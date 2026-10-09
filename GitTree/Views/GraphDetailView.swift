@@ -9,7 +9,7 @@ struct GraphDetailView: View {
     var body: some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                GraphStatusBar(graph: graph)
+                GraphStatusBar(graph: graph, state: state)
             }
             .inspector(isPresented: $state.showInspector) {
                 CommitInspector(graph: graph)
@@ -32,6 +32,7 @@ struct GraphDetailView: View {
                 revealToken: graph.revealToken,
                 searchVersion: graph.searchVersion,
                 showTags: graph.showTags,
+                annotationVersion: model.annotationVersion &+ JiraStore.shared.version,
                 onShowDetails: { state.showInspector = true }
             )
             .overlay {
@@ -106,18 +107,47 @@ struct GraphDetailView: View {
     }
 }
 
-/// Counts for the shown history, search progress and fetch status.
+/// Where the repository lives, counts for the shown history, search progress and fetch status.
 struct GraphStatusBar: View {
     let graph: GraphViewModel
+    let state: WindowState
 
     var body: some View {
         HStack(spacing: 14) {
+            let repository = graph.model.repository
+            Button {
+                if repository.kind == .remote, let web = graph.model.hosting?.webURL {
+                    NSWorkspace.shared.open(web)
+                } else {
+                    state.showInFinder(repository)
+                }
+            } label: {
+                Label(repository.fullLocation, systemImage: repository.kind == .remote ? "globe" : "folder")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .buttonStyle(.borderless)
+            .help(repository.kind == .remote ? "Cloned from \(repository.fullLocation)" : "Show \(repository.fullLocation) in Finder")
+            .layoutPriority(-1)
+
             if let layout = graph.layout {
                 Text(summary(layout))
                     .lineLimit(1)
+                    .fixedSize()
             }
             Spacer(minLength: 8)
-            if graph.activeQuery != nil {
+            if graph.activeQuery == nil, let feature = graph.selectedFeature {
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                    Text(feature.name)
+                        .lineLimit(1)
+                    Button { graph.showFeature(id: nil) } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.borderless)
+                        .help("Stop highlighting this feature")
+                }
+                .foregroundStyle(.secondary)
+            }
+            if graph.activeQuery != nil || graph.selectedFeature != nil {
                 searchStatus
             }
             if graph.model.isFetching {

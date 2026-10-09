@@ -1,11 +1,41 @@
 import Foundation
 import Observation
 
+enum RepositorySort: String, CaseIterable, Identifiable {
+    case manual, name, recent
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .manual: "Manual Order"
+        case .name: "Name"
+        case .recent: "Recently Opened"
+        }
+    }
+}
+
 /// The repositories the user added, saved as JSON in Application Support.
 @MainActor @Observable final class RepositoryLibrary {
     static let shared = RepositoryLibrary()
 
     private(set) var repositories: [Repository] = []
+
+    var sort: RepositorySort = RepositorySort(rawValue: UserDefaults.standard.string(forKey: "repositorySort") ?? "") ?? .manual {
+        didSet { UserDefaults.standard.set(sort.rawValue, forKey: "repositorySort") }
+    }
+
+    var sortedRepositories: [Repository] {
+        switch sort {
+        case .manual: repositories
+        case .name: repositories.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .recent: byRecency
+        }
+    }
+
+    var byRecency: [Repository] {
+        repositories.sorted { $0.recency > $1.recency }
+    }
 
     enum AddError: LocalizedError {
         case notARepository(String)
@@ -49,10 +79,40 @@ import Observation
         }
         var name = URL(fileURLWithPath: path).lastPathComponent
         if name.hasSuffix(".git"), name.count > 4 { name.removeLast(4) }
-        let repository = Repository(id: UUID(), name: name, kind: .local, path: path, remoteURL: nil, addedAt: Date())
+        let origin = try? await Git.string(["remote", "get-url", "origin"], in: URL(fileURLWithPath: path))
+        var repository = Repository(id: UUID(), name: name, kind: .local, path: path, remoteURL: nil, addedAt: Date())
+        repository.originURL = origin?.isEmpty == false ? origin : nil
         repositories.append(repository)
         save()
         return repository
+    }
+
+    /// Adds every git repository found in a folder (up to four levels deep).
+    func addRepositories(in folder: URL) async -> [Repository] {
+        let candidates = await Task.detached(priority: .userInitiated) {
+            RepositoryScanner.repositories(in: folder)
+        }.value
+        var added: [Repository] = []
+        for candidate in candidates {
+            if let repository = try? await addLocal(at: candidate), !added.contains(where: { $0.id == repository.id }) {
+                added.append(repository)
+            }
+        }
+        return added
+    }
+
+    func markOpened(_ id: UUID) {
+        lastOpenedID = id
+        guard let index = repositories.firstIndex(where: { $0.id == id }) else { return }
+        repositories[index].lastOpenedAt = Date()
+        save()
+    }
+
+    /// Remembers a local repository's origin once the model has read it, for links that name the remote.
+    func recordOrigin(_ url: String, for id: UUID) {
+        guard let index = repositories.firstIndex(where: { $0.id == id }), repositories[index].originURL != url else { return }
+        repositories[index].originURL = url
+        save()
     }
 
     func existingRemote(url: String) -> Repository? {

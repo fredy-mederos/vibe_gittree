@@ -28,6 +28,22 @@ enum LanePalette {
     }
 }
 
+/// A row that tints itself when it matches the search or the highlighted feature.
+final class GraphRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("GraphRow")
+
+    var isMatch = false {
+        didSet { if isMatch != oldValue { needsDisplay = true } }
+    }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isMatch, !isSelected else { return }
+        NSColor.findHighlightColor.withAlphaComponent(0.16).setFill()
+        bounds.fill(using: .sourceOver)
+    }
+}
+
 /// Draws one row of the commit graph: the lines crossing the row and the commit's dot.
 final class GraphCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("GraphCell")
@@ -43,6 +59,9 @@ final class GraphCellView: NSTableCellView {
         // Its own layer, so a merge dot's hollow centre can be punched through to the row background.
         wantsLayer = true
         layerContentsRedrawPolicy = .onSetNeedsDisplay
+        // Since macOS 14 views don't clip their drawing by default; busy rows have more lanes than
+        // the column is wide and must not spill into the description.
+        clipsToBounds = true
     }
 
     required init?(coder: NSCoder) {
@@ -72,6 +91,7 @@ final class GraphCellView: NSTableCellView {
         guard let layout, row < layout.rowCount, let context = NSGraphicsContext.current?.cgContext else { return }
         let height = bounds.height
         let middle = height / 2
+        context.clip(to: bounds)
 
         context.setLineWidth(GraphMetrics.lineWidth)
         context.setLineCap(.round)
@@ -141,7 +161,7 @@ final class DescriptionCellView: NSTableCellView {
 
     struct Badge {
         enum Style {
-            case head, branch, remote, tag, overflow
+            case head, branch, remote, tag, overflow, pullRequest
         }
 
         let style: Style
@@ -150,6 +170,9 @@ final class DescriptionCellView: NSTableCellView {
         var color: NSColor = .secondaryLabelColor
         /// A local branch at the same commit as its remote counterpart.
         var synced = false
+        /// For pull requests: a checks indicator after the number.
+        var trailingSymbol: String?
+        var trailingColor: NSColor?
     }
 
     private var badges: [Badge] = []
@@ -182,6 +205,7 @@ final class DescriptionCellView: NSTableCellView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         identifier = Self.identifier
+        clipsToBounds = true
     }
 
     required init?(coder: NSCoder) {
@@ -282,6 +306,10 @@ final class DescriptionCellView: NSTableCellView {
         case .overflow:
             stroke = .separatorColor
             textColor = .secondaryLabelColor
+        case .pullRequest:
+            fill = badge.color.withAlphaComponent(isDark ? 0.26 : 0.15)
+            textColor = Self.readable(badge.color, isDark: isDark)
+            symbol = "arrow.triangle.pull"
         }
         if emphasized {
             textColor = .white
@@ -301,13 +329,15 @@ final class DescriptionCellView: NSTableCellView {
 
         let padding: CGFloat = 5
         let leadingSymbolWidth: CGFloat = symbol == nil ? 0 : 11
-        let trailingSymbolWidth: CGFloat = badge.synced ? 12 : 0
+        let trailingSymbolWidth: CGFloat = (badge.synced || badge.trailingSymbol != nil) ? 12 : 0
         let textWidth = min(ceil(label.size().width), max(16, maxWidth - padding * 2 - leadingSymbolWidth - trailingSymbolWidth))
         let width = textWidth + padding * 2 + leadingSymbolWidth + trailingSymbolWidth
         let height: CGFloat = 16
         let rect = NSRect(x: x, y: floor((bounds.height - height) / 2), width: width, height: height)
 
-        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
+        // Pull requests are capsules so they read differently from branch labels.
+        let radius: CGFloat = badge.style == .pullRequest ? height / 2 : 4
+        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
         if let fill {
             fill.setFill()
             path.fill()
@@ -328,6 +358,9 @@ final class DescriptionCellView: NSTableCellView {
                    options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         if badge.synced {
             drawSymbol("cloud.fill", color: textColor.withAlphaComponent(0.75), leadingX: rect.maxX - padding - 10, midY: rect.midY)
+        } else if let trailing = badge.trailingSymbol {
+            let color = emphasized ? NSColor.white : (badge.trailingColor ?? textColor)
+            drawSymbol(trailing, color: color, leadingX: rect.maxX - padding - 10, midY: rect.midY)
         }
         return width
     }
@@ -345,6 +378,76 @@ final class DescriptionCellView: NSTableCellView {
     private static func readable(_ color: NSColor, isDark: Bool) -> NSColor {
         isDark ? (color.blended(withFraction: 0.25, of: .white) ?? color) : (color.blended(withFraction: 0.3, of: .black) ?? color)
     }
+}
+
+/// The Jira status of the first ticket in the commit's subject, as a colored capsule.
+final class TicketStatusCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("TicketStatusCell")
+    private static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+    private static let lineHeight = ceil(NSLayoutManager().defaultLineHeight(for: font))
+
+    private var issue: JiraIssue?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        identifier = Self.identifier
+        clipsToBounds = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { if backgroundStyle != oldValue { needsDisplay = true } }
+    }
+
+    func configure(key: String?, issue: JiraIssue?) {
+        self.issue = issue
+        if let issue {
+            let versions = issue.fixVersions.isEmpty ? "" : " · fix version \(issue.fixVersions.joined(separator: ", "))"
+            toolTip = "\(issue.key) · \(issue.status)\(versions)\n\(issue.summary)"
+            setAccessibilityLabel("\(issue.key) \(issue.status)")
+        } else {
+            toolTip = key
+            setAccessibilityLabel(key)
+        }
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let issue else { return }
+        let emphasized = backgroundStyle == .emphasized
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let textColor: NSColor = emphasized ? .white
+            : (isDark ? (issue.color.blended(withFraction: 0.25, of: .white) ?? issue.color)
+                      : (issue.color.blended(withFraction: 0.3, of: .black) ?? issue.color))
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        let text = NSAttributedString(string: issue.status, attributes: [.font: Self.font, .foregroundColor: textColor, .paragraphStyle: style])
+        let height: CGFloat = 16
+        let width = min(ceil(text.size().width) + 14, bounds.width - 4)
+        let rect = NSRect(x: 2, y: floor((bounds.height - height) / 2), width: width, height: height)
+        let fill = emphasized ? NSColor.white.withAlphaComponent(0.2) : issue.color.withAlphaComponent(isDark ? 0.26 : 0.15)
+        fill.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
+        text.draw(with: NSRect(x: rect.minX + 7, y: rect.minY + floor((height - Self.lineHeight) / 2), width: rect.width - 14, height: Self.lineHeight),
+                  options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+
+        // The fix version after the status, in the remaining width.
+        guard !issue.fixVersions.isEmpty, bounds.width - rect.maxX > 20 else { return }
+        let version = NSAttributedString(string: issue.fixVersions.joined(separator: ", "), attributes: [
+            .font: Self.versionFont,
+            .foregroundColor: emphasized ? NSColor.alternateSelectedControlTextColor : NSColor.secondaryLabelColor,
+            .paragraphStyle: style,
+        ])
+        version.draw(with: NSRect(x: rect.maxX + 6, y: floor((bounds.height - Self.lineHeight) / 2), width: bounds.width - rect.maxX - 8, height: Self.lineHeight),
+                     options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+    }
+
+    private static let versionFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
 }
 
 /// A plain text column (author, date, hash).

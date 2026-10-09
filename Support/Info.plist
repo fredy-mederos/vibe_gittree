@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged with the keys Xcode generates. Registers gittree:// deep links. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Only for local test servers; everything on the internet still needs HTTPS. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.fredymederos.GitTree</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gittree</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

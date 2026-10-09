@@ -149,6 +149,14 @@ final class CommitGraph: @unchecked Sendable {
         }
     }
 
+    /// A commit by full hash or by an unambiguous-enough prefix (at least 4 characters).
+    func index(matching hash: String) -> Int32? {
+        let needle = hash.lowercased()
+        if needle.count >= 40, let id = ObjectID(hex: needle) { return indexByID[id] }
+        guard needle.count >= 4, needle.allSatisfy(\.isHexDigit) else { return nil }
+        return ids.firstIndex { $0.hex.hasPrefix(needle) }.map(Int32.init)
+    }
+
     func date(of commit: Int32) -> Date {
         Date(timeIntervalSince1970: TimeInterval(times[Int(commit)]))
     }

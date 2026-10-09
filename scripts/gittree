@@ -1,0 +1,72 @@
+#!/bin/bash
+# gittree: open GitTree at a repository, a commit, or the commit that last changed a line.
+#
+#   gittree                  the repository you're in
+#   gittree <file>           the last commit that changed the file, with its diff
+#   gittree <file>:<line>    the commit that last changed that line, diff scrolled to it
+#   gittree <commit>         a commit (hash, branch or tag)
+#   gittree --print …        print the gittree:// link without opening GitTree
+#
+# The link is printed either way, so it can be pasted into notes, tickets or chats.
+set -euo pipefail
+
+print_only=0
+if [ "${1:-}" = "--print" ]; then
+    print_only=1
+    shift
+fi
+target="${1:-}"
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "gittree: not inside a git repository" >&2
+    exit 1
+}
+
+encode() {
+    python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+
+link="gittree://open?repo=$(encode "$root")"
+
+file=""
+line=""
+if [[ "$target" =~ ^(.+):([0-9]+)$ ]] && [ -e "${BASH_REMATCH[1]}" ]; then
+    file="${BASH_REMATCH[1]}"
+    line="${BASH_REMATCH[2]}"
+elif [ -n "$target" ] && [ -e "$target" ]; then
+    file="$target"
+fi
+
+if [ -n "$file" ]; then
+    relative=$(git -C "$(dirname "$file")" ls-files --full-name -- "$(basename "$file")" | head -1)
+    if [ -z "$relative" ]; then
+        echo "gittree: $file isn't tracked by git" >&2
+        exit 1
+    fi
+    if [ -n "$line" ]; then
+        # Porcelain blame: "<sha> <line in that commit> <line now> …" then "filename <path in that commit>".
+        blame=$(git -C "$root" blame -L "$line,$line" --porcelain -- "$relative")
+        sha=$(echo "$blame" | head -1 | cut -d' ' -f1)
+        original_line=$(echo "$blame" | head -1 | cut -d' ' -f2)
+        original_path=$(echo "$blame" | sed -n 's/^filename //p' | head -1)
+        if [[ "$sha" =~ ^0+$ ]]; then
+            echo "gittree: line $line of $relative isn't committed yet" >&2
+            exit 1
+        fi
+        link="$link&commit=$sha&path=$(encode "${original_path:-$relative}")&line=$original_line"
+    else
+        sha=$(git -C "$root" log -1 --format=%H -- "$relative")
+        link="$link&commit=$sha&path=$(encode "$relative")"
+    fi
+elif [ -n "$target" ]; then
+    sha=$(git -C "$root" rev-parse --verify --quiet "$target^{commit}") || {
+        echo "gittree: $target isn't a file, file:line or commit" >&2
+        exit 1
+    }
+    link="$link&commit=$sha"
+fi
+
+echo "$link"
+if [ "$print_only" = 0 ]; then
+    open "$link"
+fi

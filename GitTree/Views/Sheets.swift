@@ -95,6 +95,7 @@ struct CloneSheet: View {
             guard case .success = result else { return }
             let repository = library.addRemote(url: url, clonedTo: destination)
             state.open(repository.id)
+            state.resumePendingDeepLink()
             dismiss()
         }
     }
@@ -183,12 +184,65 @@ struct RepositorySettingsSheet: View {
 
 /// GitTree > Settings.
 struct AppSettingsView: View {
+    var body: some View {
+        TabView {
+            GeneralSettingsView()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            JiraSettingsView()
+                .tabItem { Label("Jira", systemImage: "ticket") }
+            GitHubSettingsView()
+                .tabItem { Label("GitHub", systemImage: "arrow.triangle.pull") }
+        }
+        .frame(width: 580)
+    }
+}
+
+/// Light, dark, or following the system.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+
+    static let key = "appearance"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    static var current: AppAppearance {
+        AppAppearance(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system
+    }
+
+    @MainActor func apply() {
+        switch self {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
+private struct GeneralSettingsView: View {
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
     @AppStorage(AppSettings.gitPathKey) private var gitPath = ""
     @AppStorage(AppSettings.fetchOnOpenKey) private var fetchOnOpen = true
     @State private var version = ""
 
     var body: some View {
         Form {
+            Section {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: appearance) { _, new in new.apply() }
+            }
             Section("Git") {
                 TextField("Git executable", text: $gitPath, prompt: Text(Git.detectedExecutable.path))
                 LabeledContent("Version", value: version.isEmpty ? "…" : version)
@@ -210,9 +264,121 @@ struct AppSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560)
         .task(id: gitPath) {
             version = (try? await Git.string(["--version"], in: nil)) ?? "Not found"
         }
+    }
+}
+
+/// Connect Jira to show ticket statuses. The token goes to the keychain.
+private struct JiraSettingsView: View {
+    @State private var site = UserDefaults.standard.string(forKey: JiraSettings.siteKey) ?? ""
+    @State private var email = UserDefaults.standard.string(forKey: JiraSettings.emailKey) ?? ""
+    @State private var token = ""
+    @State private var hasSavedToken = JiraSettings.connection != nil
+    @State private var status: String?
+    @State private var isTesting = false
+
+    private var isComplete: Bool {
+        JiraSettings.normalizedSite(site) != nil && !email.trimmingCharacters(in: .whitespaces).isEmpty
+            && (!token.isEmpty || hasSavedToken)
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("Site", text: $site, prompt: Text("your-company.atlassian.net"))
+                TextField("Email", text: $email, prompt: Text("you@company.com"))
+                SecureField("API token", text: $token, prompt: Text(hasSavedToken ? "Saved in your keychain" : "Paste an API token"))
+            } header: {
+                Text("Jira Cloud")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Ticket keys in commit messages (like ABC-123) show their status in a Ticket column and in the details. GitTree only asks Jira about tickets on screen, in small batches, and caches the answers.")
+                    Link("Create an API token…", destination: URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!)
+                }
+            }
+            Section {
+                HStack {
+                    Button("Save and Test") { Task { await saveAndTest() } }
+                        .disabled(!isComplete || isTesting)
+                    if isTesting { ProgressView().controlSize(.small) }
+                    if let status {
+                        Text(status)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    if hasSavedToken {
+                        Button("Disconnect", role: .destructive) { disconnect() }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func saveAndTest() async {
+        JiraSettings.save(site: site, email: email, token: token.isEmpty ? nil : token)
+        token = ""
+        isTesting = true
+        defer { isTesting = false }
+        guard let connection = JiraSettings.connection else {
+            hasSavedToken = false
+            status = "Add the site, email and API token."
+            return
+        }
+        hasSavedToken = true
+        do {
+            let name = try await JiraClient.myself(connection)
+            status = "Connected as \(name)."
+        } catch {
+            status = error.localizedDescription
+        }
+    }
+
+    private func disconnect() {
+        if let host = JiraSettings.normalizedSite(site)?.host {
+            Keychain.setPassword("", service: JiraSettings.keychainService, account: host)
+        }
+        JiraSettings.save(site: site, email: email, token: nil)
+        hasSavedToken = false
+        status = "Disconnected."
+    }
+}
+
+/// Pull requests come from the GitHub CLI; this shows whether it's installed and signed in.
+private struct GitHubSettingsView: View {
+    @State private var status = "Checking…"
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("GitHub CLI", value: GitHubCLI.executableURL?.path ?? "Not installed")
+                Text(status)
+                    .font(.callout.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            } header: {
+                Text("Pull Requests")
+            } footer: {
+                Text("GitTree reads pull requests with `gh` for repositories hosted on GitHub: one request when a repository loads, at most every five minutes, plus one when you fetch. Install it with `brew install gh` and sign in with `gh auth login`.")
+            }
+        }
+        .formStyle(.grouped)
+        .task { await check() }
+    }
+
+    private func check() async {
+        guard let gh = GitHubCLI.executableURL else {
+            status = "Install the GitHub CLI to see pull requests."
+            return
+        }
+        let output = try? await ProcessRunner.run(gh, ["auth", "status"], environment: Git.environment, timeout: 15, allowFailure: true)
+        let lines = String(decoding: output ?? Data(), as: UTF8.self)
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.contains("Logged in") || $0.contains("Active account") || $0.contains("not logged") }
+        status = lines.isEmpty ? "Run `gh auth login` in Terminal to sign in." : lines.joined(separator: "\n")
     }
 }

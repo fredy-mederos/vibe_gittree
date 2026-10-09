@@ -23,7 +23,17 @@ the planned features (deep links, Jira and GitHub integration, AI grouping).
   uses a throwaway library and captures only GitTree's window. Use test repositories outside
   ~/Documents (for example a `git clone --mirror` in a temp folder) so macOS doesn't show a folder
   permission prompt nobody can answer.
-- Install for daily use with `scripts/install.sh` (Release build into ~/Applications).
+- Install for daily use with `scripts/install.sh` (Release build into ~/Applications, plus the
+  `gittree` command into ~/.local/bin).
+- Network integrations must stay gentle (the user asked for this explicitly): one request at a
+  time per service, caching, minimum intervals, timeouts and backoff, and never trigger a request
+  from a redraw. GitHub goes through `gh` in `Integrations/GitHub.swift` (rate-limited in
+  `RepositoryModel.refreshPullRequests`); Jira goes through `JiraStore` (visible rows only, batched
+  bulk fetch, on-disk cache). Test Jira with `scripts/mock-jira.py`, which logs every request.
+- AI features use Apple's on-device Foundation Models only (commit messages never leave the Mac),
+  behind `#if canImport(FoundationModels)` and `@available(macOS 26.0, *)`, with a plain fallback.
+- The user's global `~/.claude/CLAUDE.md` tells every Claude session to use `gittree <file>:<line>`;
+  keep the command's arguments and link format backward compatible.
 
 ## Web snapshot (`src/template.html`, `scripts/build.py`)
 

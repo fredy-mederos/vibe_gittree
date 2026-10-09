@@ -60,52 +60,15 @@ enum Git {
     /// Keeps machine-readable output stable whatever the user's git config says.
     static let baseArguments = ["-c", "log.showSignature=false", "-c", "color.ui=never", "-c", "core.quotePath=false"]
 
-    static func run(_ arguments: [String], in directory: URL?, allowFailure: Bool = false) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    continuation.resume(returning: try runBlocking(arguments, in: directory, allowFailure: allowFailure))
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+    /// - Parameter timeout: for commands that touch the network, so a stalled connection can't hang a fetch.
+    static func run(_ arguments: [String], in directory: URL?, allowFailure: Bool = false, timeout: TimeInterval? = nil) async throws -> Data {
+        try await ProcessRunner.run(executableURL, baseArguments + arguments, in: directory, environment: environment,
+                                    timeout: timeout, allowFailure: allowFailure)
     }
 
     static func string(_ arguments: [String], in directory: URL?, allowFailure: Bool = false) async throws -> String {
         let data = try await run(arguments, in: directory, allowFailure: allowFailure)
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    static func runBlocking(_ arguments: [String], in directory: URL?, allowFailure: Bool) throws -> Data {
-        let process = Process()
-        process.executableURL = executableURL
-        process.arguments = baseArguments + arguments
-        if let directory { process.currentDirectoryURL = directory }
-        process.environment = environment
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-        process.standardInput = FileHandle.nullDevice
-        try process.run()
-
-        // Drain stderr on another thread so a chatty command can't fill the pipe and stall.
-        let errors = LockedData()
-        let group = DispatchGroup()
-        group.enter()
-        DispatchQueue.global(qos: .utility).async {
-            errors.append(stderr.fileHandleForReading.readDataToEndOfFile())
-            group.leave()
-        }
-        let output = stdout.fileHandleForReading.readDataToEndOfFile()
-        group.wait()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 && !allowFailure {
-            throw GitError(arguments: arguments, status: process.terminationStatus, output: String(decoding: errors.data, as: UTF8.self))
-        }
-        return output
     }
 }
 

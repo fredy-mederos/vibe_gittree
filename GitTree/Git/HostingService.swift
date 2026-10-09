@@ -66,6 +66,19 @@ struct HostingService: Hashable, Sendable {
         }
     }
 
+    /// A file as of a commit, scrolled to a line when given.
+    func fileURL(commit: String, path: String, line: Int?) -> URL {
+        let base: URL
+        switch provider {
+        case .github: base = webURL.appending(path: "blob/\(commit)/\(path)")
+        case .gitlab: base = webURL.appending(path: "-/blob/\(commit)/\(path)")
+        case .bitbucket: base = webURL.appending(path: "src/\(commit)/\(path)")
+        }
+        guard let line, var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return base }
+        components.fragment = provider == .bitbucket ? "lines-\(line)" : "L\(line)"
+        return components.url ?? base
+    }
+
     func tagURL(_ tag: String) -> URL {
         switch provider {
         case .github: webURL.appending(path: "releases/tag/\(tag)")

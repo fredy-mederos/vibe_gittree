@@ -31,6 +31,14 @@ import Observation
     private(set) var currentMatch: Int?
     private(set) var searchVersion = 0
 
+    /// Recent commits grouped into features (see `FeatureGrouper`).
+    private(set) var features: FeatureReport?
+    private(set) var featureProgress: String?
+    /// The feature whose commits are highlighted in the graph.
+    private(set) var selectedFeature: FeatureGroup?
+    var featureCommitLimit = 200
+    @ObservationIgnored private var featureTask: Task<Void, Never>?
+
     @ObservationIgnored private var selectedID: ObjectID?
     @ObservationIgnored private var appliedGeneration = -1
     @ObservationIgnored private var hasInitialSelection = false
@@ -50,6 +58,11 @@ import Observation
     var activeQuery: String? {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return query.count >= 2 ? query : nil
+    }
+
+    /// Text to highlight in matching rows: the search, or the selected feature's ticket key.
+    var highlightText: String? {
+        activeQuery ?? selectedFeature?.ticket
     }
 
     // MARK: Layout
@@ -142,6 +155,14 @@ import Observation
         select(ref.commit)
     }
 
+    /// A branch by name, local or on any remote (pull requests only know the bare name).
+    func revealBranch(named name: String) {
+        guard let refs = commitGraph?.refs else { return }
+        let ref = refs.first { $0.kind == .local && $0.name == name }
+            ?? refs.first { $0.kind == .remote && $0.remoteParts?.branch == name }
+        if let ref { select(ref.commit) }
+    }
+
     func revealHead() {
         guard let graph = commitGraph, graph.headCommit >= 0 else { return }
         select(graph.headCommit)
@@ -175,6 +196,10 @@ import Observation
 
     private func scheduleSearch(jump: Bool) {
         searchTask?.cancel()
+        if activeQuery == nil, selectedFeature != nil {
+            applyFeatureHighlight(jump: false)
+            return
+        }
         guard let query = activeQuery, let layout else {
             if !matchRows.isEmpty || currentMatch != nil {
                 matchRows = []
@@ -206,6 +231,67 @@ import Observation
             } else if let current = self.currentMatch, current >= rows.count {
                 self.currentMatch = nil
             }
+        }
+    }
+
+    // MARK: Features
+
+    /// Groups the most recent commits of the current scope into features, off the main thread
+    /// (the on-device model runs in its own process). Merges are left out; they repeat their branch.
+    func analyzeFeatures() {
+        guard featureTask == nil, let layout else { return }
+        let graph = layout.graph
+        var commits: [FeatureCommit] = []
+        for row in 0..<layout.rowCount where commits.count < featureCommitLimit {
+            let commit = layout.rows[row]
+            guard !graph.isMerge(commit) else { continue }
+            let index = Int(commit)
+            commits.append(FeatureCommit(id: graph.ids[index], subject: graph.subjects[index],
+                                         author: graph.authors[Int(graph.authorOf[index])], date: graph.date(of: commit)))
+        }
+        let regex = graph.ticketRegex
+        featureProgress = "Grouping \(commits.count) commits…"
+        featureTask = Task { [weak self] in
+            await FeatureGrouper.analyze(commits, ticketRegex: regex) { message in
+                self?.featureProgress = message
+            } update: { report in
+                self?.features = report
+                // Keep the highlighted feature's commits in sync as names improve.
+                if let selected = self?.selectedFeature, let refreshed = report.groups.first(where: { $0.id == selected.id }) {
+                    self?.selectedFeature = refreshed
+                }
+            }
+            guard let self else { return }
+            self.featureProgress = nil
+            self.featureTask = nil
+        }
+    }
+
+    /// Highlights a feature's commits and jumps to its newest one; nil clears the highlight.
+    func showFeature(id: String?) {
+        guard let id, let group = features?.groups.first(where: { $0.id == id }) else {
+            selectedFeature = nil
+            scheduleSearch(jump: false)
+            return
+        }
+        selectedFeature = group
+        if !searchText.isEmpty { searchText = "" }
+        applyFeatureHighlight(jump: true)
+    }
+
+    private func applyFeatureHighlight(jump: Bool) {
+        guard let group = selectedFeature, let layout else { return }
+        let rows = group.commits
+            .compactMap { layout.graph.indexByID[$0.id] }
+            .map { layout.rowOfCommit[Int($0)] }
+            .filter { $0 >= 0 }
+            .sorted()
+        matchRows = rows
+        matchSet = Set(rows)
+        currentMatch = rows.isEmpty ? nil : 0
+        searchVersion += 1
+        if jump, let first = rows.first {
+            select(layout.rows[Int(first)])
         }
     }
 

@@ -15,8 +15,14 @@ struct GitTreeCommands: Commands {
 
         CommandGroup(after: .newItem) {
             Divider()
+            Button("Switch to Repository…") { window?.isSwitcherPresented = true }
+                .keyboardShortcut("k")
+                .disabled(window == nil)
+            Divider()
             Button("Add Local Repository…") { window?.addLocalRepository() }
                 .keyboardShortcut("o")
+                .disabled(window == nil)
+            Button("Add Repositories in Folder…") { window?.addRepositoriesInFolder() }
                 .disabled(window == nil)
             Button("Clone Remote Repository…") { window?.cloneRemoteRepository() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
@@ -43,6 +49,8 @@ struct GitTreeCommands: Commands {
             Button("Reload") { window?.graph?.model.reload() }
                 .keyboardShortcut("r")
                 .disabled(window?.graph == nil)
+            Button("Refresh Ticket Statuses") { JiraStore.shared.markAllStale() }
+                .disabled(JiraStore.shared.configuredConnection == nil)
 
             Divider()
 

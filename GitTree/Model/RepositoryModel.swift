@@ -19,6 +19,16 @@ import Observation
     private(set) var hosting: HostingService?
     /// Increments every time `graph` is replaced.
     private(set) var generation = 0
+    /// Pull requests from GitHub, when the repository is hosted there and `gh` is set up.
+    private(set) var pullRequests: PullRequestIndex?
+    private(set) var pullRequestProblem: String?
+    /// Increments when pull requests or ticket statuses change, so visible rows redraw.
+    private(set) var annotationVersion = 0
+
+    @ObservationIgnored private var pullRequestTask: Task<Void, Never>?
+    @ObservationIgnored private var pullRequestsLoadedAt: Date?
+    @ObservationIgnored private var pullRequestRetryAt: Date?
+    @ObservationIgnored private var pullRequestBackoff: TimeInterval = 5 * 60
 
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var reloadDebounce: Task<Void, Never>?
@@ -85,13 +95,14 @@ import Observation
             ? ["fetch", "--prune", "--tags", "origin"]
             : ["fetch", "--all", "--prune"]
         do {
-            _ = try await Git.run(arguments, in: repository.directory)
+            _ = try await Git.run(arguments, in: repository.directory, timeout: 300)
             RepositoryLibrary.shared.markFetched(id)
         } catch {
             fetchError = error.localizedDescription
         }
         isFetching = false
         reload()
+        refreshPullRequests(force: true)
     }
 
     func details(for commit: Int32, in graph: CommitGraph) async -> CommitDetails? {
@@ -119,11 +130,52 @@ import Observation
         return index
     }
 
+    /// Loads pull requests with `gh`, carefully: one request at a time, at most every five minutes
+    /// (every 30 seconds when the user asks with Fetch), with a 30-second timeout and growing waits
+    /// after failures, so reloads and repeated clicks never pile up requests.
+    func refreshPullRequests(force: Bool = false) {
+        guard let hosting, hosting.provider == .github, pullRequestTask == nil else { return }
+        let now = Date()
+        if let loaded = pullRequestsLoadedAt, now.timeIntervalSince(loaded) < (force ? 30 : 5 * 60) { return }
+        if !force, let retry = pullRequestRetryAt, now < retry { return }
+        let repositoryPath = hosting.path
+        pullRequestTask = Task { [weak self] in
+            let result: Result<PullRequestIndex, Error>
+            do {
+                result = .success(try await GitHubCLI.pullRequests(repository: repositoryPath))
+            } catch {
+                result = .failure(error)
+            }
+            guard let self else { return }
+            self.pullRequestTask = nil
+            switch result {
+            case .success(let index):
+                self.pullRequests = index
+                self.pullRequestProblem = nil
+                self.pullRequestsLoadedAt = Date()
+                self.pullRequestRetryAt = nil
+                self.pullRequestBackoff = 5 * 60
+                self.annotationVersion += 1
+            case .failure(let error):
+                self.pullRequestProblem = error.localizedDescription
+                self.pullRequestRetryAt = Date().addingTimeInterval(self.pullRequestBackoff)
+                self.pullRequestBackoff = min(self.pullRequestBackoff * 2, 60 * 60)
+            }
+        }
+    }
+
+    /// Ticket statuses arrived from Jira; redraw.
+    func annotationsChanged() {
+        annotationVersion += 1
+    }
+
     private func didLoad() {
         if repository.kind == .local && watcher == nil { startWatching() }
         if hosting == nil && !didDetectHosting {
             didDetectHosting = true
             Task { await detectHosting() }
+        } else {
+            refreshPullRequests()
         }
         if repository.kind == .remote && !didAutoFetch && AppSettings.fetchRemotesOnOpen {
             didAutoFetch = true
@@ -161,8 +213,10 @@ import Observation
            let first = names.split(separator: "\n").first {
             remote = try? await Git.string(["remote", "get-url", String(first)], in: directory)
         }
-        if let remote, let service = HostingService(remoteURL: remote) {
-            hosting = service
+        if let remote, !remote.isEmpty {
+            RepositoryLibrary.shared.recordOrigin(remote, for: id)
+            hosting = HostingService(remoteURL: remote)
+            refreshPullRequests()
         }
     }
 }

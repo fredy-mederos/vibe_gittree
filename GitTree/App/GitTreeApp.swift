@@ -10,9 +10,17 @@ struct GitTreeApp: App {
             RepositoryWindow(repositoryID: $repositoryID)
         }
         .defaultSize(width: 1400, height: 880)
+        .handlesExternalEvents(matching: ["*"])
         .commands {
             GitTreeCommands()
         }
+
+        // One window per file diff, opened from the inspector or a deep link.
+        WindowGroup("Changes", id: "diff", for: DiffTarget.self) { $target in
+            DiffWindow(target: target)
+        }
+        .defaultSize(width: 980, height: 720)
+        .handlesExternalEvents(matching: [])
 
         Settings {
             AppSettingsView()
@@ -21,6 +29,10 @@ struct GitTreeApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated { AppAppearance.current.apply() }
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }

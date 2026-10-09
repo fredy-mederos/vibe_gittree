@@ -5,6 +5,7 @@ import SwiftUI
 struct RepositoryWindow: View {
     @Binding var repositoryID: UUID?
     @State private var state = WindowState()
+    @Environment(\.openWindow) private var openWindow
     private let library = RepositoryLibrary.shared
 
     var body: some View {
@@ -20,6 +21,10 @@ struct RepositoryWindow: View {
         .sheet(isPresented: $state.isCloneSheetPresented) {
             CloneSheet(state: state)
         }
+        .sheet(isPresented: $state.isSwitcherPresented) {
+            RepositorySwitcher(state: state)
+        }
+        .background(WindowAccessor { WindowTabbing.windowAppeared($0) })
         .sheet(item: $state.editingRepository) { repository in
             RepositorySettingsSheet(repository: repository)
         }
@@ -38,12 +43,20 @@ struct RepositoryWindow: View {
                  : "The folder on your Mac isn't changed.")
         }
         .alert(
-            "Couldn't Add Repository",
+            state.errorTitle,
             isPresented: Binding(get: { state.errorMessage != nil }, set: { if !$0 { state.errorMessage = nil } })
         ) {
             Button("OK") {}
         } message: {
             Text(state.errorMessage ?? "")
+        }
+        // gittree:// links go to an existing window instead of opening a new one.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        .onOpenURL { state.handle($0) }
+        .onChange(of: state.diffRequest) { _, request in
+            guard let request else { return }
+            openWindow(id: "diff", value: request)
+            state.diffRequest = nil
         }
         .task {
             state.restore(requested: repositoryID)
@@ -85,6 +98,7 @@ struct RepositoryWindow: View {
 #if DEBUG
 /// Launch arguments for testing without clicking through the UI:
 /// `-GTOpenRepository <path>` adds and opens a local repository, `-GTCloneURL <url>` clones one,
+/// `-GTAddFolder <path>` adds every repository in a folder, `-GTShowSwitcher YES` opens the ⌘K switcher,
 /// `-GTSearch <text>` searches once a repository is open, `-GTScope local|head|<full ref name>`
 /// narrows the graph, and `-GTAppearance dark|light` forces an appearance.
 @MainActor enum DebugLaunch {
@@ -105,8 +119,26 @@ struct RepositoryWindow: View {
         if let url = defaults.string(forKey: "GTCloneURL") {
             state.cloneRemoteRepository(prefilledURL: url)
         }
+        if let folder = defaults.string(forKey: "GTAddFolder") {
+            Task {
+                let added = await RepositoryLibrary.shared.addRepositories(in: URL(fileURLWithPath: folder))
+                if state.repositoryID == nil, let first = added.first { state.open(first.id) }
+            }
+        }
+        if defaults.bool(forKey: "GTShowSwitcher") {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                state.isSwitcherPresented = true
+            }
+        }
         let query = defaults.string(forKey: "GTSearch")
         let scope = defaults.string(forKey: "GTScope")
+        if defaults.bool(forKey: "GTGroupFeatures") {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                state.graph?.analyzeFeatures()
+            }
+        }
         guard query != nil || scope != nil else { return }
         Task {
             try? await Task.sleep(for: .seconds(2))

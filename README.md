@@ -19,17 +19,25 @@ scripts/install.sh
 ```
 
 This builds an optimized copy and installs it into `~/Applications`, where Launchpad and Spotlight
-find it. Pass another folder to install elsewhere, for example `scripts/install.sh /Applications`.
-To work on the app, open `GitTree.xcodeproj` and press Run.
+find it, and installs the `gittree` command into `~/.local/bin`. Pass another folder to install the
+app elsewhere, for example `scripts/install.sh /Applications`. To work on the app, open
+`GitTree.xcodeproj` and press Run.
 
 The first time GitTree reads a repository inside Documents, Desktop or Downloads, macOS asks for
 permission to access that folder.
 
 ### What it does
 
-- **Library of repositories** in the sidebar: add folders from your Mac (File › Add Local Repository,
-  ⌘O, or drag them in) or clone remote ones by URL (File › Clone Remote Repository, ⇧⌘O). Click
-  one to switch. Use "Open in New Window" to see several at once; windows can be merged into tabs.
+- **Library of repositories** in the sidebar, each with its location underneath
+  (`~/Documents/projects/acme`, or `github.com/owner` for cloned ones). Add folders from your Mac
+  (File › Add Local Repository, ⌘O, or drag them in), every repository inside a folder (File › Add
+  Repositories in Folder…, which looks four levels deep and skips `node_modules`, build folders and
+  the like), or clone remote ones by URL (File › Clone Remote Repository, ⇧⌘O). The list shows the
+  first eight with "Show All"; the filter at the bottom matches repositories too; the + menu sorts
+  them by your own order (drag), name, or recently opened.
+- **Switch quickly** with ⌘K: type part of a name or path, press Return. Without typing, it lists
+  repositories most recently opened first. Right-click a repository for Open in New Tab or Open in
+  New Window to see several at once.
 - **Remote repositories** are cloned into GitTree's own storage as bare, blobless clones: commits
   and folder structure only, no file contents. They fetch automatically when opened (if the last
   fetch was over 10 minutes ago) and on Fetch (⇧⌘F).
@@ -45,18 +53,54 @@ permission to access that folder.
   commit and its pull request on GitHub, GitLab or Bitbucket, ticket links, the first release tag
   that contains the commit, parents and children, the branches that contain it, and changed files.
 - **Branches, remotes and tags** in the sidebar, grouped by folder (`feature/`, `release/`…) and by
-  version for tags, newest first with their age. Filter them at the bottom of the sidebar.
+  version for tags, newest first with their age. Click one to jump to it; double-click (or Return)
+  to show only its history.
+- **Changes**: click a file in the inspector to open its diff in its own window, with a Whole File
+  toggle, a link to the file on GitHub, and Copy Link.
+- **Pull requests** (GitHub, through the `gh` command): an open pull request's number next to its
+  branch in the graph and sidebar, with its checks (✓ passed, ✗ failed, clock running). Stacked pull
+  requests (based on another open PR's branch) show their position, like `#8161 · 5/5`. The sidebar
+  lists every stack in order and the other open pull requests; the inspector shows the pull request
+  that merged a commit, its review and checks, and the whole stack.
+- **Jira** (Settings › Jira): a Ticket column with each commit's ticket status and fix version, and
+  a Ticket section in the inspector with summary, type, assignee and fix version.
+- **Features**: the sidebar's Features section groups the latest commits (100 to 1,000) by ticket and
+  uses Apple's on-device model to name each feature, file it under a product area, and group commits
+  without a ticket. Groups appear right away and get their names as the model works through them.
+  Select one to highlight its commits in the graph. Commit messages never leave the Mac.
+- **Deep links**: `gittree://open?repo=<path|remote URL|name>&commit=<sha>&path=<file>&line=<n>`
+  opens the repository (adding it if needed), selects the commit and opens the file's diff scrolled
+  to the line. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit
+  that last changed that line with `git blame`; `gittree <file>`, `gittree <commit>` and plain
+  `gittree` work too; `--print` prints the link without opening the app.
 - **Per-repository settings** (right-click › Repository Settings): display name, an issue link such
   as `https://example.atlassian.net/browse/{key}` for ticket keys found in commit messages, and the
-  regular expression that marks release tags.
+  regular expression that marks release tags (for example `^android-v[\d.]+$`).
+- **Appearance**: Settings › General › Appearance picks Light, Dark or System.
 
 GitTree never changes your repositories. The only git command that writes anything is `fetch`,
 and only when you ask for it (or when a remote repository GitTree cloned itself is opened).
+
+### How GitTree talks to GitHub and Jira
+
+Both integrations are deliberately gentle, so scrolling or reloading can never turn into a storm of
+requests:
+
+- **GitHub**: two `gh pr list` calls per repository (recent pull requests, then reviews and checks
+  of the open ones). At most one at a time, at most every five minutes (30 seconds when you press
+  Fetch), each with a 30-second timeout; after a failure it waits 5 minutes, then longer.
+- **Jira**: only tickets on screen, only once scrolling pauses, only ones not already cached; up to
+  50 per request with bulk fetch (one request per screen), one request at a time, at most 20 a
+  minute. Statuses are cached on disk (`jira-cache.json`) and asked for again only after an hour,
+  when they're on screen. Unknown tickets aren't asked about again for a day. A rejected token stops
+  all requests until Settings change; timeouts and rate limits back off. Repository › Refresh
+  Ticket Statuses asks again for what's on screen.
 
 ### Shortcuts
 
 | Action | Keys |
 | --- | --- |
+| Switch to repository | ⌘K |
 | Add local repository | ⌘O |
 | Clone remote repository | ⇧⌘O |
 | Find commits / next / previous | ⌘F / ⌘G / ⇧⌘G |
@@ -69,18 +113,22 @@ and only when you ask for it (or when a remote repository GitTree cloned itself 
 ### Where things are stored
 
 `~/Library/Application Support/GitTree/`: `library.json` (the repository list and per-repository
-settings) and `Clones/<host>/<owner>/<name>.git` (remote repositories). Removing a remote repository
-from GitTree deletes its clone; removing a local one never touches the folder.
+settings), `jira-cache.json` (ticket statuses) and `Clones/<host>/<owner>/<name>.git` (remote
+repositories). The Jira API token is in the login keychain. Removing a remote repository from
+GitTree deletes its clone; removing a local one never touches the folder.
 
 ### How it's built
 
 ```
 GitTree/
-  App/        app entry point and menu commands
-  Git/        running git, parsing history, lane layout, clone, file watching, hosting links
-  Model/      repository library, per-repository model, per-window state, sidebar tree
-  Views/      window, sidebar, toolbar and status bar, inspector, sheets
-  Views/Graph the commit table (NSTableView) and its Core Graphics cells
+  App/           app entry point and menu commands
+  Git/           running git, parsing history, lane layout, diffs, clone, file watching, hosting links
+  Integrations/  GitHub (gh), Jira (REST + keychain), feature grouping (Foundation Models)
+  Model/         repository library, per-repository model, per-window state, sidebar tree, deep links
+  Views/         window, sidebar, switcher, toolbar and status bar, inspector, diff window, sheets
+  Views/Graph    the commit table (NSTableView) and its Core Graphics cells
+Support/Info.plist   the gittree:// URL scheme (merged with Xcode's generated keys)
+scripts/gittree      the deep-link command
 ```
 
 - History comes from one `git log --branches --remotes --tags --date-order` plus `git for-each-ref`,
@@ -101,8 +149,18 @@ library and captures only its window:
 scripts/snapshot.sh /tmp/gittree.png 6 -GTOpenRepository ~/code/some-repo -GTSearch "fix"
 ```
 
-Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTSearch <text>`,
-`-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light`.
+Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>`, `-GTSearch <text>`,
+`-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light`, `-GTShowSwitcher YES`,
+`-GTGroupFeatures YES`, and `-GTJiraSite <url>` (with optional `-GTJiraEmail`/`-GTJiraToken`) to use
+a Jira site without touching the keychain.
+
+To try the Jira integration without real credentials, run the mock server and point a debug build
+at it; it logs every request, which makes it easy to check that scrolling doesn't flood Jira:
+
+```bash
+python3 scripts/mock-jira.py 8899
+scripts/snapshot.sh /tmp/gittree.png 8 -GTOpenRepository ~/code/some-repo -GTJiraSite http://127.0.0.1:8899
+```
 
 ## Web snapshot
 

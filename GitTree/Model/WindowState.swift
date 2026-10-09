@@ -5,6 +5,8 @@ enum SidebarItem: Hashable {
     case repository(UUID)
     /// A branch or tag of the window's repository, by full ref name.
     case ref(UUID, String)
+    /// A group from the Features section.
+    case feature(UUID, String)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -18,11 +20,21 @@ enum SidebarItem: Hashable {
 
     var showInspector = true
     var isCloneSheetPresented = false
+    var isSwitcherPresented = false
+    /// Shows every repository in the sidebar instead of the first few.
+    var showsAllRepositories = false
+    /// A short confirmation shown at the bottom of the sidebar, like "Added 12 repositories".
+    var notice: String?
     /// A URL the clone sheet should start with (used by "Clone…" with a prefilled address).
     var pendingCloneURL: String?
     var editingRepository: Repository?
     var repositoryPendingRemoval: Repository?
+    var errorTitle = "Couldn't Add Repository"
     var errorMessage: String?
+    /// A diff the window should open in its own window (set by deep links).
+    var diffRequest: DiffTarget?
+    /// A link waiting for its repository to finish cloning.
+    @ObservationIgnored private var pendingDeepLink: DeepLink?
     var refFilter = ""
     private(set) var searchFocusRequest = 0
 
@@ -70,7 +82,7 @@ enum SidebarItem: Hashable {
                 graph = fresh
             }
             model.loadIfNeeded()
-            library.lastOpenedID = id
+            library.markOpened(id)
         }
         if sidebarSelection != .repository(id) {
             sidebarSelection = .repository(id)
@@ -83,7 +95,11 @@ enum SidebarItem: Hashable {
             open(id)
         case .ref(let id, let fullName):
             if id != repositoryID { open(id) }
+            graph?.showFeature(id: nil)
             graph?.reveal(refNamed: fullName)
+        case .feature(let id, let featureID):
+            if id != repositoryID { open(id) }
+            graph?.showFeature(id: featureID)
         case nil:
             break
         }
@@ -122,7 +138,39 @@ enum SidebarItem: Hashable {
                 }
             }
             if let added { open(added.id) }
-            if !failures.isEmpty { errorMessage = failures.joined(separator: "\n") }
+            if !failures.isEmpty { showError("Couldn't Add Repository", failures.joined(separator: "\n")) }
+        }
+    }
+
+    func addRepositoriesInFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add Repositories"
+        panel.message = "Choose a folder. GitTree adds every git repository inside it, up to four levels deep."
+        let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard response == .OK, let folder = panel.url else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.notice = "Looking for repositories…"
+                let before = Set(self.library.repositories.map(\.id))
+                let found = await self.library.addRepositories(in: folder)
+                let new = found.filter { !before.contains($0.id) }
+                switch (found.count, new.count) {
+                case (0, _): self.notice = "No git repositories found in “\(folder.lastPathComponent)”."
+                case (_, 0): self.notice = "All \(counted(found.count, "repository", "repositories")) were already in the list."
+                default: self.notice = "Added \(counted(new.count, "repository", "repositories"))."
+                }
+                if self.repositoryID == nil, let first = new.first { self.open(first.id) }
+                try? await Task.sleep(for: .seconds(4))
+                self.notice = nil
+            }
+        }
+        if let window = NSApp.keyWindow {
+            panel.beginSheetModal(for: window, completionHandler: handler)
+        } else {
+            panel.begin(completionHandler: handler)
         }
     }
 
@@ -139,6 +187,61 @@ enum SidebarItem: Hashable {
         graph = nil
         sidebarSelection = nil
         if let first = library.repositories.first { open(first.id) }
+    }
+
+    // MARK: Deep links
+
+    func handle(_ url: URL) {
+        guard let link = DeepLink(url: url) else {
+            showError("Can't Open Link", "GitTree doesn't understand \(url.absoluteString). Links look like gittree://open?repo=<path>&commit=<sha>.")
+            return
+        }
+        Task { await handle(link) }
+    }
+
+    /// After a clone started by a link finishes, continue to the commit and file it named.
+    func resumePendingDeepLink() {
+        guard let link = pendingDeepLink else { return }
+        pendingDeepLink = nil
+        Task { await handle(link) }
+    }
+
+    private func handle(_ link: DeepLink) async {
+        switch await library.resolve(link.repository) {
+        case .notFound(let message):
+            showError("Can't Open Link", message)
+        case .needsClone(let url):
+            pendingDeepLink = link
+            cloneRemoteRepository(prefilledURL: url)
+        case .found(let repository):
+            open(repository.id)
+            guard let commit = link.commit else { return }
+            guard let graph, await waitForHistory(of: graph), let commitGraph = graph.commitGraph else { return }
+            guard let index = commitGraph.index(matching: commit) else {
+                showError("Commit Not Found", "\(commit.prefix(12)) isn't in \(repository.name)'s history. Fetch the repository and try the link again.")
+                return
+            }
+            graph.select(index)
+            showInspector = true
+            if let path = link.path {
+                diffRequest = DiffTarget(repositoryID: repository.id, commit: commitGraph.ids[Int(index)].hex, path: path, line: link.line)
+            }
+        }
+    }
+
+    /// Waits up to 20 seconds for the repository's history to load.
+    private func waitForHistory(of graph: GraphViewModel) async -> Bool {
+        for _ in 0..<200 {
+            if graph.layout != nil { return true }
+            if case .failed = graph.model.status { return false }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return false
+    }
+
+    private func showError(_ title: String, _ message: String) {
+        errorTitle = title
+        errorMessage = message
     }
 
     // MARK: Actions

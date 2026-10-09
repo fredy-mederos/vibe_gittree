@@ -1,9 +1,20 @@
 import AppKit
 import SwiftUI
 
+extension PullRequest.Readiness {
+    var color: NSColor {
+        switch self {
+        case .ready, .checksPassed: .systemGreen
+        case .checksRunning: .systemOrange
+        case .checksFailing: .systemRed
+        }
+    }
+}
+
 private enum ColumnID {
     static let graph = NSUserInterfaceItemIdentifier("graph")
     static let description = NSUserInterfaceItemIdentifier("description")
+    static let ticket = NSUserInterfaceItemIdentifier("ticket")
     static let author = NSUserInterfaceItemIdentifier("author")
     static let date = NSUserInterfaceItemIdentifier("date")
     static let commit = NSUserInterfaceItemIdentifier("commit")
@@ -19,6 +30,8 @@ struct GraphTableView: NSViewRepresentable {
     let revealToken: Int
     let searchVersion: Int
     let showTags: Bool
+    /// Pull requests or ticket statuses changed.
+    let annotationVersion: Int
     let onShowDetails: () -> Void
 
     func makeCoordinator() -> GraphTableCoordinator {
@@ -44,6 +57,9 @@ struct GraphTableView: NSViewRepresentable {
 
         tableView.addTableColumn(Self.column(ColumnID.graph, title: "Graph", width: 100, minWidth: 24, maxWidth: 800))
         tableView.addTableColumn(Self.column(ColumnID.description, title: "Description", width: 640, minWidth: 220))
+        let ticket = Self.column(ColumnID.ticket, title: "Ticket", width: 160, minWidth: 60)
+        ticket.isHidden = true  // shown when the repository's tickets are on the connected Jira site
+        tableView.addTableColumn(ticket)
         tableView.addTableColumn(Self.column(ColumnID.author, title: "Author", width: 150, minWidth: 60))
         tableView.addTableColumn(Self.column(ColumnID.date, title: "Date", width: 178, minWidth: 80))
         tableView.addTableColumn(Self.column(ColumnID.commit, title: "Commit", width: 84, minWidth: 60))
@@ -73,6 +89,11 @@ struct GraphTableView: NSViewRepresentable {
             coordinator, selector: #selector(GraphTableCoordinator.visibleAreaDidResize(_:)),
             name: NSView.frameDidChangeNotification, object: scrollView.contentView
         )
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            coordinator, selector: #selector(GraphTableCoordinator.visibleAreaDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView
+        )
         return scrollView
     }
 
@@ -84,7 +105,8 @@ struct GraphTableView: NSViewRepresentable {
             selectedCommit: selectedCommit,
             revealToken: revealToken,
             searchVersion: searchVersion,
-            showTags: showTags
+            showTags: showTags,
+            annotationVersion: annotationVersion
         )
     }
 
@@ -123,7 +145,11 @@ final class GraphNSTableView: NSTableView {
     private var appliedSearchVersion = -1
     private var appliedRevealToken = -1
     private var appliedShowTags = true
+    private var appliedAnnotationVersion = -1
     private var isApplyingSelection = false
+    /// Set when this repository's tickets are on the connected Jira site.
+    private var jira: JiraConnection?
+    private var ticketRequest: DispatchWorkItem?
     private var isFittingColumns = false
 
     private static let dateFormatter: DateFormatter = {
@@ -139,10 +165,14 @@ final class GraphNSTableView: NSTableView {
     // MARK: Updates from SwiftUI
 
     func update(graph newGraph: GraphViewModel, layoutVersion: Int, selectedCommit: Int32?, revealToken: Int,
-                searchVersion: Int, showTags: Bool) {
+                searchVersion: Int, showTags: Bool, annotationVersion: Int) {
         guard let tableView else { return }
         let switchedRepository = newGraph !== graph
         graph = newGraph
+        let changed = switchedRepository || layoutVersion != appliedLayoutVersion || annotationVersion != appliedAnnotationVersion
+        if changed {
+            updateTicketColumn()
+        }
 
         if switchedRepository || layoutVersion != appliedLayoutVersion {
             let previousLayout = layout
@@ -151,6 +181,7 @@ final class GraphNSTableView: NSTableView {
             appliedLayoutVersion = layoutVersion
             appliedSearchVersion = searchVersion
             appliedShowTags = showTags
+            appliedAnnotationVersion = annotationVersion
             tableView.reloadData()
             if let layout, switchedRepository || previousLayout == nil || previousLayout?.scope != layout.scope {
                 sizeGraphColumn(for: layout)
@@ -160,10 +191,16 @@ final class GraphNSTableView: NSTableView {
             } else if switchedRepository {
                 tableView.scroll(.zero)
             }
-        } else if searchVersion != appliedSearchVersion || showTags != appliedShowTags {
+            scheduleTicketRequest()
+        } else if searchVersion != appliedSearchVersion || showTags != appliedShowTags || annotationVersion != appliedAnnotationVersion {
+            let annotationsChanged = annotationVersion != appliedAnnotationVersion
             appliedSearchVersion = searchVersion
             appliedShowTags = showTags
-            reloadVisibleDescriptions()
+            appliedAnnotationVersion = annotationVersion
+            reloadVisibleRows()
+            // After "Refresh Ticket Statuses" the visible tickets are stale and get asked for once;
+            // after statuses arrive they're fresh, so this asks for nothing.
+            if annotationsChanged { scheduleTicketRequest() }
         }
 
         applySelection(selectedCommit)
@@ -198,6 +235,46 @@ final class GraphNSTableView: NSTableView {
 
     @objc func visibleAreaDidResize(_ notification: Notification) {
         fitDescriptionColumn()
+        scheduleTicketRequest()
+    }
+
+    @objc func visibleAreaDidScroll(_ notification: Notification) {
+        scheduleTicketRequest()
+    }
+
+    // MARK: Jira
+
+    private func updateTicketColumn() {
+        let connection = JiraStore.shared.connection(for: graph.model.repository)
+        jira = connection
+        guard let column = tableView?.tableColumn(withIdentifier: ColumnID.ticket), column.isHidden != (connection == nil) else { return }
+        column.isHidden = connection == nil
+        fitDescriptionColumn()
+    }
+
+    /// Asks Jira for the tickets on screen once scrolling pauses. Redraws when statuses arrive don't
+    /// come through here, so they can't trigger more requests.
+    private func scheduleTicketRequest() {
+        guard jira != nil else { return }
+        ticketRequest?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.requestVisibleTickets() }
+        }
+        ticketRequest = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
+    private func requestVisibleTickets() {
+        guard let tableView, let layout, let jira else { return }
+        let visible = tableView.rows(in: tableView.visibleRect)
+        guard visible.length > 0 else { return }
+        var keys: [String] = []
+        for row in visible.location..<min(layout.rowCount, visible.location + visible.length) {
+            if let key = layout.graph.ticketKeys(in: layout.graph.subjects[Int(layout.rows[row])]).first, !keys.contains(key) {
+                keys.append(key)
+            }
+        }
+        if !keys.isEmpty { JiraStore.shared.request(keys, connection: jira) }
     }
 
     func tableViewColumnDidResize(_ notification: Notification) {
@@ -207,13 +284,16 @@ final class GraphNSTableView: NSTableView {
         fitDescriptionColumn()
     }
 
-    private func reloadVisibleDescriptions() {
+    /// Redraws what's on screen (labels, highlights, statuses) without touching the rest.
+    private func reloadVisibleRows() {
         guard let tableView else { return }
         let rows = tableView.rows(in: tableView.visibleRect)
-        let column = tableView.column(withIdentifier: ColumnID.description)
-        guard rows.length > 0, column >= 0 else { return }
-        tableView.reloadData(forRowIndexes: IndexSet(integersIn: rows.location..<(rows.location + rows.length)),
-                             columnIndexes: IndexSet(integer: column))
+        guard rows.length > 0 else { return }
+        let range = rows.location..<(rows.location + rows.length)
+        tableView.reloadData(forRowIndexes: IndexSet(integersIn: range), columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns))
+        for row in range {
+            (tableView.rowView(atRow: row, makeIfNecessary: false) as? GraphRowView)?.isMatch = graph.matchSet.contains(Int32(row))
+        }
     }
 
     private func applySelection(_ commit: Int32?) {
@@ -292,8 +372,15 @@ final class GraphNSTableView: NSTableView {
                 subject: commitGraph.subjects[index],
                 isMerge: commitGraph.isMerge(commit),
                 ticketRegex: commitGraph.ticketRegex,
-                highlight: graph.matchSet.contains(Int32(row)) ? graph.activeQuery : nil
+                highlight: graph.matchSet.contains(Int32(row)) ? graph.highlightText : nil
             )
+            return cell
+
+        case ColumnID.ticket:
+            let cell = tableView.makeView(withIdentifier: TicketStatusCellView.identifier, owner: nil) as? TicketStatusCellView
+                ?? TicketStatusCellView()
+            let key = jira == nil ? nil : commitGraph.ticketKeys(in: commitGraph.subjects[index]).first
+            cell.configure(key: key, issue: key.flatMap { JiraStore.shared.issue($0) })
             return cell
 
         case ColumnID.author:
@@ -323,37 +410,71 @@ final class GraphNSTableView: NSTableView {
             ?? TextCellView(identifier: identifier, font: font, color: color)
     }
 
-    /// Local branches first (merged with their remote counterpart when both point here), then
-    /// remote-only branches, then tags; at most three plus a "+n".
+    /// Local branches first (merged with their remote counterpart when both point here), each
+    /// followed by its open pull request, then remote-only branches, then tags; at most four plus a "+n".
     private func badges(for commit: Int32, row: Int, layout: GraphLayout) -> [DescriptionCellView.Badge] {
         let refs = layout.graph.refs(at: commit)
         guard !refs.isEmpty else { return [] }
         let laneColor = LanePalette.color(layout.color[row])
+        let pullRequests = graph.model.pullRequests
         let remoteBranches = Set(refs.compactMap { $0.remoteParts?.branch })
         var badges: [DescriptionCellView.Badge] = []
+        var shownPullRequests: Set<Int> = []
+        func addPullRequest(forBranch branch: String) {
+            guard let pullRequests, let pullRequest = pullRequests.openPullRequest(forBranch: branch),
+                  shownPullRequests.insert(pullRequest.number).inserted else { return }
+            badges.append(Self.badge(for: pullRequest, in: pullRequests))
+        }
         for ref in refs where ref.kind == .local {
             badges.append(.init(style: ref.isHead ? .head : .branch, text: ref.name, color: laneColor,
                                 synced: remoteBranches.contains(ref.name)))
+            addPullRequest(forBranch: ref.name)
         }
         let localNames = Set(refs.filter { $0.kind == .local }.map(\.name))
         for ref in refs where ref.kind == .remote {
-            guard let parts = ref.remoteParts, !localNames.contains(parts.branch) else { continue }
-            badges.append(.init(style: .remote, text: parts.branch, prefix: parts.remote + "/", color: laneColor))
+            guard let parts = ref.remoteParts else { continue }
+            if !localNames.contains(parts.branch) {
+                badges.append(.init(style: .remote, text: parts.branch, prefix: parts.remote + "/", color: laneColor))
+            }
+            addPullRequest(forBranch: parts.branch)
         }
         if graph.showTags {
             for ref in refs where ref.kind == .tag {
                 badges.append(.init(style: .tag, text: ref.name))
             }
         }
-        if badges.count > 3 {
-            let hidden = badges.count - 3
-            badges = Array(badges.prefix(3)) + [.init(style: .overflow, text: "+\(hidden)")]
+        if badges.count > 4 {
+            let hidden = badges.count - 4
+            badges = Array(badges.prefix(4)) + [.init(style: .overflow, text: "+\(hidden)")]
         }
         return badges
     }
 
+    /// `#8160`, or `#8160 · 2/3` for the second of three stacked pull requests, with its checks.
+    private static func badge(for pullRequest: PullRequest, in index: PullRequestIndex) -> DescriptionCellView.Badge {
+        var text = "#\(pullRequest.number)"
+        let stack = index.stack(containing: pullRequest)
+        if let position = stack.firstIndex(where: { $0.number == pullRequest.number }) {
+            text += " · \(position + 1)/\(stack.count)"
+        }
+        var badge = DescriptionCellView.Badge(style: .pullRequest, text: text,
+                                              color: pullRequest.isDraft ? .secondaryLabelColor : .systemGreen)
+        if let readiness = pullRequest.readiness {
+            badge.trailingSymbol = readiness.symbol
+            badge.trailingColor = readiness.color
+        }
+        return badge
+    }
+
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         GraphMetrics.rowHeight
+    }
+
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        let view = tableView.makeView(withIdentifier: GraphRowView.identifier, owner: nil) as? GraphRowView ?? GraphRowView()
+        view.identifier = GraphRowView.identifier
+        view.isMatch = graph.matchSet.contains(Int32(row))
+        return view
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
