@@ -123,14 +123,15 @@ struct SidebarView: View {
                     }
                 }
             } header: {
-                SectionHeader(title: "Pull Request Stacks", count: pullRequests.stacks.count)
+                SectionHeader(title: "Pull Request Stacks", count: pullRequests.stacks.count,
+                              fold: fold(pullRequests.stacks.map { ("stack:\($0.first?.number ?? 0)", true) }))
             }
         }
         if tree.local.count > 0 {
             Section(isExpanded: isFiltering ? .constant(true) : $branchesExpanded) {
                 refContent(tree.local, commitGraph: commitGraph, repositoryID: repositoryID, icon: "arrow.triangle.branch")
             } header: {
-                SectionHeader(title: "Branches", count: tree.local.count)
+                SectionHeader(title: "Branches", count: tree.local.count, fold: fold(tree.local.groups.map { ($0.id, false) }))
             }
         }
         if !tree.remotes.isEmpty {
@@ -143,14 +144,28 @@ struct SidebarView: View {
                     }
                 }
             } header: {
-                SectionHeader(title: "Remotes", count: tree.remoteCount)
+                // Folds the folders inside each remote; the remotes themselves (origin) stay open.
+                SectionHeader(title: "Remotes", count: tree.remoteCount,
+                              fold: fold(tree.remotes.flatMap { remote in remote.section.groups.map { ($0.id, false) } }))
             }
         }
         if tree.tags.count > 0 {
             Section(isExpanded: isFiltering ? .constant(true) : $tagsExpanded) {
                 refContent(tree.tags, commitGraph: commitGraph, repositoryID: repositoryID, icon: "tag")
             } header: {
-                SectionHeader(title: "Tags", count: tree.tags.count)
+                SectionHeader(title: "Tags", count: tree.tags.count, fold: fold(tree.tags.groups.map { ($0.id, false) }))
+            }
+        }
+    }
+
+    /// Collapse All / Expand All for the groups inside a section, leaving the section itself open.
+    /// Each group comes with whether it starts expanded.
+    private func fold(_ groups: [(id: String, expandedByDefault: Bool)]) -> FoldControl? {
+        guard !groups.isEmpty, !isFiltering else { return nil }
+        let anyExpanded = groups.contains { expanded[$0.id] ?? $0.expandedByDefault }
+        return FoldControl(anyExpanded: anyExpanded) {
+            withAnimation {
+                for group in groups { expanded[group.id] = !anyExpanded }
             }
         }
     }
@@ -259,6 +274,9 @@ struct SidebarView: View {
             HStack {
                 Text("Features")
                 Spacer()
+                if let report = graph.features, let fold = fold(report.areas.map { ("area:\($0.name)", true) }) {
+                    FoldButton(fold: fold)
+                }
                 if graph.features != nil && graph.featureProgress == nil {
                     Menu {
                         Button("Group Again") { graph.analyzeFeatures() }
@@ -521,14 +539,39 @@ private struct FeatureRow: View {
     }
 }
 
+/// Whether any group in a section is open, and how to fold or unfold them all.
+private struct FoldControl {
+    let anyExpanded: Bool
+    let toggle: () -> Void
+}
+
+private struct FoldButton: View {
+    let fold: FoldControl
+
+    var body: some View {
+        Button(action: fold.toggle) {
+            Image(systemName: fold.anyExpanded ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(fold.anyExpanded ? "Collapse All" : "Expand All")
+        .accessibilityLabel(fold.anyExpanded ? "Collapse All" : "Expand All")
+    }
+}
+
 private struct SectionHeader: View {
     let title: String
     let count: Int
+    /// Collapse All / Expand All for the section's groups, when it has any.
+    var fold: FoldControl?
 
     var body: some View {
         HStack {
             Text(title)
             Spacer()
+            if let fold {
+                FoldButton(fold: fold)
+            }
             Text(count.formatted())
                 .monospacedDigit()
                 .foregroundStyle(.tertiary)
