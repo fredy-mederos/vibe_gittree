@@ -34,7 +34,8 @@ permission to access that folder.
   Repositories in Folder…, which looks four levels deep and skips `node_modules`, build folders and
   the like), or clone remote ones by URL (File › Clone Remote Repository, ⇧⌘O). The list shows the
   first eight with "Show All"; the filter at the bottom matches repositories too; the + menu sorts
-  them by your own order (drag), name, or recently opened.
+  them by your own order (drag), name, or recently opened, and can group them by folder or host.
+  Right-click › Pin to Top keeps favorites above the rest.
 - **Switch quickly** with ⌘K: type part of a name or path, press Return. Without typing, it lists
   repositories most recently opened first. Right-click a repository for Open in New Tab or Open in
   New Window to see several at once.

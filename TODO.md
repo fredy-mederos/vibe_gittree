@@ -11,8 +11,6 @@ model, and the Light/Dark/System appearance setting.
 
 ## Still open
 
-- **Repository list**: pin favorites to the top; optional grouping by parent folder or host/owner
-  (`acme/…`, `github.com/apple/…`).
 - **GitHub**: highlight a stack's lanes in the graph.
 - **Features**: a short AI summary per feature (what changed, from the commit messages), and turning
   a feature or a fix version into release notes.

@@ -22,6 +22,8 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     var lastOpenedAt: Date?
     /// The `origin` remote of a local repository, so links naming the remote find it.
     var originURL: String?
+    /// Pinned repositories stay at the top of the list, in the order they were pinned.
+    var pinnedAt: Date?
 
     static let defaultReleaseTagPattern = #"^v?\d+(\.\d+)+$"#
 
@@ -46,6 +48,18 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     }
 
     var recency: Date { lastOpenedAt ?? addedAt }
+
+    /// The folder it sits in (`~/Documents/projects/acme`), or GitTree's clones for remote ones.
+    var folderGroup: String {
+        kind == .local ? locationSummary : "Cloned by GitTree"
+    }
+
+    /// Where it's hosted (`github.com/acme`), or "Not hosted" for a local repository without a remote.
+    var hostGroup: String {
+        guard let remote = remoteURL ?? originURL, let parts = HostingService.split(remote) else { return "Not hosted" }
+        let owner = parts.path.split(separator: "/").dropLast().joined(separator: "/")
+        return owner.isEmpty ? parts.host : "\(parts.host)/\(owner)"
+    }
 
     var effectiveReleaseTagPattern: String {
         guard let pattern = releaseTagPattern, !pattern.isEmpty else { return Self.defaultReleaseTagPattern }

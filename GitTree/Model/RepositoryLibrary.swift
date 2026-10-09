@@ -15,6 +15,20 @@ enum RepositorySort: String, CaseIterable, Identifiable {
     }
 }
 
+enum RepositoryGrouping: String, CaseIterable, Identifiable {
+    case none, folder, host
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .none: "None"
+        case .folder: "Folder"
+        case .host: "Host"
+        }
+    }
+}
+
 /// The repositories the user added, saved as JSON in Application Support.
 @MainActor @Observable final class RepositoryLibrary {
     static let shared = RepositoryLibrary()
@@ -25,12 +39,28 @@ enum RepositorySort: String, CaseIterable, Identifiable {
         didSet { UserDefaults.standard.set(sort.rawValue, forKey: "repositorySort") }
     }
 
+    var grouping: RepositoryGrouping = RepositoryGrouping(rawValue: UserDefaults.standard.string(forKey: "repositoryGrouping") ?? "") ?? .none {
+        didSet { UserDefaults.standard.set(grouping.rawValue, forKey: "repositoryGrouping") }
+    }
+
+    /// Unpinned repositories in the chosen order (pinned ones are listed separately, on top).
     var sortedRepositories: [Repository] {
+        let unpinned = repositories.filter { $0.pinnedAt == nil }
         switch sort {
-        case .manual: repositories
-        case .name: repositories.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        case .recent: byRecency
+        case .manual: return unpinned
+        case .name: return unpinned.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .recent: return unpinned.sorted { $0.recency > $1.recency }
         }
+    }
+
+    var pinnedRepositories: [Repository] {
+        repositories.filter { $0.pinnedAt != nil }.sorted { ($0.pinnedAt ?? .distantPast) < ($1.pinnedAt ?? .distantPast) }
+    }
+
+    func setPinned(_ pinned: Bool, for id: UUID) {
+        guard let index = repositories.firstIndex(where: { $0.id == id }) else { return }
+        repositories[index].pinnedAt = pinned ? Date() : nil
+        save()
     }
 
     var byRecency: [Repository] {
@@ -178,8 +208,11 @@ enum RepositorySort: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Reorders the unpinned repositories (the manual order the sidebar shows).
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
-        repositories.move(fromOffsets: source, toOffset: destination)
+        var unpinned = repositories.filter { $0.pinnedAt == nil }
+        unpinned.move(fromOffsets: source, toOffset: destination)
+        repositories = repositories.filter { $0.pinnedAt != nil } + unpinned
         save()
     }
 

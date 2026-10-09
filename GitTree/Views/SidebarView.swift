@@ -24,12 +24,16 @@ struct SidebarView: View {
 
     private var isFiltering: Bool { !filterText.isEmpty }
 
-    /// The repositories to list and how many are tucked away behind "Show All".
+    private func matchesFilter(_ repository: Repository) -> Bool {
+        let needle = filterText.lowercased()
+        return repository.name.lowercased().contains(needle) || repository.fullLocation.lowercased().contains(needle)
+    }
+
+    /// The unpinned repositories to list and how many are tucked away behind "Show All".
     private var visibleRepositories: (shown: [Repository], hidden: Int) {
         let all = library.sortedRepositories
         if isFiltering {
-            let needle = filterText.lowercased()
-            return (all.filter { $0.name.lowercased().contains(needle) || $0.fullLocation.lowercased().contains(needle) }, 0)
+            return (all.filter(matchesFilter), 0)
         }
         guard !state.showsAllRepositories, all.count > Self.collapsedLimit + 1 else { return (all, 0) }
         var shown = Array(all.prefix(Self.collapsedLimit))
@@ -39,16 +43,49 @@ struct SidebarView: View {
         return (shown, all.count - shown.count)
     }
 
+    /// With grouping on: unpinned repositories by folder or host, groups sorted by name.
+    private var repositoryGroups: [(name: String, repositories: [Repository])] {
+        let all = library.sortedRepositories.filter { !isFiltering || matchesFilter($0) }
+        let key: (Repository) -> String = library.grouping == .host ? { $0.hostGroup } : { $0.folderGroup }
+        var order: [String] = []
+        var grouped: [String: [Repository]] = [:]
+        for repository in all {
+            let name = key(repository)
+            if grouped[name] == nil { order.append(name) }
+            grouped[name, default: []].append(repository)
+        }
+        return order.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.map { ($0, grouped[$0] ?? []) }
+    }
+
+    private func repositoryRow(_ repository: Repository) -> some View {
+        RepositoryRow(repository: repository, isCurrent: repository.id == state.repositoryID)
+            .tag(SidebarItem.repository(repository.id))
+    }
+
     var body: some View {
         List(selection: $state.sidebarSelection) {
             let visible = visibleRepositories
+            let groups = library.grouping == .none ? [] : repositoryGroups
             Section(isExpanded: isFiltering ? .constant(true) : $repositoriesExpanded) {
+                ForEach(library.pinnedRepositories.filter { !isFiltering || matchesFilter($0) }) { repository in
+                    repositoryRow(repository)
+                }
+                if library.grouping != .none {
+                    ForEach(groups, id: \.name) { group in
+                        DisclosureGroup(isExpanded: expansion("repositories:\(group.name)", default: true)) {
+                            ForEach(group.repositories) { repositoryRow($0) }
+                        } label: {
+                            CountedLabel(title: group.name, systemImage: library.grouping == .host ? "network" : "folder",
+                                         count: group.repositories.count)
+                        }
+                    }
+                } else {
                 ForEach(visible.shown) { repository in
-                    RepositoryRow(repository: repository, isCurrent: repository.id == state.repositoryID)
-                        .tag(SidebarItem.repository(repository.id))
+                    repositoryRow(repository)
                 }
                 .onMove(perform: library.sort == .manual && !isFiltering && visible.hidden == 0 ? { library.move(fromOffsets: $0, toOffset: $1) } : nil)
-                if visible.hidden > 0 {
+                }
+                if library.grouping == .none, visible.hidden > 0 {
                     Button {
                         state.showsAllRepositories = true
                     } label: {
@@ -56,7 +93,8 @@ struct SidebarView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                } else if state.showsAllRepositories, !isFiltering, library.repositories.count > Self.collapsedLimit + 1 {
+                } else if library.grouping == .none, state.showsAllRepositories, !isFiltering,
+                          library.sortedRepositories.count > Self.collapsedLimit + 1 {
                     Button {
                         state.showsAllRepositories = false
                     } label: {
@@ -66,7 +104,8 @@ struct SidebarView: View {
                     .buttonStyle(.plain)
                 }
             } header: {
-                SectionHeader(title: "Repositories", count: library.repositories.count)
+                SectionHeader(title: "Repositories", count: library.repositories.count,
+                              fold: fold(groups.map { ("repositories:\($0.name)", true) }))
             }
 
             if let graph = state.graph, let repositoryID = state.repositoryID,
@@ -226,13 +265,18 @@ struct SidebarView: View {
 
     /// A pull request; selecting it goes to its merge commit (merged) or its branch.
     @ViewBuilder
-    private func pullRequestRow(_ pullRequest: PullRequest, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
+    private func pullRequestRow(_ pullRequest: PullRequest, commitGraph: CommitGraph, repositoryID: UUID, position: Int? = nil) -> some View {
         let ref = commitGraph.refs.first { $0.kind == .local && $0.name == pullRequest.head }
             ?? commitGraph.refs.first { $0.kind == .remote && $0.remoteParts?.branch == pullRequest.head }
         let mergeCommit = pullRequest.mergeCommit.flatMap { commitGraph.indexByID[$0] != nil ? $0 : nil }
         let row = Label {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
+                    if let position {
+                        Text(verbatim: "\(position + 1).")
+                            .monospacedDigit()
+                            .foregroundStyle(.tertiary)
+                    }
                     Text(verbatim: "#\(pullRequest.number)")
                         .monospacedDigit()
                         .foregroundStyle(Self.stateColor(pullRequest))
@@ -337,31 +381,9 @@ struct SidebarView: View {
         }
     }
 
-    /// One pull request of a stack; selecting it goes to its branch.
-    @ViewBuilder
+    /// One pull request of a stack, laid out like the other pull requests with its place in the stack.
     private func stackRow(_ pullRequest: PullRequest, position: Int, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
-        let ref = commitGraph.refs.first { $0.kind == .local && $0.name == pullRequest.head }
-            ?? commitGraph.refs.first { $0.kind == .remote && $0.remoteParts?.branch == pullRequest.head }
-        let row = Label {
-            HStack(spacing: 6) {
-                Text("\(position + 1). \(pullRequest.head)")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 4)
-                Text(verbatim: "#\(pullRequest.number)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(pullRequest.isDraft ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.green))
-            }
-        } icon: {
-            Image(systemName: "arrow.triangle.pull")
-                .foregroundStyle(.secondary)
-        }
-        .help(Text(verbatim: "#\(pullRequest.number) \(pullRequest.title)\n\(pullRequest.base) ← \(pullRequest.head)"))
-        if let ref {
-            row.tag(SidebarItem.ref(repositoryID, ref.fullName))
-        } else {
-            row.foregroundStyle(.secondary)
-        }
+        pullRequestRow(pullRequest, commitGraph: commitGraph, repositoryID: repositoryID, position: position)
     }
 
     private func expansion(_ id: String, default defaultValue: Bool = false) -> Binding<Bool> {
@@ -389,6 +411,10 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func repositoryMenu(_ repository: Repository) -> some View {
+        Button(repository.pinnedAt == nil ? "Pin to Top" : "Unpin") {
+            library.setPinned(repository.pinnedAt == nil, for: repository.id)
+        }
+        Divider()
         Button("Open in New Tab") {
             WindowTabbing.openNextWindowAsTab()
             openWindow(id: "repository", value: repository.id)
@@ -465,6 +491,11 @@ struct SidebarView: View {
                             Text(sort.title).tag(sort)
                         }
                     }
+                    Picker("Group Repositories By", selection: $library.grouping) {
+                        ForEach(RepositoryGrouping.allCases) { grouping in
+                            Text(grouping.title).tag(grouping)
+                        }
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -500,6 +531,11 @@ private struct RepositoryRow: View {
                     Spacer(minLength: 4)
                     if model?.isBusy == true {
                         ProgressView().controlSize(.mini)
+                    } else if repository.pinnedAt != nil {
+                        Image(systemName: "pin.fill")
+                            .imageScale(.small)
+                            .foregroundStyle(.tertiary)
+                            .help("Pinned")
                     }
                 }
                 Text(repository.locationSummary)
