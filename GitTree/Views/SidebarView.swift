@@ -66,17 +66,19 @@ struct SidebarView: View {
         List(selection: $state.sidebarSelection) {
             let visible = visibleRepositories
             let groups = library.grouping == .none ? [] : repositoryGroups
-            Section(isExpanded: isFiltering ? .constant(true) : $repositoriesExpanded) {
+            FoldingSection(isExpanded: isFiltering ? .constant(true) : $repositoriesExpanded) {
                 ForEach(library.pinnedRepositories.filter { !isFiltering || matchesFilter($0) }) { repository in
                     repositoryRow(repository)
                 }
                 if library.grouping != .none {
                     ForEach(groups, id: \.name) { group in
-                        DisclosureGroup(isExpanded: expansion("repositories:\(group.name)", default: true)) {
+                        let isExpanded = expansion("repositories:\(group.name)", default: true)
+                        DisclosureGroup(isExpanded: isExpanded) {
                             ForEach(group.repositories) { repositoryRow($0) }
                         } label: {
                             CountedLabel(title: group.name, systemImage: library.grouping == .host ? "network" : "folder",
                                          count: group.repositories.count)
+                                .togglesDisclosure(isExpanded)
                         }
                     }
                 } else {
@@ -105,7 +107,7 @@ struct SidebarView: View {
                 }
             } header: {
                 SectionHeader(title: "Repositories", count: library.repositories.count,
-                              fold: fold(groups.map { ("repositories:\($0.name)", true) }))
+                              fold: repositoriesExpanded ? fold(groups.map { ("repositories:\($0.name)", true) }) : nil)
             }
 
             if let graph = state.graph, let repositoryID = state.repositoryID,
@@ -140,65 +142,73 @@ struct SidebarView: View {
         if let pullRequests = state.graph?.model.pullRequests, !isFiltering {
             let groups = pullRequestGroups(pullRequests)
             if !groups.isEmpty {
-                Section(isExpanded: $pullRequestsExpanded) {
+                FoldingSection(isExpanded: $pullRequestsExpanded) {
                     ForEach(groups, id: \.id) { group in
-                        DisclosureGroup(isExpanded: expansion(group.id, default: group.expandedByDefault)) {
+                        let isExpanded = expansion(group.id, default: group.expandedByDefault)
+                        DisclosureGroup(isExpanded: isExpanded) {
                             ForEach(group.pullRequests) { pullRequest in
                                 pullRequestRow(pullRequest, commitGraph: commitGraph, repositoryID: repositoryID)
                             }
                         } label: {
                             CountedLabel(title: group.title, systemImage: group.systemImage, count: group.pullRequests.count)
+                                .togglesDisclosure(isExpanded)
                         }
                     }
                 } header: {
                     SectionHeader(title: "Pull Requests", count: groups.reduce(0) { $0 + $1.pullRequests.count },
-                                  fold: fold(groups.map { ($0.id, $0.expandedByDefault) }))
+                                  fold: pullRequestsExpanded ? fold(groups.map { ($0.id, $0.expandedByDefault) }) : nil)
                 }
             }
         }
         if let pullRequests = state.graph?.model.pullRequests, !pullRequests.stacks.isEmpty, !isFiltering {
-            Section(isExpanded: $stacksExpanded) {
+            FoldingSection(isExpanded: $stacksExpanded) {
                 ForEach(pullRequests.stacks, id: \.first?.number) { stack in
-                    DisclosureGroup(isExpanded: expansion("stack:\(stack.first?.number ?? 0)", default: true)) {
+                    let isExpanded = expansion("stack:\(stack.first?.number ?? 0)", default: true)
+                    DisclosureGroup(isExpanded: isExpanded) {
                         ForEach(Array(stack.enumerated()), id: \.element.number) { position, pullRequest in
                             stackRow(pullRequest, position: position, commitGraph: commitGraph, repositoryID: repositoryID)
                         }
                     } label: {
                         CountedLabel(title: "on \(stack.first?.base ?? "")", systemImage: "square.stack.3d.up", count: stack.count)
+                            .togglesDisclosure(isExpanded)
                     }
                 }
             } header: {
                 SectionHeader(title: "Pull Request Stacks", count: pullRequests.stacks.count,
-                              fold: fold(pullRequests.stacks.map { ("stack:\($0.first?.number ?? 0)", true) }))
+                              fold: stacksExpanded ? fold(pullRequests.stacks.map { ("stack:\($0.first?.number ?? 0)", true) }) : nil)
             }
         }
         if tree.local.count > 0 {
-            Section(isExpanded: isFiltering ? .constant(true) : $branchesExpanded) {
+            FoldingSection(isExpanded: isFiltering ? .constant(true) : $branchesExpanded) {
                 refContent(tree.local, commitGraph: commitGraph, repositoryID: repositoryID, icon: "arrow.triangle.branch")
             } header: {
-                SectionHeader(title: "Branches", count: tree.local.count, fold: fold(tree.local.groups.map { ($0.id, false) }))
+                SectionHeader(title: "Branches", count: tree.local.count,
+                              fold: branchesExpanded ? fold(tree.local.groups.map { ($0.id, false) }) : nil)
             }
         }
         if !tree.remotes.isEmpty {
-            Section(isExpanded: isFiltering ? .constant(true) : $remotesExpanded) {
+            FoldingSection(isExpanded: isFiltering ? .constant(true) : $remotesExpanded) {
                 ForEach(tree.remotes) { remote in
-                    DisclosureGroup(isExpanded: expansion("remote:\(remote.name)", default: true)) {
+                    let isExpanded = expansion("remote:\(remote.name)", default: true)
+                    DisclosureGroup(isExpanded: isExpanded) {
                         refContent(remote.section, commitGraph: commitGraph, repositoryID: repositoryID, icon: "cloud")
                     } label: {
                         CountedLabel(title: remote.name, systemImage: "network", count: remote.section.count)
+                            .togglesDisclosure(isExpanded)
                     }
                 }
             } header: {
                 // Folds the folders inside each remote; the remotes themselves (origin) stay open.
                 SectionHeader(title: "Remotes", count: tree.remoteCount,
-                              fold: fold(tree.remotes.flatMap { remote in remote.section.groups.map { ($0.id, false) } }))
+                              fold: remotesExpanded ? fold(tree.remotes.flatMap { remote in remote.section.groups.map { ($0.id, false) } }) : nil)
             }
         }
         if tree.tags.count > 0 {
-            Section(isExpanded: isFiltering ? .constant(true) : $tagsExpanded) {
+            FoldingSection(isExpanded: isFiltering ? .constant(true) : $tagsExpanded) {
                 refContent(tree.tags, commitGraph: commitGraph, repositoryID: repositoryID, icon: "tag")
             } header: {
-                SectionHeader(title: "Tags", count: tree.tags.count, fold: fold(tree.tags.groups.map { ($0.id, false) }))
+                SectionHeader(title: "Tags", count: tree.tags.count,
+                              fold: tagsExpanded ? fold(tree.tags.groups.map { ($0.id, false) }) : nil)
             }
         }
     }
@@ -218,12 +228,14 @@ struct SidebarView: View {
     @ViewBuilder
     private func refContent(_ section: RefSection, commitGraph: CommitGraph, repositoryID: UUID, icon: String) -> some View {
         ForEach(section.groups) { group in
-            DisclosureGroup(isExpanded: expansion(group.id)) {
+            let isExpanded = expansion(group.id)
+            DisclosureGroup(isExpanded: isExpanded) {
                 ForEach(group.items) { item in
                     refRow(item, commitGraph: commitGraph, repositoryID: repositoryID, icon: icon)
                 }
             } label: {
                 CountedLabel(title: group.title, systemImage: "folder", count: group.items.count)
+                    .togglesDisclosure(isExpanded)
             }
         }
         ForEach(section.items) { item in
@@ -321,7 +333,7 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func featuresSection(_ graph: GraphViewModel, repositoryID: UUID) -> some View {
-        Section(isExpanded: $featuresExpanded) {
+        FoldingSection(isExpanded: $featuresExpanded) {
             if let progress = graph.featureProgress {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -332,13 +344,15 @@ struct SidebarView: View {
             }
             if let report = graph.features {
                 ForEach(report.areas, id: \.name) { area in
-                    DisclosureGroup(isExpanded: expansion("area:\(area.name)", default: true)) {
+                    let isExpanded = expansion("area:\(area.name)", default: true)
+                    DisclosureGroup(isExpanded: isExpanded) {
                         ForEach(area.groups) { group in
                             FeatureRow(group: group)
                                 .tag(SidebarItem.feature(repositoryID, group.id))
                         }
                     } label: {
                         CountedLabel(title: area.name, systemImage: "square.grid.2x2", count: area.groups.count)
+                            .togglesDisclosure(isExpanded)
                     }
                 }
                 if let note = report.note {
@@ -360,7 +374,7 @@ struct SidebarView: View {
             HStack {
                 Text("Features")
                 Spacer()
-                if let report = graph.features, let fold = fold(report.areas.map { ("area:\($0.name)", true) }) {
+                if featuresExpanded, let report = graph.features, let fold = fold(report.areas.map { ("area:\($0.name)", true) }) {
                     FoldButton(fold: fold)
                 }
                 if graph.features != nil && graph.featureProgress == nil {
@@ -617,6 +631,52 @@ private struct FeatureRow: View {
                 .foregroundStyle(.secondary)
         }
         .help(Text(verbatim: "\(group.name)\n\(group.commits.count) commits by \(group.authors.prefix(3).joined(separator: ", "))"))
+    }
+}
+
+/// A sidebar section whose chevron always shows (the system one appears only on hover). Clicking
+/// anywhere on the header opens or closes it.
+private struct FoldingSection<Content: View, Header: View>: View {
+    @Binding var isExpanded: Bool
+    let content: Content
+    let header: Header
+
+    init(isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content, @ViewBuilder header: () -> Header) {
+        _isExpanded = isExpanded
+        self.content = content()
+        self.header = header()
+    }
+
+    var body: some View {
+        Section {
+            if isExpanded { content }
+        } header: {
+            HStack(spacing: 6) {
+                header
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 12)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { toggle() }
+            .accessibilityAction(named: isExpanded ? "Collapse" : "Expand", toggle)
+        }
+    }
+
+    private func toggle() {
+        withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+    }
+}
+
+private extension View {
+    /// Clicking a group's label opens or closes it, not only its small chevron.
+    func togglesDisclosure(_ isExpanded: Binding<Bool>) -> some View {
+        contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.wrappedValue.toggle() }
+            }
     }
 }
 
