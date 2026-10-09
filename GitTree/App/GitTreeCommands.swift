@@ -51,7 +51,7 @@ struct GitTreeCommands: Commands {
                 .keyboardShortcut("r")
                 .disabled(window?.graph == nil)
             Button("Refresh Ticket Statuses") { JiraStore.shared.markAllStale() }
-                .disabled(JiraStore.shared.configuredConnection == nil)
+                .disabled(JiraStore.shared.profiles.isEmpty)
 
             Divider()
 

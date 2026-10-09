@@ -86,7 +86,7 @@ struct GraphDetailView: View {
             }
             .help("Show tag labels in the graph")
         }
-        if JiraStore.shared.connection(for: graph.model.repository) != nil {
+        if let jira = JiraStore.shared.connection(for: graph.model.repository) {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Section("Tickets in the latest 500 commits") {
@@ -95,7 +95,7 @@ struct GraphDetailView: View {
                         }
                     }
                     Section("Fix Version") {
-                        ForEach(JiraStore.shared.knownFixVersions.prefix(12), id: \.self) { fixVersion in
+                        ForEach(JiraStore.shared.knownFixVersions(for: jira).prefix(12), id: \.self) { fixVersion in
                             Button(fixVersion) { graph.highlightFixVersion(fixVersion) }
                         }
                         Button("Other Fix Version…") { state.isFixVersionPromptPresented = true }

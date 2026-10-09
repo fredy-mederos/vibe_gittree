@@ -24,6 +24,10 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     var originURL: String?
     /// Pinned repositories stay at the top of the list, in the order they were pinned.
     var pinnedAt: Date?
+    /// The Jira profile this repository's tickets live in; nil for no Jira.
+    var jiraProfileID: UUID?
+    /// Ticket key prefixes to look for, like PROJ in PROJ-123. Nil or empty: detected from commit messages.
+    var ticketPrefixes: [String]?
 
     static let defaultReleaseTagPattern = #"^v?\d+(\.\d+)+$"#
 
@@ -64,6 +68,14 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     var effectiveReleaseTagPattern: String {
         guard let pattern = releaseTagPattern, !pattern.isEmpty else { return Self.defaultReleaseTagPattern }
         return pattern
+    }
+
+    /// Ticket prefixes set by hand, cleaned up (uppercased, without blanks or duplicates).
+    var customTicketPrefixes: [String] {
+        var seen: Set<String> = []
+        return (ticketPrefixes ?? [])
+            .map { $0.trimmingCharacters(in: .whitespaces).uppercased() }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     func issueURL(for key: String) -> URL? {

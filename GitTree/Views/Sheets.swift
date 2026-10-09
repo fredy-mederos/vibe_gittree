@@ -105,9 +105,25 @@ struct CloneSheet: View {
 struct RepositorySettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var repository: Repository
+    @State private var ticketPrefixes: String
 
     init(repository: Repository) {
         _repository = State(initialValue: repository)
+        _ticketPrefixes = State(initialValue: repository.customTicketPrefixes.joined(separator: ", "))
+    }
+
+    /// The repository's profile; one that was removed reads as none.
+    private var jiraProfile: Binding<UUID?> {
+        Binding(
+            get: { JiraStore.shared.profile(id: repository.jiraProfileID)?.id },
+            set: { repository.jiraProfileID = $0 }
+        )
+    }
+
+    /// What GitTree found in the commit messages, shown when no keys are set.
+    private var detectedPrefixes: String {
+        let detected = RepositoryModelStore.shared.existingModel(id: repository.id)?.graph?.ticketPrefixes ?? []
+        return detected.isEmpty ? "Detected from commit messages" : "Detected: " + detected.prefix(4).joined(separator: ", ")
     }
 
     private var patternError: String? {
@@ -138,10 +154,19 @@ struct RepositorySettingsSheet: View {
                     }
                 }
                 Section {
+                    Picker("Jira", selection: jiraProfile) {
+                        Text("No Jira").tag(UUID?.none)
+                        ForEach(JiraStore.shared.profiles) { profile in
+                            Text(profile.name).tag(UUID?.some(profile.id))
+                        }
+                    }
+                    TextField("Ticket keys", text: $ticketPrefixes, prompt: Text(detectedPrefixes))
                     TextField("Issue link", text: optional(\.issueURLTemplate),
                               prompt: Text("https://example.atlassian.net/browse/{key}"))
+                } header: {
+                    Text("Tickets")
                 } footer: {
-                    Text("Ticket keys in commit messages, like ABC-123, open this link. {key} is replaced with the key.")
+                    Text("Ticket keys like ABC-123 in commit messages show their status from this Jira (profiles are in Settings › Jira). Ticket keys limits them to these projects, separated by commas; leave it empty to detect them. Issue link opens tickets somewhere else, with {key} for the key.")
                 }
                 Section {
                     TextField("Release tags", text: optional(\.releaseTagPattern),
@@ -163,6 +188,8 @@ struct RepositorySettingsSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Save") {
                     repository.name = repository.name.trimmingCharacters(in: .whitespaces)
+                    let prefixes = ticketPrefixes.split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init)
+                    repository.ticketPrefixes = prefixes.isEmpty ? nil : prefixes
                     RepositoryLibrary.shared.update(repository)
                     dismiss()
                 }
@@ -171,7 +198,7 @@ struct RepositorySettingsSheet: View {
             }
             .padding([.horizontal, .bottom], 20)
         }
-        .frame(width: 540, height: 440)
+        .frame(width: 560, height: 560)
     }
 
     private func optional(_ keyPath: WritableKeyPath<Repository, String?>) -> Binding<String> {
@@ -184,14 +211,19 @@ struct RepositorySettingsSheet: View {
 
 /// GitTree > Settings.
 struct AppSettingsView: View {
+    @AppStorage("settingsTab") private var tab = "general"
+
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             GeneralSettingsView()
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag("general")
             JiraSettingsView()
                 .tabItem { Label("Jira", systemImage: "ticket") }
+                .tag("jira")
             GitHubSettingsView()
                 .tabItem { Label("GitHub", systemImage: "arrow.triangle.pull") }
+                .tag("github")
         }
         .frame(width: 580)
     }
@@ -270,80 +302,174 @@ private struct GeneralSettingsView: View {
     }
 }
 
-/// Connect Jira to show ticket statuses. The token goes to the keychain.
+/// Jira profiles (a site and an account each), which one each repository uses, and the one new
+/// repositories start with.
 private struct JiraSettingsView: View {
-    @State private var site = UserDefaults.standard.string(forKey: JiraSettings.siteKey) ?? ""
-    @State private var email = UserDefaults.standard.string(forKey: JiraSettings.emailKey) ?? ""
-    @State private var token = ""
-    @State private var hasSavedToken = JiraSettings.connection != nil
-    @State private var status: String?
-    @State private var isTesting = false
-
-    private var isComplete: Bool {
-        JiraSettings.normalizedSite(site) != nil && !email.trimmingCharacters(in: .whitespaces).isEmpty
-            && (!token.isEmpty || hasSavedToken)
-    }
+    @Bindable private var store = JiraStore.shared
+    @Bindable private var library = RepositoryLibrary.shared
+    @State private var editing: JiraProfile?
 
     var body: some View {
         Form {
             Section {
-                TextField("Site", text: $site, prompt: Text("your-company.atlassian.net"))
-                TextField("Email", text: $email, prompt: Text("you@company.com"))
-                SecureField("API token", text: $token, prompt: Text(hasSavedToken ? "Saved in your keychain" : "Paste an API token"))
-            } header: {
-                Text("Jira Cloud")
-            } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Ticket keys in commit messages (like ABC-123) show their status in a Ticket column and in the details. GitTree only asks Jira about tickets on screen, in small batches, and caches the answers.")
-                    Link("Create an API token…", destination: URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!)
+                if store.profiles.isEmpty {
+                    Text("No profiles yet.")
+                        .foregroundStyle(.secondary)
                 }
+                ForEach(store.profiles) { profile in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(profile.name)
+                            Text([profile.host, profile.email].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if store.connection(for: profile) == nil {
+                            Text("Incomplete")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        } else if let problem = store.problems[profile.id] {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .help(problem)
+                        }
+                        Button("Edit…") { editing = profile }
+                    }
+                }
+                Button("Add Profile…") { editing = JiraProfile(id: UUID(), name: "", site: "", email: "") }
+            } header: {
+                Text("Profiles")
+            } footer: {
+                Text("A profile is a Jira Cloud site and the account GitTree uses there. Ticket keys in commit messages (like ABC-123) show their status in a Ticket column and in the details. GitTree only asks Jira about tickets on screen, in small batches, and caches the answers.")
             }
             Section {
-                HStack {
-                    Button("Save and Test") { Task { await saveAndTest() } }
-                        .disabled(!isComplete || isTesting)
-                    if isTesting { ProgressView().controlSize(.small) }
-                    if let status {
-                        Text(status)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                    if hasSavedToken {
-                        Button("Disconnect", role: .destructive) { disconnect() }
+                Picker("New repositories", selection: $store.defaultProfileID) {
+                    profileOptions
+                }
+                ForEach(library.repositories.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { repository in
+                    Picker(selection: profileBinding(for: repository)) {
+                        profileOptions
+                    } label: {
+                        Text(repository.name)
+                        Text(repository.locationSummary)
                     }
                 }
+            } header: {
+                Text("Repositories")
+            } footer: {
+                Text("Each repository shows ticket statuses from its own Jira, or none.")
             }
         }
         .formStyle(.grouped)
+        .frame(height: 540)
+        .sheet(item: $editing) { profile in
+            JiraProfileEditor(profile: profile, isNew: store.profile(id: profile.id) == nil)
+        }
+    }
+
+    @ViewBuilder private var profileOptions: some View {
+        Text("No Jira").tag(UUID?.none)
+        ForEach(store.profiles) { profile in
+            Text(profile.name).tag(UUID?.some(profile.id))
+        }
+    }
+
+    /// A repository's profile; one that was removed reads as none.
+    private func profileBinding(for repository: Repository) -> Binding<UUID?> {
+        Binding(
+            get: { store.profile(id: repository.jiraProfileID)?.id },
+            set: { library.setJiraProfile($0, for: repository.id) }
+        )
+    }
+}
+
+/// Adds or edits a Jira profile. The token goes to the keychain.
+private struct JiraProfileEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var profile: JiraProfile
+    @State private var isNew: Bool
+    @State private var token = ""
+    @State private var hasSavedToken: Bool
+    @State private var status: String?
+    @State private var isTesting = false
+    @State private var confirmsRemoval = false
+
+    init(profile: JiraProfile, isNew: Bool) {
+        _profile = State(initialValue: profile)
+        _isNew = State(initialValue: isNew)
+        _hasSavedToken = State(initialValue: JiraProfiles.token(for: profile.id) != nil)
+    }
+
+    private var isComplete: Bool {
+        profile.baseURL != nil && !profile.email.trimmingCharacters(in: .whitespaces).isEmpty && (!token.isEmpty || hasSavedToken)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    TextField("Name", text: $profile.name, prompt: Text("Work"))
+                    TextField("Site", text: $profile.site, prompt: Text("your-company.atlassian.net"))
+                    TextField("Email", text: $profile.email, prompt: Text("you@company.com"))
+                    SecureField("API token", text: $token, prompt: Text(hasSavedToken ? "Saved in your keychain" : "Paste an API token"))
+                } header: {
+                    Text(isNew ? "New Jira Profile" : "Jira Profile")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let status {
+                            Text(status)
+                        }
+                        Link("Create an API token…", destination: URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            HStack {
+                if !isNew {
+                    Button("Remove…", role: .destructive) { confirmsRemoval = true }
+                }
+                Spacer()
+                if isTesting { ProgressView().controlSize(.small) }
+                Button(isNew ? "Cancel" : "Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Save and Test") { Task { await saveAndTest() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!isComplete || isTesting)
+            }
+            .padding([.horizontal, .bottom], 20)
+        }
+        .frame(width: 480)
+        .confirmationDialog("Remove “\(profile.name)”?", isPresented: $confirmsRemoval) {
+            Button("Remove", role: .destructive) {
+                JiraStore.shared.remove(profileID: profile.id)
+                dismiss()
+            }
+        } message: {
+            Text("Its API token is removed from your keychain. Repositories that use it show no ticket statuses until you pick another profile.")
+        }
     }
 
     private func saveAndTest() async {
-        JiraSettings.save(site: site, email: email, token: token.isEmpty ? nil : token)
+        if profile.name.trimmingCharacters(in: .whitespaces).isEmpty {
+            profile.name = profile.host?.split(separator: ".").first.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? "Jira"
+        }
+        JiraStore.shared.save(profile, token: token)
         token = ""
-        isTesting = true
-        defer { isTesting = false }
-        guard let connection = JiraSettings.connection else {
-            hasSavedToken = false
+        isNew = false
+        hasSavedToken = JiraProfiles.token(for: profile.id) != nil
+        guard let connection = JiraStore.shared.connection(for: profile) else {
             status = "Add the site, email and API token."
             return
         }
-        hasSavedToken = true
+        isTesting = true
+        defer { isTesting = false }
         do {
             let name = try await JiraClient.myself(connection)
-            status = "Connected as \(name)."
+            status = "Saved. Connected as \(name)."
         } catch {
-            status = error.localizedDescription
+            status = "Saved, but the test failed: \(error.localizedDescription)"
         }
-    }
-
-    private func disconnect() {
-        if let host = JiraSettings.normalizedSite(site)?.host {
-            Keychain.setPassword("", service: JiraSettings.keychainService, account: host)
-        }
-        JiraSettings.save(site: site, email: email, token: nil)
-        hasSavedToken = false
-        status = "Disconnected."
     }
 }
 

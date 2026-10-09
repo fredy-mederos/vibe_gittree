@@ -25,8 +25,9 @@ struct JiraIssue: Sendable, Hashable, Codable {
     }
 }
 
-/// The Jira site GitTree talks to. The API token lives in the keychain, never in preferences.
-struct JiraConnection: Sendable, Equatable {
+/// A Jira site and the account GitTree uses there, ready for requests.
+struct JiraConnection: Sendable, Hashable {
+    let profileID: UUID
     let baseURL: URL
     let email: String
     let token: String
@@ -38,10 +39,32 @@ struct JiraConnection: Sendable, Equatable {
     }
 }
 
-enum JiraSettings {
-    static let siteKey = "jiraSite"
-    static let emailKey = "jiraEmail"
+/// A Jira site and account set up in Settings › Jira. Each repository picks one, or none. The API
+/// token lives in the keychain, never in preferences.
+struct JiraProfile: Codable, Identifiable, Hashable, Sendable {
+    var id: UUID
+    var name: String
+    var site: String
+    var email: String
+
+    var baseURL: URL? { JiraProfiles.normalizedSite(site) }
+    var host: String? { baseURL?.host }
+}
+
+/// Where profiles are kept: `jira-profiles.json` in Application Support for the list and the
+/// default for new repositories, the keychain (under each profile's id) for API tokens.
+enum JiraProfiles {
+    struct Saved: Codable {
+        var profiles: [JiraProfile] = []
+        var defaultProfileID: UUID?
+    }
+
+    /// Set once the single Jira connection of earlier versions became a profile, until repositories
+    /// that used it are assigned to it.
+    static let pendingAssignmentKey = "jiraProfileToAssign"
     static let keychainService = "GitTree Jira API token"
+
+    private static var url: URL { AppPaths.dataDirectory.appendingPathComponent("jira-profiles.json") }
 
     /// `https://example.atlassian.net`, accepting a bare host too.
     static func normalizedSite(_ site: String) -> URL? {
@@ -55,35 +78,73 @@ enum JiraSettings {
         return components.url
     }
 
-    static var connection: JiraConnection? {
-        let defaults = UserDefaults.standard
+    static func load() -> Saved {
+        if let data = try? Data(contentsOf: url) {
+            return (try? JSONDecoder().decode(Saved.self, from: data)) ?? Saved()
+        }
+        return migrateLegacySettings()
+    }
+
+    static func save(_ saved: Saved) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(saved) else { return }
+        try? FileManager.default.createDirectory(at: AppPaths.dataDirectory, withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+
+    static func token(for id: UUID) -> String? {
         #if DEBUG
-        // Test runs point GitTree at a local mock server with throwaway credentials.
-        if let site = defaults.string(forKey: "GTJiraSite"), let url = normalizedSite(site) {
-            return JiraConnection(baseURL: url, email: defaults.string(forKey: "GTJiraEmail") ?? "test@example.com",
-                                  token: defaults.string(forKey: "GTJiraToken") ?? "test-token")
+        if let tokens = testTokens { return tokens[id.uuidString].flatMap { $0.isEmpty ? nil : $0 } }
+        #endif
+        return Keychain.password(service: keychainService, account: id.uuidString).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    @discardableResult
+    static func setToken(_ token: String, for id: UUID) -> Bool {
+        #if DEBUG
+        if var tokens = testTokens {
+            tokens[id.uuidString] = token.isEmpty ? nil : token
+            try? JSONEncoder().encode(tokens).write(to: testTokensURL, options: .atomic)
+            return true
         }
         #endif
-        guard let url = normalizedSite(defaults.string(forKey: siteKey) ?? ""),
-              let email = defaults.string(forKey: emailKey)?.trimmingCharacters(in: .whitespaces), !email.isEmpty,
-              let host = url.host, let token = Keychain.password(service: keychainService, account: host), !token.isEmpty
-        else { return nil }
-        return JiraConnection(baseURL: url, email: email, token: token)
+        return Keychain.setPassword(token, service: keychainService, account: id.uuidString)
     }
 
-    static func save(site: String, email: String, token: String?) {
+    #if DEBUG
+    /// Test runs (`-GTDataDirectory`) keep tokens in their throwaway folder, never in the keychain.
+    private static var testTokensURL: URL { AppPaths.dataDirectory.appendingPathComponent("test-tokens.json") }
+
+    private static var testTokens: [String: String]? {
+        guard UserDefaults.standard.string(forKey: "GTDataDirectory") != nil else { return nil }
+        guard let data = try? Data(contentsOf: testTokensURL) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+    }
+    #endif
+
+    /// Earlier versions had one Jira connection (site and email in preferences, the token in the
+    /// keychain under the site's host). It becomes the first profile, the default for new
+    /// repositories, and is assigned to the repositories that used it (see `RepositoryLibrary`).
+    private static func migrateLegacySettings() -> Saved {
         let defaults = UserDefaults.standard
-        defaults.set(site.trimmingCharacters(in: .whitespacesAndNewlines), forKey: siteKey)
-        defaults.set(email.trimmingCharacters(in: .whitespacesAndNewlines), forKey: emailKey)
-        if let token, let host = normalizedSite(site)?.host {
-            Keychain.setPassword(token, service: keychainService, account: host)
+        guard let site = defaults.string(forKey: "jiraSite"), let url = normalizedSite(site), let host = url.host else {
+            save(Saved())
+            return Saved()
         }
-        Task { @MainActor in JiraStore.shared.connectionChanged() }
-    }
-
-    /// Where a ticket key links: the repository's own issue link, or the configured Jira site.
-    @MainActor static func issueURL(for key: String, in repository: Repository) -> URL? {
-        repository.issueURL(for: key) ?? JiraStore.shared.configuredConnection.map { $0.browseURL(key) }
+        let email = defaults.string(forKey: "jiraEmail")?.trimmingCharacters(in: .whitespaces) ?? ""
+        let name = host.split(separator: ".").first.map { $0.prefix(1).uppercased() + $0.dropFirst() } ?? host
+        let profile = JiraProfile(id: UUID(), name: name, site: site, email: email)
+        if let token = Keychain.password(service: keychainService, account: host), !token.isEmpty,
+           setToken(token, for: profile.id) {
+            Keychain.setPassword("", service: keychainService, account: host)
+        }
+        let saved = Saved(profiles: [profile], defaultProfileID: profile.id)
+        save(saved)
+        defaults.set(profile.id.uuidString, forKey: pendingAssignmentKey)
+        defaults.removeObject(forKey: "jiraSite")
+        defaults.removeObject(forKey: "jiraEmail")
+        return saved
     }
 }
 
@@ -272,22 +333,39 @@ enum JiraClient {
 }
 
 /// Ticket statuses for the whole app, fetched politely: only keys that aren't cached, in batches of
-/// up to 50, one request at a time, after a short pause so scrolling doesn't fire requests, at most
-/// 20 requests a minute, backing off on errors and stopping entirely on bad credentials.
+/// up to 50, one request at a time across every Jira site, after a short pause so scrolling doesn't
+/// fire requests, at most 20 requests a minute, backing off on errors, and stopping for a profile
+/// whose credentials Jira rejects.
 @MainActor @Observable final class JiraStore {
     static let shared = JiraStore()
 
     /// Increments when statuses arrive, so visible rows redraw.
     private(set) var version = 0
-    private(set) var problem: String?
+    /// The Jira sites and accounts set up in Settings.
+    private(set) var profiles: [JiraProfile]
+    /// Why a profile's requests failed or stopped.
+    private(set) var problems: [UUID: String] = [:]
 
-    @ObservationIgnored private var issues: [String: (issue: JiraIssue, fetchedAt: Date)] = [:]
-    @ObservationIgnored private var unknown: [String: Date] = [:]
-    /// Statuses survive relaunches: everything is saved per Jira site in Application Support.
-    @ObservationIgnored private var cacheFile = JiraCacheFile.load()
-    @ObservationIgnored private var cacheHost: String?
+    /// The profile new repositories start with.
+    var defaultProfileID: UUID? {
+        didSet { saveProfiles() }
+    }
+
+    private struct SiteCache {
+        var issues: [String: (issue: JiraIssue, fetchedAt: Date)] = [:]
+        var unknown: [String: Date] = [:]
+    }
+
+    private struct Pending {
+        let key: String
+        let connection: JiraConnection
+    }
+
+    /// Statuses per Jira host. They survive relaunches in `jira-cache.json`.
+    @ObservationIgnored private var sites: [String: SiteCache] = [:]
     @ObservationIgnored private var saveTask: Task<Void, Never>?
-    @ObservationIgnored private var queue: [String] = []
+    @ObservationIgnored private var queue: [Pending] = []
+    /// `host key` of everything queued or being fetched.
     @ObservationIgnored private var queued: Set<String> = []
     @ObservationIgnored private var inFlightKeys: Set<String> = []
     @ObservationIgnored private var inFlight = false
@@ -295,36 +373,136 @@ enum JiraClient {
     @ObservationIgnored private var pausedUntil: Date?
     @ObservationIgnored private var backoff: TimeInterval = 30
     @ObservationIgnored private var recentRequests: [Date] = []
-    @ObservationIgnored private var unauthorized = false
-    @ObservationIgnored private var connection: JiraConnection?
+    @ObservationIgnored private var unauthorized: Set<UUID> = []
     /// Sites without the bulk-fetch endpoint; they get JQL search instead.
     @ObservationIgnored private var searchOnlySites: Set<String> = []
+    /// Connections built from profiles, so the keychain is read once per profile.
+    @ObservationIgnored private var connections: [UUID: JiraConnection?] = [:]
+    /// Tickets of recently asked fix versions, and the requests under way, so asking again soon
+    /// doesn't go back to Jira.
+    @ObservationIgnored private var fixVersionResults: [String: (keys: [String], fetchedAt: Date)] = [:]
+    @ObservationIgnored private var fixVersionRequests: [String: Task<[JiraIssue], Error>] = [:]
 
     /// A cached status is shown right away and asked for again only after an hour, when on screen.
     private static let freshFor: TimeInterval = 60 * 60
     /// Keys Jira doesn't know are not asked about again for a day.
     private static let missingFor: TimeInterval = 24 * 60 * 60
+    private static let fixVersionFreshFor: TimeInterval = 10 * 60
     private static let batchSize = 50
     private static let requestsPerMinute = 20
 
-    @ObservationIgnored private var cachedConnection: JiraConnection??
+    private init() {
+        let saved = JiraProfiles.load()
+        profiles = saved.profiles
+        defaultProfileID = saved.defaultProfileID
+        sites = JiraCacheFile.load().sites.mapValues { site in
+            SiteCache(issues: site.issues.mapValues { ($0.issue, $0.fetchedAt) }, unknown: site.unknown)
+        }
+    }
 
-    func issue(_ key: String) -> JiraIssue? {
-        loadCacheForConfiguredSite()
-        return issues[key]?.issue
+    private static func id(_ host: String, _ key: String) -> String { "\(host) \(key)" }
+
+    // MARK: Profiles
+
+    func profile(id: UUID?) -> JiraProfile? {
+        guard let id else { return nil }
+        return profiles.first { $0.id == id }
+    }
+
+    /// The Jira a repository's tickets live in, or nil when it has none (or its profile is incomplete).
+    func connection(for repository: Repository) -> JiraConnection? {
+        #if DEBUG
+        if let mock = Self.mockConnection { return mock }
+        #endif
+        return profile(id: repository.jiraProfileID).flatMap(connection(for:))
+    }
+
+    func connection(for profile: JiraProfile) -> JiraConnection? {
+        if let cached = connections[profile.id] { return cached }
+        var connection: JiraConnection?
+        if let url = profile.baseURL, !profile.email.trimmingCharacters(in: .whitespaces).isEmpty,
+           let token = JiraProfiles.token(for: profile.id) {
+            connection = JiraConnection(profileID: profile.id, baseURL: url, email: profile.email.trimmingCharacters(in: .whitespaces), token: token)
+        }
+        connections[profile.id] = .some(connection)
+        return connection
+    }
+
+    /// Adds or updates a profile. A non-empty token replaces the saved one.
+    func save(_ profile: JiraProfile, token: String?) {
+        var saved = profile
+        saved.name = saved.name.trimmingCharacters(in: .whitespaces)
+        saved.site = saved.site.trimmingCharacters(in: .whitespacesAndNewlines)
+        saved.email = saved.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let token, !token.isEmpty { JiraProfiles.setToken(token, for: saved.id) }
+        if let index = profiles.firstIndex(where: { $0.id == saved.id }) {
+            profiles[index] = saved
+        } else {
+            profiles.append(saved)
+        }
+        saveProfiles()
+        profilesChanged()
+    }
+
+    /// Removes a profile and its token. Repositories that used it have no Jira until another is picked.
+    func remove(profileID: UUID) {
+        profiles.removeAll { $0.id == profileID }
+        JiraProfiles.setToken("", for: profileID)
+        if defaultProfileID == profileID { defaultProfileID = nil }
+        saveProfiles()
+        profilesChanged()
+    }
+
+    private func saveProfiles() {
+        JiraProfiles.save(JiraProfiles.Saved(profiles: profiles, defaultProfileID: defaultProfileID))
+    }
+
+    /// Credentials changed: forget rejected accounts and unknown tickets (another account may see
+    /// them), and drop queued requests made with the old credentials.
+    private func profilesChanged() {
+        connections = [:]
+        unauthorized = []
+        problems = [:]
+        pausedUntil = nil
+        backoff = 30
+        sites = sites.mapValues { SiteCache(issues: $0.issues, unknown: [:]) }
+        queue.removeAll()
+        queued.removeAll()
+        fixVersionResults = [:]
+        version += 1
+    }
+
+    func problem(for connection: JiraConnection?) -> String? {
+        connection.flatMap { problems[$0.profileID] }
+    }
+
+    #if DEBUG
+    /// Test runs point every repository at a local mock server with throwaway credentials:
+    /// `-GTJiraSite http://127.0.0.1:8899`.
+    private static let mockConnection: JiraConnection? = {
+        let defaults = UserDefaults.standard
+        guard let site = defaults.string(forKey: "GTJiraSite"), let url = JiraProfiles.normalizedSite(site) else { return nil }
+        return JiraConnection(profileID: UUID(uuidString: "00000000-0000-0000-0000-00000000A11A")!, baseURL: url,
+                              email: defaults.string(forKey: "GTJiraEmail") ?? "test@example.com",
+                              token: defaults.string(forKey: "GTJiraToken") ?? "test-token")
+    }()
+    #endif
+
+    // MARK: Statuses
+
+    func issue(_ key: String, connection: JiraConnection) -> JiraIssue? {
+        sites[connection.host]?.issues[key]?.issue
     }
 
     /// Jira answered without this key: it doesn't exist or isn't visible to this account.
-    func isMissing(_ key: String) -> Bool {
-        loadCacheForConfiguredSite()
-        return unknown[key] != nil && issues[key] == nil
+    func isMissing(_ key: String, connection: JiraConnection) -> Bool {
+        guard let site = sites[connection.host] else { return false }
+        return site.unknown[key] != nil && site.issues[key] == nil
     }
 
-    /// Repository › Refresh Ticket Statuses: keeps showing what's cached, but asks Jira again for
-    /// the tickets on screen.
-    /// Fix versions seen in cached tickets, newest first ("2.12", "2.11"…).
-    var knownFixVersions: [String] {
-        loadCacheForConfiguredSite()
+    /// Fix versions seen in a site's cached tickets, newest first ("2.12", "2.11"…).
+    func knownFixVersions(for connection: JiraConnection) -> [String] {
+        guard let issues = sites[connection.host]?.issues else { return [] }
         let versions = Set(issues.values.flatMap(\.issue.fixVersions))
         return versions.sorted { $0.compare($1, options: .numeric) == .orderedDescending }
     }
@@ -333,111 +511,64 @@ enum JiraClient {
     /// cached), and waits up to 30 seconds for them.
     func ensure(_ keys: [String], connection: JiraConnection) async {
         request(keys, connection: connection)
+        let ids = keys.map { Self.id(connection.host, $0) }
         for _ in 0..<100 {
-            if keys.allSatisfy({ !queued.contains($0) && !inFlightKeys.contains($0) }) { return }
-            if unauthorized { return }
+            if ids.allSatisfy({ !queued.contains($0) && !inFlightKeys.contains($0) }) { return }
+            if unauthorized.contains(connection.profileID) { return }
             try? await Task.sleep(for: .milliseconds(300))
         }
     }
 
-    /// The tickets in a fix version, asked of Jira directly (a few requests) and cached like the rest.
+    /// The tickets in a fix version, asked of Jira directly (a few requests) and cached like the
+    /// rest. Asking for the same version again within ten minutes, or while it's loading, doesn't
+    /// send another request.
     func issues(inFixVersion fixVersion: String, connection: JiraConnection) async throws -> [JiraIssue] {
-        useCache(for: connection.host)
+        let id = Self.id(connection.host, fixVersion)
+        if let result = fixVersionResults[id], Date().timeIntervalSince(result.fetchedAt) < Self.fixVersionFreshFor {
+            let cached = result.keys.compactMap { issue($0, connection: connection) }
+            if cached.count == result.keys.count { return cached }
+        }
+        if let running = fixVersionRequests[id] { return try await running.value }
+        let request = Task { try await JiraClient.issues(inFixVersion: fixVersion, connection: connection) }
+        fixVersionRequests[id] = request
         recentRequests.append(Date())
-        let found = try await JiraClient.issues(inFixVersion: fixVersion, connection: connection)
+        defer { fixVersionRequests[id] = nil }
+        let found = try await request.value
         let now = Date()
-        for issue in found { issues[issue.key] = (issue, now) }
+        for issue in found { sites[connection.host, default: SiteCache()].issues[issue.key] = (issue, now) }
+        fixVersionResults[id] = (found.map(\.key), now)
         version += 1
         scheduleSave()
         return found
     }
 
+    /// Repository › Refresh Ticket Statuses: keeps showing what's cached, but asks Jira again for
+    /// the tickets on screen.
     func markAllStale() {
-        for key in issues.keys { issues[key]?.fetchedAt = .distantPast }
-        unknown = [:]
+        sites = sites.mapValues { site in
+            SiteCache(issues: site.issues.mapValues { ($0.issue, Date.distantPast) }, unknown: [:])
+        }
+        fixVersionResults = [:]
         version += 1
-    }
-
-    // MARK: Cache on disk
-
-    private func loadCacheForConfiguredSite() {
-        if cacheHost == nil, let host = configuredConnection?.host { useCache(for: host) }
-    }
-
-    private func useCache(for host: String) {
-        guard host != cacheHost else { return }
-        storeCurrentSite()
-        cacheHost = host
-        let site = cacheFile.sites[host] ?? JiraCacheFile.Site()
-        issues = site.issues.mapValues { ($0.issue, $0.fetchedAt) }
-        unknown = site.unknown
-    }
-
-    private func storeCurrentSite() {
-        guard let host = cacheHost else { return }
-        cacheFile.sites[host] = JiraCacheFile.Site(
-            issues: issues.mapValues { JiraCacheFile.Entry(issue: $0.issue, fetchedAt: $0.fetchedAt) },
-            unknown: unknown
-        )
-    }
-
-    private func scheduleSave() {
-        saveTask?.cancel()
-        saveTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
-            guard let self, !Task.isCancelled else { return }
-            self.storeCurrentSite()
-            let file = self.cacheFile
-            await Task.detached(priority: .utility) { file.save() }.value
-        }
-    }
-
-    /// The configured connection, read from preferences and the keychain once until settings change.
-    var configuredConnection: JiraConnection? {
-        if let cachedConnection { return cachedConnection }
-        let connection = JiraSettings.connection
-        cachedConnection = .some(connection)
-        return connection
-    }
-
-    func connection(for repository: Repository) -> JiraConnection? {
-        guard let connection = configuredConnection else { return nil }
-        guard let template = repository.issueURLTemplate?.trimmingCharacters(in: .whitespaces), !template.isEmpty else {
-            return connection
-        }
-        return URL(string: template.replacingOccurrences(of: "{key}", with: "KEY-1"))?.host == connection.host ? connection : nil
     }
 
     /// Asks for these keys' statuses; cached, queued and known-missing keys are skipped.
     func request(_ keys: [String], connection: JiraConnection) {
-        if self.connection != connection {
-            self.connection = connection
-            unauthorized = false
-            problem = nil
-        }
-        guard !unauthorized else { return }
-        useCache(for: connection.host)
+        guard !unauthorized.contains(connection.profileID) else { return }
         let now = Date()
-        for key in keys where !queued.contains(key) && !inFlightKeys.contains(key) {
-            if let cached = issues[key], now.timeIntervalSince(cached.fetchedAt) < Self.freshFor { continue }
-            if let missing = unknown[key], now.timeIntervalSince(missing) < Self.missingFor { continue }
-            queue.append(key)
-            queued.insert(key)
+        let site = sites[connection.host]
+        for key in keys {
+            let id = Self.id(connection.host, key)
+            guard !queued.contains(id), !inFlightKeys.contains(id) else { continue }
+            if let cached = site?.issues[key], now.timeIntervalSince(cached.fetchedAt) < Self.freshFor { continue }
+            if let missing = site?.unknown[key], now.timeIntervalSince(missing) < Self.missingFor { continue }
+            queue.append(Pending(key: key, connection: connection))
+            queued.insert(id)
         }
         scheduleFlush(after: 0.6)
     }
 
-    func connectionChanged() {
-        cachedConnection = nil
-        // Statuses stay cached per site; a different account may see tickets this one couldn't.
-        unknown = [:]
-        unauthorized = false
-        problem = nil
-        pausedUntil = nil
-        backoff = 30
-        connection = nil
-        version += 1
-    }
+    // MARK: Requests
 
     private func scheduleFlush(after delay: TimeInterval) {
         guard !queue.isEmpty, !inFlight, flushTask == nil else { return }
@@ -456,15 +587,25 @@ enum JiraClient {
         }
     }
 
+    /// Sends one batch: up to 50 queued keys of the same Jira site and account.
     private func flush() async {
-        guard !inFlight, !unauthorized, let connection, !queue.isEmpty else { return }
-        let batch = Array(queue.prefix(Self.batchSize))
-        queue.removeFirst(batch.count)
-        batch.forEach { queued.remove($0) }
-        inFlightKeys.formUnion(batch)
+        guard !inFlight, let connection = queue.first?.connection else { return }
+        var batch: [String] = []
+        var rest: [Pending] = []
+        for pending in queue {
+            if pending.connection == connection && batch.count < Self.batchSize {
+                batch.append(pending.key)
+            } else {
+                rest.append(pending)
+            }
+        }
+        queue = rest
+        let ids = batch.map { Self.id(connection.host, $0) }
+        ids.forEach { queued.remove($0) }
+        inFlightKeys.formUnion(ids)
         inFlight = true
         await fetch(batch, connection: connection, depth: 0)
-        inFlightKeys.subtract(batch)
+        inFlightKeys.subtract(ids)
         inFlight = false
         version += 1
         scheduleSave()
@@ -475,50 +616,74 @@ enum JiraClient {
     /// search, where an unknown key fails the query and the batch is split (at most six levels deep)
     /// to find it. Unknown keys are remembered so they're not asked for again soon.
     private func fetch(_ keys: [String], connection: JiraConnection, depth: Int) async {
+        let host = connection.host
         recentRequests.append(Date())
         do {
             var found: [JiraIssue]?
-            if !searchOnlySites.contains(connection.host) {
+            if !searchOnlySites.contains(host) {
                 found = try await JiraClient.bulkFetch(keys, connection: connection)
-                if found == nil { searchOnlySites.insert(connection.host) }
+                if found == nil { searchOnlySites.insert(host) }
             }
             if found == nil {
                 found = try await JiraClient.search(keys, connection: connection)
             }
             let received = found ?? []
             let now = Date()
-            for issue in received { issues[issue.key] = (issue, now) }
+            for issue in received { sites[host, default: SiteCache()].issues[issue.key] = (issue, now) }
             let foundKeys = Set(received.map(\.key))
-            for key in keys where !foundKeys.contains(key) { unknown[key] = now }
-            problem = nil
+            for key in keys where !foundKeys.contains(key) { sites[host, default: SiteCache()].unknown[key] = now }
+            problems[connection.profileID] = nil
             backoff = 30
         } catch JiraError.badQuery {
             guard keys.count > 1, depth < 6 else {
-                keys.forEach { unknown[$0] = Date() }
+                let now = Date()
+                for key in keys { sites[host, default: SiteCache()].unknown[key] = now }
                 return
             }
             let half = keys.count / 2
             await fetch(Array(keys[..<half]), connection: connection, depth: depth + 1)
             await fetch(Array(keys[half...]), connection: connection, depth: depth + 1)
         } catch JiraError.unauthorized {
-            unauthorized = true
-            problem = JiraError.unauthorized.localizedDescription
-            queue.removeAll()
-            queued.removeAll()
+            unauthorized.insert(connection.profileID)
+            problems[connection.profileID] = JiraError.unauthorized.localizedDescription
+            for pending in queue where pending.connection.profileID == connection.profileID {
+                queued.remove(Self.id(pending.connection.host, pending.key))
+            }
+            queue.removeAll { $0.connection.profileID == connection.profileID }
         } catch JiraError.rateLimited(let retryAfter) {
-            pause(for: retryAfter, putBack: keys)
+            pause(for: retryAfter, putBack: keys, connection: connection)
         } catch {
-            problem = error.localizedDescription
-            pause(for: backoff, putBack: keys)
+            problems[connection.profileID] = error.localizedDescription
+            pause(for: backoff, putBack: keys, connection: connection)
             backoff = min(backoff * 2, 15 * 60)
         }
     }
 
-    private func pause(for seconds: TimeInterval, putBack keys: [String]) {
+    private func pause(for seconds: TimeInterval, putBack keys: [String], connection: JiraConnection) {
         pausedUntil = Date().addingTimeInterval(seconds)
-        for key in keys where !queued.contains(key) {
-            queue.append(key)
-            queued.insert(key)
+        for key in keys {
+            let id = Self.id(connection.host, key)
+            guard !queued.contains(id) else { continue }
+            queue.append(Pending(key: key, connection: connection))
+            queued.insert(id)
+        }
+    }
+
+    // MARK: Cache on disk
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, !Task.isCancelled else { return }
+            var file = JiraCacheFile()
+            for (host, site) in self.sites {
+                file.sites[host] = JiraCacheFile.Site(
+                    issues: site.issues.mapValues { JiraCacheFile.Entry(issue: $0.issue, fetchedAt: $0.fetchedAt) },
+                    unknown: site.unknown
+                )
+            }
+            await Task.detached(priority: .utility) { file.save() }.value
         }
     }
 }

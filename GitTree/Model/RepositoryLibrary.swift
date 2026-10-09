@@ -79,6 +79,37 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
 
     private init() {
         load()
+        assignMigratedJiraProfile()
+    }
+
+    /// Repositories that used the single Jira connection of earlier versions keep using it, now as a
+    /// profile: those without an issue link, or with one on the same site.
+    private func assignMigratedJiraProfile() {
+        let profiles = JiraProfiles.load().profiles  // migrates the old settings, once
+        let defaults = UserDefaults.standard
+        guard let pending = defaults.string(forKey: JiraProfiles.pendingAssignmentKey) else { return }
+        defaults.removeObject(forKey: JiraProfiles.pendingAssignmentKey)
+        guard let id = UUID(uuidString: pending), let host = profiles.first(where: { $0.id == id })?.host else { return }
+        for index in repositories.indices where repositories[index].jiraProfileID == nil {
+            let template = repositories[index].issueURLTemplate?.trimmingCharacters(in: .whitespaces) ?? ""
+            let templateHost = URL(string: template.replacingOccurrences(of: "{key}", with: "KEY-1"))?.host
+            if template.isEmpty || templateHost == host {
+                repositories[index].jiraProfileID = id
+            }
+        }
+        save()
+    }
+
+    /// New repositories start with the default Jira profile from Settings (or none).
+    private var defaultJiraProfileID: UUID? {
+        let id = JiraStore.shared.defaultProfileID
+        return JiraStore.shared.profile(id: id) == nil ? nil : id
+    }
+
+    func setJiraProfile(_ profileID: UUID?, for id: UUID) {
+        guard var repository = repository(id: id) else { return }
+        repository.jiraProfileID = profileID
+        update(repository)
     }
 
     func repository(id: UUID?) -> Repository? {
@@ -112,6 +143,7 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
         let origin = try? await Git.string(["remote", "get-url", "origin"], in: URL(fileURLWithPath: path))
         var repository = Repository(id: UUID(), name: name, kind: .local, path: path, remoteURL: nil, addedAt: Date())
         repository.originURL = origin?.isEmpty == false ? origin : nil
+        repository.jiraProfileID = defaultJiraProfileID
         repositories.append(repository)
         save()
         return repository
@@ -153,10 +185,11 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
     func addRemote(url: String, clonedTo directory: URL) -> Repository {
         if let existing = existingRemote(url: url) { return existing }
         let name = HostingService.repositoryName(from: url) ?? directory.deletingPathExtension().lastPathComponent
-        let repository = Repository(
+        var repository = Repository(
             id: UUID(), name: name, kind: .remote, path: directory.standardizedFileURL.path,
             remoteURL: url, addedAt: Date(), lastFetchedAt: Date()
         )
+        repository.jiraProfileID = defaultJiraProfileID
         repositories.append(repository)
         save()
         return repository

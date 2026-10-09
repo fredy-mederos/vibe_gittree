@@ -5,7 +5,8 @@ enum GraphLoader {
     /// One commit per line: hash, parents, author, email, author time, subject — separated by 0x1F.
     private static let logFormat = "%H%x1f%P%x1f%aN%x1f%aE%x1f%at%x1f%s"
 
-    static func load(repositoryAt directory: URL) async throws -> CommitGraph {
+    /// `ticketPrefixes` replaces the detected ticket prefixes when it isn't empty.
+    static func load(repositoryAt directory: URL, ticketPrefixes: [String] = []) async throws -> CommitGraph {
         async let refsData = Git.run(
             ["for-each-ref", "--format=%(HEAD)%1f%(refname)%1f%(objectname)%1f%(*objectname)", "refs/heads", "refs/remotes", "refs/tags"],
             in: directory
@@ -21,11 +22,11 @@ enum GraphLoader {
         let head = try await headData
         let log = try await logData
         return await Task.detached(priority: .userInitiated) {
-            build(log: log, refs: refs, head: head)
+            build(log: log, refs: refs, head: head, ticketPrefixes: ticketPrefixes)
         }.value
     }
 
-    static func build(log: Data, refs refData: Data, head headData: Data) -> CommitGraph {
+    static func build(log: Data, refs refData: Data, head headData: Data, ticketPrefixes: [String] = []) -> CommitGraph {
         var ids: [ObjectID] = []
         var parentIDs: [ObjectID] = []
         var parentStart: [Int32] = [0]
@@ -151,7 +152,7 @@ enum GraphLoader {
             refs: refs,
             indexByID: indexByID,
             headCommit: headCommit,
-            ticketPrefixes: TicketDetector.prefixes(in: subjects)
+            ticketPrefixes: ticketPrefixes.isEmpty ? TicketDetector.prefixes(in: subjects) : ticketPrefixes
         )
     }
 }

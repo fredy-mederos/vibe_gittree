@@ -137,6 +137,18 @@ struct RepositoryWindow: View {
                 if state.repositoryID == nil, let first = added.first { state.open(first.id) }
             }
         }
+        if defaults.bool(forKey: "GTRepositorySettings") {
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                state.editingRepository = state.currentRepository
+            }
+        }
+        if defaults.bool(forKey: "GTShowSettings") {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+        }
         if defaults.bool(forKey: "GTShowSwitcher") {
             Task {
                 try? await Task.sleep(for: .seconds(2))

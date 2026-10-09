@@ -147,7 +147,7 @@ final class GraphNSTableView: NSTableView {
     private var appliedShowTags = true
     private var appliedAnnotationVersion = -1
     private var isApplyingSelection = false
-    /// Set when this repository's tickets are on the connected Jira site.
+    /// The Jira this repository's tickets live in, when it has one.
     private var jira: JiraConnection?
     private var ticketRequest: DispatchWorkItem?
     private var isFittingColumns = false
@@ -380,7 +380,7 @@ final class GraphNSTableView: NSTableView {
             let cell = tableView.makeView(withIdentifier: TicketStatusCellView.identifier, owner: nil) as? TicketStatusCellView
                 ?? TicketStatusCellView()
             let key = jira == nil ? nil : commitGraph.ticketKeys(in: commitGraph.subjects[index]).first
-            cell.configure(key: key, issue: key.flatMap { JiraStore.shared.issue($0) })
+            cell.configure(key: key, issue: key.flatMap { key in jira.flatMap { JiraStore.shared.issue(key, connection: $0) } })
             return cell
 
         case ColumnID.author:

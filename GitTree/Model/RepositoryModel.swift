@@ -55,7 +55,14 @@ import Observation
     var isBusy: Bool { status == .loading || isFetching }
 
     func update(repository: Repository) {
+        let prefixesChanged = repository.customTicketPrefixes != self.repository.customTicketPrefixes
+        let ticketsChanged = repository.jiraProfileID != self.repository.jiraProfileID
+            || repository.issueURLTemplate != self.repository.issueURLTemplate
         self.repository = repository
+        // A different Jira: the Ticket column shows or hides and rows redraw.
+        if ticketsChanged { annotationVersion += 1 }
+        // Ticket keys are found while loading; new prefixes need a reload.
+        if prefixesChanged, status != .idle { reload() }
     }
 
     func loadIfNeeded() {
@@ -67,12 +74,13 @@ import Observation
         loadTask?.cancel()
         if graph == nil { status = .loading }
         let directory = repository.directory
+        let ticketPrefixes = repository.customTicketPrefixes
         loadTask = Task { [weak self] in
             do {
                 #if DEBUG
                 let started = ContinuousClock.now
                 #endif
-                let graph = try await GraphLoader.load(repositoryAt: directory)
+                let graph = try await GraphLoader.load(repositoryAt: directory, ticketPrefixes: ticketPrefixes)
                 let layout = await Task.detached(priority: .userInitiated) {
                     LaneLayoutEngine.layout(graph: graph, scope: .all)
                 }.value

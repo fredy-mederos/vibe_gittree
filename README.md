@@ -65,8 +65,11 @@ permission to access that folder.
   requests (based on another open PR's branch) show their position, like `#8161 · 5/5`. The sidebar
   lists every stack in order, plus open, draft, recently merged and recently closed pull requests; the inspector shows the pull request
   that merged a commit, its review and checks, and the whole stack.
-- **Jira** (Settings › Jira): a Ticket column with each commit's ticket status and fix version, and
-  a Ticket section in the inspector with summary, type, assignee and fix version.
+- **Jira** (Settings › Jira): profiles, each a Jira Cloud site and the account to use there. Every
+  repository picks its profile or none, in Settings › Jira or in its Repository Settings, and new
+  repositories start with the default profile. Repositories with a profile get a Ticket column with
+  each commit's ticket status and fix version, and a Ticket section in the inspector with summary,
+  type, assignee and fix version.
 - **Highlight** (toolbar, with Jira connected): tint the commits of tickets that aren't Done, are in
   progress or to do (among the latest 500 commits), or of every ticket in a fix version (asked of
   Jira directly, so it covers tickets beyond what's on screen). The status bar steps through them.
@@ -86,9 +89,11 @@ permission to access that folder.
   to the line. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit
   that last changed that line with `git blame`; `gittree <file>`, `gittree <commit>` and plain
   `gittree` work too; `--print` prints the link without opening the app.
-- **Per-repository settings** (right-click › Repository Settings): display name, an issue link such
-  as `https://example.atlassian.net/browse/{key}` for ticket keys found in commit messages, and the
-  regular expression that marks release tags (for example `^android-v[\d.]+$`).
+- **Per-repository settings** (right-click › Repository Settings): display name, the Jira profile,
+  the ticket keys to look for (`PROJ`, or several separated by commas; empty detects them from commit
+  messages), an issue link such as `https://example.atlassian.net/browse/{key}` for ticket keys when
+  tickets live somewhere else, and the regular expression that marks release tags (for example
+  `^android-v[\d.]+$`).
 - **Appearance**: Settings › General › Appearance picks Light, Dark or System.
 
 GitTree never changes your repositories. The only git command that writes anything is `fetch`,
@@ -103,11 +108,12 @@ requests:
   of the open ones). At most one at a time, at most every five minutes (30 seconds when you press
   Fetch), each with a 30-second timeout; after a failure it waits 5 minutes, then longer.
 - **Jira**: only tickets on screen, only once scrolling pauses, only ones not already cached; up to
-  50 per request with bulk fetch (one request per screen), one request at a time, at most 20 a
-  minute. Statuses are cached on disk (`jira-cache.json`) and asked for again only after an hour,
-  when they're on screen. Unknown tickets aren't asked about again for a day. A rejected token stops
-  all requests until Settings change; timeouts and rate limits back off. Repository › Refresh
-  Ticket Statuses asks again for what's on screen.
+  50 per request with bulk fetch (one request per screen), one request at a time across all
+  profiles, at most 20 a minute. Statuses are cached on disk per site (`jira-cache.json`) and asked
+  for again only after an hour, when they're on screen. Unknown tickets aren't asked about again for
+  a day. A fix version's tickets are asked for once and reused for ten minutes. A rejected token
+  stops that profile's requests until its settings change; timeouts and rate limits back off.
+  Repository › Refresh Ticket Statuses asks again for what's on screen.
 
 ### Shortcuts
 
@@ -127,8 +133,9 @@ requests:
 ### Where things are stored
 
 `~/Library/Application Support/GitTree/`: `library.json` (the repository list and per-repository
-settings), `jira-cache.json` (ticket statuses) and `Clones/<host>/<owner>/<name>.git` (remote
-repositories). The Jira API token is in the login keychain. Removing a remote repository from
+settings), `jira-profiles.json` (Jira sites and accounts, without tokens), `jira-cache.json` (ticket
+statuses per site) and `Clones/<host>/<owner>/<name>.git` (remote repositories). Jira API tokens
+are in the login keychain. Removing a remote repository from
 GitTree deletes its clone; removing a local one never touches the folder.
 
 ### How it's built

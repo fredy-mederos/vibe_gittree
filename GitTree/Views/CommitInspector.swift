@@ -103,9 +103,9 @@ private struct CommitDetailView: View {
             if !ticketKeys.isEmpty, let jira = JiraStore.shared.connection(for: graph.model.repository) {
                 Section(ticketKeys.count > 1 ? "Tickets" : "Ticket") {
                     ForEach(ticketKeys, id: \.self) { key in
-                        TicketRow(key: key, url: jira.browseURL(key))
+                        TicketRow(key: key, url: graph.model.repository.issueURL(for: key) ?? jira.browseURL(key), connection: jira)
                     }
-                    JiraProblemNote()
+                    JiraProblemNote(connection: jira)
                 }
             }
 
@@ -346,7 +346,7 @@ private struct CommitDetailView: View {
         let repository = graph.model.repository
         if JiraStore.shared.connection(for: repository) == nil {
             for key in commitGraph.ticketKeys(in: subject) {
-                if let url = JiraSettings.issueURL(for: key, in: repository) {
+                if let url = repository.issueURL(for: key) {
                     links.append(InspectorLink(title: key, systemImage: "ticket", url: url))
                 }
             }
@@ -371,12 +371,13 @@ private struct CommitDetailView: View {
 private struct TicketRow: View {
     let key: String
     let url: URL
+    let connection: JiraConnection
     private let store = JiraStore.shared
 
     var body: some View {
         let _ = store.version
-        let issue = store.issue(key)
-        let isMissing = store.isMissing(key)
+        let issue = store.issue(key, connection: connection)
+        let isMissing = store.isMissing(key, connection: connection)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Link(destination: url) {
@@ -418,10 +419,11 @@ private struct TicketRow: View {
 }
 
 private struct JiraProblemNote: View {
+    let connection: JiraConnection
     private let store = JiraStore.shared
 
     var body: some View {
-        if let problem = store.problem {
+        if let problem = store.problem(for: connection) {
             Text(problem)
                 .font(.caption)
                 .foregroundStyle(.secondary)

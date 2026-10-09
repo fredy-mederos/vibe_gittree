@@ -311,7 +311,7 @@ import Observation
             await JiraStore.shared.ensure(keys, connection: jira)
             guard let self else { return }
             let matching = Set(keys.filter { key in
-                guard let issue = JiraStore.shared.issue(key) else { return false }
+                guard let issue = JiraStore.shared.issue(key, connection: jira) else { return false }
                 return filter.matches(issue)
             })
             self.highlightProgress = nil
