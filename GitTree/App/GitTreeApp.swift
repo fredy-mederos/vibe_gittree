@@ -15,6 +15,13 @@ struct GitTreeApp: App {
             GitTreeCommands()
         }
 
+        // The activity calendar, one window per repository.
+        WindowGroup("Activity", id: "activity", for: UUID.self) { $repositoryID in
+            ActivityWindow(repositoryID: repositoryID)
+        }
+        .defaultSize(width: 1000, height: 640)
+        .handlesExternalEvents(matching: [])
+
         // One window per file diff, opened from the inspector or a deep link.
         WindowGroup("Changes", id: "diff", for: DiffTarget.self) { $target in
             DiffWindow(target: target)

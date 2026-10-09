@@ -35,12 +35,24 @@ struct FeatureReport: Sendable {
     let usedAI: Bool
     /// Why the on-device model wasn't used, when it wasn't.
     let note: String?
+    /// Terms newest first, each with its features newest first. Built once, with ties broken by
+    /// name, so the sidebar's order never shifts between redraws.
+    let areas: [(name: String, groups: [FeatureGroup])]
 
-    /// Terms newest first, each with its features newest first.
-    var areas: [(name: String, groups: [FeatureGroup])] {
-        Dictionary(grouping: groups, by: \.area)
-            .map { (name: $0.key, groups: $0.value.sorted { $0.latest > $1.latest }) }
-            .sorted { ($0.groups.first?.latest ?? .distantPast) > ($1.groups.first?.latest ?? .distantPast) }
+    init(groups: [FeatureGroup], commitCount: Int, usedAI: Bool, note: String?) {
+        self.groups = groups
+        self.commitCount = commitCount
+        self.usedAI = usedAI
+        self.note = note
+        areas = Dictionary(grouping: groups, by: \.area)
+            .map { name, members in
+                (name: name, groups: members.sorted { ($0.latest, $1.id) > ($1.latest, $0.id) })
+            }
+            .sorted { lhs, rhs in
+                let left = lhs.groups.first?.latest ?? .distantPast
+                let right = rhs.groups.first?.latest ?? .distantPast
+                return left == right ? lhs.name < rhs.name : left > right
+            }
     }
 }
 

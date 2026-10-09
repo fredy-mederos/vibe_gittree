@@ -5,6 +5,7 @@ struct GraphDetailView: View {
     @Bindable var graph: GraphViewModel
     @Bindable var state: WindowState
     @FocusState private var searchFocused: Bool
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         content
@@ -95,6 +96,14 @@ struct GraphDetailView: View {
                 }
                 .help("Fetch new commits from the remote")
             }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                openWindow(id: "activity", value: graph.model.id)
+            } label: {
+                Label("Activity", systemImage: "calendar")
+            }
+            .help("Show commits per day in a calendar")
         }
         ToolbarItem(placement: .primaryAction) {
             Button {

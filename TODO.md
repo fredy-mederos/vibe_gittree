@@ -21,7 +21,3 @@ model, and the Light/Dark/System appearance setting.
 - **Features**: a short AI summary per feature (what changed, from the commit messages), and turning
   a feature or a fix version into release notes.
 - **Diff window**: syntax highlighting and a side-by-side mode.
-- **Activity calendar**: a contribution grid like GitHub's (one square per day, shaded by number of
-  commits) for the current repository and scope, optionally filtered by author. Hovering a day shows
-  that day's commits and the features and tickets they belong to; clicking it jumps the graph to that
-  day (or highlights its commits). Could live in its own window or as a strip above the graph.

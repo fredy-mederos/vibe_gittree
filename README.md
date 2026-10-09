@@ -71,6 +71,10 @@ permission to access that folder.
   term goes to Apple's on-device model, which picks an existing term or suggests a new one (commit
   messages never leave the Mac). Each ticket is a feature named after its most descriptive commit.
   Select one to highlight its commits in the graph.
+- **Activity** (toolbar calendar button or ⇧⌘A): a contribution grid with one square per day, shaded
+  by commits, for the last 12 months or any year, filtered by branches and author. Hover a day to
+  see its tickets (with their terms) and commits; click to keep it; click a commit to select it in
+  the graph.
 - **Deep links**: `gittree://open?repo=<path|remote URL|name>&commit=<sha>&path=<file>&line=<n>`
   opens the repository (adding it if needed), selects the commit and opens the file's diff scrolled
   to the line. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit
@@ -109,6 +113,7 @@ requests:
 | Find commits / next / previous | ⌘F / ⌘G / ⇧⌘G |
 | All branches / local / current | ⌘1 / ⌘2 / ⌘3 |
 | Go to HEAD | ⇧⌘H |
+| Show activity calendar | ⇧⌘A |
 | Fetch / reload | ⇧⌘F / ⌘R |
 | Commit details for the selected row | Return or double-click |
 | Repository settings | ⌥⌘, |

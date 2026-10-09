@@ -7,6 +7,7 @@ extension FocusedValues {
 /// Menu bar commands. They act on the focused window.
 struct GitTreeCommands: Commands {
     @FocusedValue(\.windowState) private var window
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         SidebarCommands()
@@ -68,6 +69,11 @@ struct GitTreeCommands: Commands {
             Button("Go to HEAD") { window?.graph?.revealHead() }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
                 .disabled(window?.graph == nil)
+            Button("Show Activity") {
+                if let id = window?.repositoryID { openWindow(id: "activity", value: id) }
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled(window?.repositoryID == nil)
 
             Divider()
 

@@ -58,10 +58,22 @@ struct RepositoryWindow: View {
             openWindow(id: "diff", value: request)
             state.diffRequest = nil
         }
+        // A commit clicked in the activity calendar.
+        .onReceive(NotificationCenter.default.publisher(for: .gitTreeRevealCommit)) { notification in
+            guard let id = notification.userInfo?["repository"] as? UUID, id == state.repositoryID,
+                  let hex = notification.userInfo?["commit"] as? String,
+                  let graph = state.graph, let index = graph.commitGraph?.index(matching: hex) else { return }
+            graph.select(index)
+            state.showInspector = true
+        }
         .task {
             state.restore(requested: repositoryID)
             #if DEBUG
             DebugLaunch.runOnce(state: state)
+            if UserDefaults.standard.bool(forKey: "GTShowActivity") {
+                try? await Task.sleep(for: .seconds(2))
+                if let id = state.repositoryID { openWindow(id: "activity", value: id) }
+            }
             #endif
         }
         .onChange(of: state.repositoryID) { _, id in
