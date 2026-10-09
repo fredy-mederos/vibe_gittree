@@ -34,10 +34,14 @@ import Observation
     /// Recent commits grouped into features (see `FeatureGrouper`).
     private(set) var features: FeatureReport?
     private(set) var featureProgress: String?
-    /// The feature whose commits are highlighted in the graph.
-    private(set) var selectedFeature: FeatureGroup?
     var featureCommitLimit = 200
     @ObservationIgnored private var featureTask: Task<Void, Never>?
+
+    /// Commits highlighted by a feature or a ticket filter (a search takes precedence).
+    private(set) var highlight: CommitHighlight?
+    /// "Loading tickets…" while a ticket filter waits for Jira.
+    private(set) var highlightProgress: String?
+    @ObservationIgnored private var highlightTask: Task<Void, Never>?
 
     @ObservationIgnored private var selectedID: ObjectID?
     @ObservationIgnored private var appliedGeneration = -1
@@ -60,9 +64,9 @@ import Observation
         return query.count >= 2 ? query : nil
     }
 
-    /// Text to highlight in matching rows: the search, or the selected feature's ticket key.
+    /// Text to highlight in matching rows: the search, or the highlighted feature's ticket key.
     var highlightText: String? {
-        activeQuery ?? selectedFeature?.ticket
+        activeQuery ?? highlight?.featureTicket
     }
 
     // MARK: Layout
@@ -196,8 +200,8 @@ import Observation
 
     private func scheduleSearch(jump: Bool) {
         searchTask?.cancel()
-        if activeQuery == nil, selectedFeature != nil {
-            applyFeatureHighlight(jump: false)
+        if activeQuery == nil, highlight != nil {
+            applyHighlight(jump: false)
             return
         }
         guard let query = activeQuery, let layout else {
@@ -257,9 +261,9 @@ import Observation
                 self?.featureProgress = message
             } update: { report in
                 self?.features = report
-                // Keep the highlighted feature's commits in sync as names improve.
-                if let selected = self?.selectedFeature, let refreshed = report.groups.first(where: { $0.id == selected.id }) {
-                    self?.selectedFeature = refreshed
+                // Keep a highlighted feature in sync as the grouping improves.
+                if let id = self?.highlight?.featureID, let refreshed = report.groups.first(where: { $0.id == id }) {
+                    self?.highlight = .feature(refreshed)
                 }
             }
             guard let self else { return }
@@ -278,28 +282,80 @@ import Observation
     /// Highlights a feature's commits and jumps to its newest one; nil clears the highlight.
     func showFeature(id: String?) {
         guard let id, let group = features?.groups.first(where: { $0.id == id }) else {
-            selectedFeature = nil
-            scheduleSearch(jump: false)
+            clearHighlight()
             return
         }
-        selectedFeature = group
-        if !searchText.isEmpty { searchText = "" }
-        applyFeatureHighlight(jump: true)
+        setHighlight(.feature(group))
     }
 
-    private func applyFeatureHighlight(jump: Bool) {
-        guard let group = selectedFeature, let layout else { return }
-        let rows = group.commits
-            .compactMap { layout.graph.indexByID[$0.id] }
-            .map { layout.rowOfCommit[Int($0)] }
-            .filter { $0 >= 0 }
-            .sorted()
-        matchRows = rows
-        matchSet = Set(rows)
-        currentMatch = rows.isEmpty ? nil : 0
-        searchVersion += 1
-        if jump, let first = rows.first {
-            select(layout.rows[Int(first)])
+    // MARK: Highlights
+
+    /// Highlights the commits of tickets with a status, among the latest 500 commits of the scope.
+    /// Missing statuses are fetched through the usual Jira queue first.
+    func highlightTickets(_ filter: TicketFilter) {
+        guard let layout, let jira = JiraStore.shared.connection(for: model.repository) else { return }
+        let graph = layout.graph
+        var keys: [String] = []
+        var seen: Set<String> = []
+        var looked = 0
+        for row in 0..<layout.rowCount where looked < 500 {
+            let commit = layout.rows[row]
+            guard !graph.isMerge(commit) else { continue }
+            looked += 1
+            if let key = graph.ticketKeys(in: graph.subjects[Int(commit)]).first, seen.insert(key).inserted {
+                keys.append(key)
+            }
+        }
+        highlightProgress = "Loading \(counted(keys.count, "ticket", "tickets"))…"
+        Task { [weak self] in
+            await JiraStore.shared.ensure(keys, connection: jira)
+            guard let self else { return }
+            let matching = Set(keys.filter { key in
+                guard let issue = JiraStore.shared.issue(key) else { return false }
+                return filter.matches(issue)
+            })
+            self.highlightProgress = nil
+            self.setHighlight(.tickets(title: filter.title, keys: matching))
+        }
+    }
+
+    /// Highlights the commits of every ticket in a fix version, as listed by Jira.
+    func highlightFixVersion(_ fixVersion: String) {
+        guard let jira = JiraStore.shared.connection(for: model.repository) else { return }
+        highlightProgress = "Loading fix version \(fixVersion)…"
+        Task { [weak self] in
+            let issues = (try? await JiraStore.shared.issues(inFixVersion: fixVersion, connection: jira)) ?? []
+            guard let self else { return }
+            self.highlightProgress = nil
+            self.setHighlight(.tickets(title: "Fix version \(fixVersion)", keys: Set(issues.map(\.key))))
+        }
+    }
+
+    func clearHighlight() {
+        guard highlight != nil else { return }
+        highlight = nil
+        scheduleSearch(jump: false)
+    }
+
+    private func setHighlight(_ newHighlight: CommitHighlight) {
+        highlight = newHighlight
+        if !searchText.isEmpty { searchText = "" }
+        applyHighlight(jump: true)
+    }
+
+    private func applyHighlight(jump: Bool) {
+        guard let highlight, let layout else { return }
+        highlightTask?.cancel()
+        highlightTask = Task { [weak self] in
+            let rows = await Task.detached(priority: .userInitiated) { highlight.rows(in: layout) }.value
+            guard let self, !Task.isCancelled, self.layout === layout else { return }
+            self.matchRows = rows
+            self.matchSet = Set(rows)
+            self.currentMatch = rows.isEmpty ? nil : 0
+            self.searchVersion += 1
+            if jump, let first = rows.first {
+                self.select(layout.rows[Int(first)])
+            }
         }
     }
 
@@ -347,5 +403,79 @@ enum SearchEngine {
             }
         }
         return rows
+    }
+}
+
+/// What a highlight (as opposed to a search) marks in the graph.
+enum CommitHighlight: Sendable {
+    case feature(FeatureGroup)
+    case tickets(title: String, keys: Set<String>)
+
+    var title: String {
+        switch self {
+        case .feature(let group): group.name
+        case .tickets(let title, _): title
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .feature: "sparkles"
+        case .tickets: "ticket"
+        }
+    }
+
+    var featureID: String? {
+        if case .feature(let group) = self { return group.id }
+        return nil
+    }
+
+    var featureTicket: String? {
+        if case .feature(let group) = self { return group.ticket }
+        return nil
+    }
+
+    /// Matching rows, top to bottom.
+    func rows(in layout: GraphLayout) -> [Int32] {
+        switch self {
+        case .feature(let group):
+            return group.commits
+                .compactMap { layout.graph.indexByID[$0.id] }
+                .map { layout.rowOfCommit[Int($0)] }
+                .filter { $0 >= 0 }
+                .sorted()
+        case .tickets(_, let keys):
+            guard !keys.isEmpty else { return [] }
+            let graph = layout.graph
+            var rows: [Int32] = []
+            for row in 0..<layout.rowCount {
+                let commit = layout.rows[row]
+                if let key = graph.ticketKeys(in: graph.subjects[Int(commit)]).first, keys.contains(key) {
+                    rows.append(Int32(row))
+                }
+            }
+            return rows
+        }
+    }
+}
+
+/// Ticket statuses the Highlight menu can pick.
+enum TicketFilter: CaseIterable {
+    case notDone, inProgress, toDo
+
+    var title: String {
+        switch self {
+        case .notDone: "Tickets Not Done"
+        case .inProgress: "Tickets In Progress"
+        case .toDo: "Tickets To Do"
+        }
+    }
+
+    func matches(_ issue: JiraIssue) -> Bool {
+        switch self {
+        case .notDone: issue.category != .done
+        case .inProgress: issue.category == .inProgress
+        case .toDo: issue.category == .toDo
+        }
     }
 }

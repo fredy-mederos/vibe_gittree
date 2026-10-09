@@ -15,6 +15,8 @@ import sys
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+VERSIONS = ["2.10", "2.11", "2.12"]
+seen = set()
 STATUSES = [
     ("To Do", "new"),
     ("In Progress", "indeterminate"),
@@ -53,9 +55,18 @@ class Handler(BaseHTTPRequestHandler):
             print(f"request {requests}: bulk fetch refused (404)", file=sys.stderr, flush=True)
             self.reply(404, {"errorMessages": ["Not found"]})
             return
-        keys = query.get("issueIdsOrKeys", []) if bulk else re.findall(r"[A-Z][A-Z0-9]+-\d+", query.get("jql", ""))
-        kind = "bulk fetch" if bulk else "search"
-        print(f"request {requests}: {kind}, {len(keys)} keys", file=sys.stderr, flush=True)
+        jql = query.get("jql", "")
+        version = re.search(r'fixVersion = "([^"]+)"', jql)
+        if version:
+            # Every ticket asked about so far whose (mock) fix version matches.
+            keys = sorted(key for key in seen if VERSIONS[zlib.crc32(key.encode()) % len(VERSIONS)] == version.group(1))
+            print(f"request {requests}: fixVersion {version.group(1)}, {len(keys)} tickets", file=sys.stderr, flush=True)
+        else:
+            keys = query.get("issueIdsOrKeys", []) if bulk else re.findall(r"[A-Z][A-Z0-9]+-\d+", jql)
+            seen.update(key for key in keys if not key.startswith("PRO-"))
+        if not version:
+            kind = "bulk fetch" if bulk else "search"
+            print(f"request {requests}: {kind}, {len(keys)} keys", file=sys.stderr, flush=True)
         missing = [key for key in keys if key.startswith("PRO-")]
         if missing and not bulk:
             self.reply(400, {"errorMessages": ["An issue with key 'PRO-…' does not exist for field 'key'."]})
@@ -70,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
                     "status": {"name": name, "statusCategory": {"key": category}},
                     "issuetype": {"name": "Story"},
                     "assignee": {"displayName": "Mock Person"},
-                    "fixVersions": [{"name": "2.12"}],
+                    "fixVersions": [{"name": VERSIONS[zlib.crc32(key.encode()) % len(VERSIONS)]}],
                 },
             })
         errors = [{"issueIdOrKey": key, "errorMessages": ["Issue does not exist"]} for key in missing]

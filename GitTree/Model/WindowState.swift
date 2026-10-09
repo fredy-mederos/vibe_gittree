@@ -7,6 +7,8 @@ enum SidebarItem: Hashable {
     case ref(UUID, String)
     /// A group from the Features section.
     case feature(UUID, String)
+    /// A commit by hash, like a merged pull request's merge commit.
+    case commit(UUID, String)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -21,6 +23,7 @@ enum SidebarItem: Hashable {
     var showInspector = true
     var isCloneSheetPresented = false
     var isSwitcherPresented = false
+    var isFixVersionPromptPresented = false
     /// Shows every repository in the sidebar instead of the first few.
     var showsAllRepositories = false
     /// A short confirmation shown at the bottom of the sidebar, like "Added 12 repositories".
@@ -100,6 +103,9 @@ enum SidebarItem: Hashable {
         case .feature(let id, let featureID):
             if id != repositoryID { open(id) }
             graph?.showFeature(id: featureID)
+        case .commit(let id, let hex):
+            if id != repositoryID { open(id) }
+            if let index = graph?.commitGraph?.index(matching: hex) { graph?.select(index) }
         case nil:
             break
         }

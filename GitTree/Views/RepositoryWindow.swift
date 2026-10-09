@@ -145,6 +145,12 @@ struct RepositoryWindow: View {
         }
         let query = defaults.string(forKey: "GTSearch")
         let scope = defaults.string(forKey: "GTScope")
+        if let fixVersion = defaults.string(forKey: "GTHighlightFixVersion") {
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                state.graph?.highlightFixVersion(fixVersion)
+            }
+        }
         if defaults.bool(forKey: "GTGroupFeatures") {
             Task {
                 try? await Task.sleep(for: .seconds(2))

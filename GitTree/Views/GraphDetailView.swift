@@ -21,6 +21,9 @@ struct GraphDetailView: View {
             .searchFocused($searchFocused)
             .onSubmit(of: .search) { graph.nextMatch() }
             .onChange(of: state.searchFocusRequest) { searchFocused = true }
+            .sheet(isPresented: $state.isFixVersionPromptPresented) {
+                FixVersionPrompt { fixVersion in graph.highlightFixVersion(fixVersion) }
+            }
     }
 
     @ViewBuilder private var content: some View {
@@ -82,6 +85,30 @@ struct GraphDetailView: View {
                 Label("Tags", systemImage: "tag")
             }
             .help("Show tag labels in the graph")
+        }
+        if JiraStore.shared.connection(for: graph.model.repository) != nil {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Section("Tickets in the latest 500 commits") {
+                        ForEach(TicketFilter.allCases, id: \.title) { filter in
+                            Button(filter.title) { graph.highlightTickets(filter) }
+                        }
+                    }
+                    Section("Fix Version") {
+                        ForEach(JiraStore.shared.knownFixVersions.prefix(12), id: \.self) { fixVersion in
+                            Button(fixVersion) { graph.highlightFixVersion(fixVersion) }
+                        }
+                        Button("Other Fix Version…") { state.isFixVersionPromptPresented = true }
+                    }
+                    if graph.highlight != nil {
+                        Divider()
+                        Button("Clear Highlight") { graph.clearHighlight() }
+                    }
+                } label: {
+                    Label("Highlight", systemImage: "line.3.horizontal.decrease.circle")
+                }
+                .help("Highlight commits by ticket status or fix version")
+            }
         }
         ToolbarItem(placement: .primaryAction) {
             if graph.model.isFetching {
@@ -145,18 +172,23 @@ struct GraphStatusBar: View {
                     .fixedSize()
             }
             Spacer(minLength: 8)
-            if graph.activeQuery == nil, let feature = graph.selectedFeature {
+            if let progress = graph.highlightProgress {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text(progress)
+                }
+            } else if graph.activeQuery == nil, let highlight = graph.highlight {
                 HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                    Text(feature.name)
+                    Image(systemName: highlight.systemImage)
+                    Text(highlight.title)
                         .lineLimit(1)
-                    Button { graph.showFeature(id: nil) } label: { Image(systemName: "xmark.circle.fill") }
+                    Button { graph.clearHighlight() } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.borderless)
-                        .help("Stop highlighting this feature")
+                        .help("Stop highlighting")
                 }
                 .foregroundStyle(.secondary)
             }
-            if graph.activeQuery != nil || graph.selectedFeature != nil {
+            if graph.activeQuery != nil || (graph.highlight != nil && graph.highlightProgress == nil) {
                 searchStatus
             }
             if graph.model.isFetching {
@@ -216,4 +248,42 @@ struct GraphStatusBar: View {
 /// "1 branch", "95 branches".
 func counted(_ count: Int, _ singular: String, _ plural: String) -> String {
     "\(count.formatted()) \(count == 1 ? singular : plural)"
+}
+
+/// Asks which fix version to highlight when it isn't among the ones already seen.
+private struct FixVersionPrompt: View {
+    let onHighlight: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var fixVersion = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Highlight a Fix Version")
+                .font(.headline)
+            Text("GitTree asks Jira for the tickets in this fix version and highlights the commits that mention them.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("Fix version", text: $fixVersion, prompt: Text("2.12"))
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(highlight)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Highlight", action: highlight)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(fixVersion.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+    }
+
+    private func highlight() {
+        let value = fixVersion.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty else { return }
+        onHighlight(value)
+        dismiss()
+    }
 }

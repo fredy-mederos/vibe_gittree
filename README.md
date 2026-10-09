@@ -60,10 +60,13 @@ permission to access that folder.
 - **Pull requests** (GitHub, through the `gh` command): an open pull request's number next to its
   branch in the graph and sidebar, with its checks (✓ passed, ✗ failed, clock running). Stacked pull
   requests (based on another open PR's branch) show their position, like `#8161 · 5/5`. The sidebar
-  lists every stack in order and the other open pull requests; the inspector shows the pull request
+  lists every stack in order, plus open, draft, recently merged and recently closed pull requests; the inspector shows the pull request
   that merged a commit, its review and checks, and the whole stack.
 - **Jira** (Settings › Jira): a Ticket column with each commit's ticket status and fix version, and
   a Ticket section in the inspector with summary, type, assignee and fix version.
+- **Highlight** (toolbar, with Jira connected): tint the commits of tickets that aren't Done, are in
+  progress or to do (among the latest 500 commits), or of every ticket in a fix version (asked of
+  Jira directly, so it covers tickets beyond what's on screen). The status bar steps through them.
 - **Features**: the sidebar's Features section groups the latest commits (100 to 1,000) under the
   terms your team writes in commit messages: bracket tags like `[Search]` or `[Tech Debt]` and scope
   prefixes like `github-pr:`. A ticket takes its commits' most common term, so untagged commits of a

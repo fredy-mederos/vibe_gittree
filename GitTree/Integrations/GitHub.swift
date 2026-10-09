@@ -1,11 +1,11 @@
 import Foundation
 
-struct PullRequest: Identifiable, Hashable, Sendable {
-    enum State: String, Sendable {
+struct PullRequest: Identifiable, Hashable, Sendable, Codable {
+    enum State: String, Sendable, Codable {
         case open = "OPEN", closed = "CLOSED", merged = "MERGED"
     }
 
-    enum Checks: Sendable {
+    enum Checks: String, Sendable, Codable {
         case passing, failing, pending
     }
 
@@ -243,5 +243,32 @@ enum GitHubCLI {
             if check.state == "PENDING" || check.state == "EXPECTED" { pending = true }
         }
         return pending ? .pending : .passing
+    }
+}
+
+/// `PullRequests/<repository>.json`: the last pull requests seen, so they show right away after a
+/// relaunch while a fresh copy loads under the usual limits.
+struct PullRequestCache: Codable, Sendable {
+    let loadedAt: Date
+    let pullRequests: [PullRequest]
+
+    private static func url(for repositoryID: UUID) -> URL {
+        AppPaths.dataDirectory.appendingPathComponent("PullRequests", isDirectory: true)
+            .appendingPathComponent("\(repositoryID.uuidString).json")
+    }
+
+    static func load(repositoryID: UUID) -> PullRequestCache? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: url(for: repositoryID)) else { return nil }
+        return try? decoder.decode(PullRequestCache.self, from: data)
+    }
+
+    func save(repositoryID: UUID) {
+        let url = Self.url(for: repositoryID)
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(self).write(to: url, options: .atomic)
     }
 }

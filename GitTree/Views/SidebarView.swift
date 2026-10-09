@@ -99,15 +99,21 @@ struct SidebarView: View {
             featuresSection(graph, repositoryID: repositoryID)
         }
         if let pullRequests = state.graph?.model.pullRequests, !isFiltering {
-            let stacked = Set(pullRequests.stacks.flatMap { $0.map(\.number) })
-            let others = pullRequests.all.filter { $0.state == .open && !stacked.contains($0.number) }
-            if !others.isEmpty {
+            let groups = pullRequestGroups(pullRequests)
+            if !groups.isEmpty {
                 Section(isExpanded: $pullRequestsExpanded) {
-                    ForEach(others) { pullRequest in
-                        pullRequestRow(pullRequest, commitGraph: commitGraph, repositoryID: repositoryID)
+                    ForEach(groups, id: \.id) { group in
+                        DisclosureGroup(isExpanded: expansion(group.id, default: group.expandedByDefault)) {
+                            ForEach(group.pullRequests) { pullRequest in
+                                pullRequestRow(pullRequest, commitGraph: commitGraph, repositoryID: repositoryID)
+                            }
+                        } label: {
+                            CountedLabel(title: group.title, systemImage: group.systemImage, count: group.pullRequests.count)
+                        }
                     }
                 } header: {
-                    SectionHeader(title: "Pull Requests", count: others.count)
+                    SectionHeader(title: "Pull Requests", count: groups.reduce(0) { $0 + $1.pullRequests.count },
+                                  fold: fold(groups.map { ($0.id, $0.expandedByDefault) }))
                 }
             }
         }
@@ -194,22 +200,47 @@ struct SidebarView: View {
             .tag(SidebarItem.ref(repositoryID, item.ref.fullName))
     }
 
-    /// An open pull request; selecting it goes to its branch.
+    private struct PullRequestGroup {
+        let id: String
+        let title: String
+        let systemImage: String
+        let pullRequests: [PullRequest]
+        let expandedByDefault: Bool
+    }
+
+    /// Open (outside stacks, which have their own section), drafts, and the latest merged and closed.
+    private func pullRequestGroups(_ index: PullRequestIndex) -> [PullRequestGroup] {
+        let stacked = Set(index.stacks.flatMap { $0.map(\.number) })
+        let newest = index.all.sorted { $0.number > $1.number }
+        let open = newest.filter { $0.state == .open && !$0.isDraft && !stacked.contains($0.number) }
+        let drafts = newest.filter { $0.state == .open && $0.isDraft && !stacked.contains($0.number) }
+        let merged = Array(newest.filter { $0.state == .merged }.prefix(25))
+        let closed = Array(newest.filter { $0.state == .closed }.prefix(15))
+        return [
+            PullRequestGroup(id: "pulls:open", title: "Open", systemImage: "arrow.triangle.pull", pullRequests: open, expandedByDefault: true),
+            PullRequestGroup(id: "pulls:drafts", title: "Drafts", systemImage: "circle.dashed", pullRequests: drafts, expandedByDefault: false),
+            PullRequestGroup(id: "pulls:merged", title: "Recently Merged", systemImage: "arrow.triangle.merge", pullRequests: merged, expandedByDefault: false),
+            PullRequestGroup(id: "pulls:closed", title: "Recently Closed", systemImage: "xmark.circle", pullRequests: closed, expandedByDefault: false),
+        ].filter { !$0.pullRequests.isEmpty }
+    }
+
+    /// A pull request; selecting it goes to its merge commit (merged) or its branch.
     @ViewBuilder
     private func pullRequestRow(_ pullRequest: PullRequest, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
         let ref = commitGraph.refs.first { $0.kind == .local && $0.name == pullRequest.head }
             ?? commitGraph.refs.first { $0.kind == .remote && $0.remoteParts?.branch == pullRequest.head }
+        let mergeCommit = pullRequest.mergeCommit.flatMap { commitGraph.indexByID[$0] != nil ? $0 : nil }
         let row = Label {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(verbatim: "#\(pullRequest.number)")
                         .monospacedDigit()
-                        .foregroundStyle(pullRequest.isDraft ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.green))
+                        .foregroundStyle(Self.stateColor(pullRequest))
                     Text(pullRequest.title)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 2)
-                    if let readiness = pullRequest.readiness {
+                    if pullRequest.state == .open, let readiness = pullRequest.readiness {
                         ReadinessMark(readiness: readiness)
                     }
                 }
@@ -224,10 +255,21 @@ struct SidebarView: View {
                 .foregroundStyle(.secondary)
         }
         .help(Text(verbatim: "#\(pullRequest.number) \(pullRequest.title)\n\(pullRequest.stateTitle)\(pullRequest.author.map { " · \($0)" } ?? "")"))
-        if let ref {
+        if pullRequest.state == .merged, let mergeCommit {
+            row.tag(SidebarItem.commit(repositoryID, mergeCommit.hex))
+        } else if let ref {
             row.tag(SidebarItem.ref(repositoryID, ref.fullName))
         } else {
             row.foregroundStyle(.secondary)
+        }
+    }
+
+    private static func stateColor(_ pullRequest: PullRequest) -> Color {
+        if pullRequest.state == .open && pullRequest.isDraft { return .secondary }
+        switch pullRequest.state {
+        case .open: return .green
+        case .merged: return .purple
+        case .closed: return .red
         }
     }
 
@@ -340,6 +382,8 @@ struct SidebarView: View {
             if let ref = state.graph?.commitGraph?.refs.first(where: { $0.fullName == fullName }) { refMenu(ref) }
         case .feature:
             Button("Clear Highlight") { state.graph?.showFeature(id: nil) }
+        case .commit:
+            EmptyView()
         }
     }
 

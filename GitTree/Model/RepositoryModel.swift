@@ -44,6 +44,12 @@ import Observation
         if repository.kind == .remote, let url = repository.remoteURL {
             hosting = HostingService(remoteURL: url)
         }
+        // Last session's pull requests show right away; a refresh follows under the usual limits.
+        if let cached = PullRequestCache.load(repositoryID: repository.id),
+           Date().timeIntervalSince(cached.loadedAt) < 7 * 24 * 60 * 60 {
+            pullRequests = PullRequestIndex(cached.pullRequests)
+            pullRequestsLoadedAt = cached.loadedAt
+        }
     }
 
     var isBusy: Bool { status == .loading || isFetching }
@@ -151,6 +157,9 @@ import Observation
             switch result {
             case .success(let index):
                 self.pullRequests = index
+                let cache = PullRequestCache(loadedAt: Date(), pullRequests: index.all)
+                let repositoryID = self.id
+                Task.detached(priority: .utility) { cache.save(repositoryID: repositoryID) }
                 self.pullRequestProblem = nil
                 self.pullRequestsLoadedAt = Date()
                 self.pullRequestRetryAt = nil

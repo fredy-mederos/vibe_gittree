@@ -209,6 +209,31 @@ enum JiraClient {
         return try decode(response)
     }
 
+    /// The tickets in a fix version, a page of 100 at a time, at most `limit` (a handful of requests).
+    static func issues(inFixVersion version: String, connection: JiraConnection, limit: Int = 500) async throws -> [JiraIssue] {
+        var collected: [JiraIssue] = []
+        var pageToken: String?
+        let escaped = version.replacingOccurrences(of: "\"", with: "\\\"")
+        repeat {
+            var body: [String: Any] = [
+                "jql": "fixVersion = \"\(escaped)\" ORDER BY key DESC",
+                "fields": fields,
+                "maxResults": 100,
+            ]
+            if let pageToken { body["nextPageToken"] = pageToken }
+            let data = try JSONSerialization.data(withJSONObject: body)
+            let (response, urlResponse) = try await session.data(for: request(connection, path: "rest/api/3/search/jql", method: "POST", body: data))
+            try check(urlResponse)
+            collected += try decode(response)
+            pageToken = (try? JSONDecoder().decode(PageInfo.self, from: response))?.nextPageToken
+        } while pageToken != nil && collected.count < limit
+        return collected
+    }
+
+    private struct PageInfo: Decodable {
+        let nextPageToken: String?
+    }
+
     private struct SearchResponse: Decodable {
         struct Issue: Decodable {
             struct Fields: Decodable {
@@ -297,6 +322,36 @@ enum JiraClient {
 
     /// Repository › Refresh Ticket Statuses: keeps showing what's cached, but asks Jira again for
     /// the tickets on screen.
+    /// Fix versions seen in cached tickets, newest first ("2.12", "2.11"…).
+    var knownFixVersions: [String] {
+        loadCacheForConfiguredSite()
+        let versions = Set(issues.values.flatMap(\.issue.fixVersions))
+        return versions.sorted { $0.compare($1, options: .numeric) == .orderedDescending }
+    }
+
+    /// Makes sure these tickets' statuses are known, through the usual queue (batched, paced,
+    /// cached), and waits up to 30 seconds for them.
+    func ensure(_ keys: [String], connection: JiraConnection) async {
+        request(keys, connection: connection)
+        for _ in 0..<100 {
+            if keys.allSatisfy({ !queued.contains($0) && !inFlightKeys.contains($0) }) { return }
+            if unauthorized { return }
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+    }
+
+    /// The tickets in a fix version, asked of Jira directly (a few requests) and cached like the rest.
+    func issues(inFixVersion fixVersion: String, connection: JiraConnection) async throws -> [JiraIssue] {
+        useCache(for: connection.host)
+        recentRequests.append(Date())
+        let found = try await JiraClient.issues(inFixVersion: fixVersion, connection: connection)
+        let now = Date()
+        for issue in found { issues[issue.key] = (issue, now) }
+        version += 1
+        scheduleSave()
+        return found
+    }
+
     func markAllStale() {
         for key in issues.keys { issues[key]?.fetchedAt = .distantPast }
         unknown = [:]

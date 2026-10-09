@@ -13,11 +13,7 @@ model, and the Light/Dark/System appearance setting.
 
 - **Repository list**: pin favorites to the top; optional grouping by parent folder or host/owner
   (`acme/…`, `github.com/apple/…`).
-- **Jira**: filter or highlight commits by ticket status ("commits whose ticket isn't Done"), and by
-  fix version ("everything in 2.12").
-- **GitHub**: highlight a stack's lanes in the graph; keep pull requests cached on disk like ticket
-  statuses so they show instantly after a relaunch; draft/merged/closed PRs in the sidebar besides
-  the open ones.
+- **GitHub**: highlight a stack's lanes in the graph.
 - **Features**: a short AI summary per feature (what changed, from the commit messages), and turning
   a feature or a fix version into release notes.
 - **Diff window**: syntax highlighting and a side-by-side mode.

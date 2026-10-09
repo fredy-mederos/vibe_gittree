@@ -48,12 +48,28 @@ struct ObjectID: Hashable, Sendable {
 
     private static let digits: [UInt8] = Array("0123456789abcdef".utf8)
 
-    @inline(__always) private static func nibble(_ c: UInt8) -> UInt8? {
+    @inline(__always) fileprivate static func nibble(_ c: UInt8) -> UInt8? {
         switch c {
         case 0x30...0x39: return c - 0x30
         case 0x61...0x66: return c - 0x61 + 10
         case 0x41...0x46: return c - 0x41 + 10
         default: return nil
         }
+    }
+}
+
+/// Stored as its hex string, for caches on disk.
+extension ObjectID: Codable {
+    init(from decoder: Decoder) throws {
+        let hex = try decoder.singleValueContainer().decode(String.self)
+        guard let id = ObjectID(hex: hex) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Not a git object id: \(hex)"))
+        }
+        self = id
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(hex)
     }
 }
