@@ -280,6 +280,7 @@ struct SidebarView: View {
                 if graph.features != nil && graph.featureProgress == nil {
                     Menu {
                         Button("Group Again") { graph.analyzeFeatures() }
+                        Button("Forget Learned Terms and Group Again") { graph.forgetFeatureTerms() }
                         Picker("Commits to Group", selection: Bindable(graph).featureCommitLimit) {
                             ForEach([100, 200, 500, 1000], id: \.self) { Text("Latest \($0)").tag($0) }
                         }

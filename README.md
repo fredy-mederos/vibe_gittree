@@ -64,10 +64,13 @@ permission to access that folder.
   that merged a commit, its review and checks, and the whole stack.
 - **Jira** (Settings › Jira): a Ticket column with each commit's ticket status and fix version, and
   a Ticket section in the inspector with summary, type, assignee and fix version.
-- **Features**: the sidebar's Features section groups the latest commits (100 to 1,000) by ticket and
-  uses Apple's on-device model to name each feature, file it under a product area, and group commits
-  without a ticket. Groups appear right away and get their names as the model works through them.
-  Select one to highlight its commits in the graph. Commit messages never leave the Mac.
+- **Features**: the sidebar's Features section groups the latest commits (100 to 1,000) under the
+  terms your team writes in commit messages: bracket tags like `[Search]` or `[Tech Debt]` and scope
+  prefixes like `github-pr:`. A ticket takes its commits' most common term, so untagged commits of a
+  tagged ticket follow it. Terms and assignments are remembered per repository; only work without a
+  term goes to Apple's on-device model, which picks an existing term or suggests a new one (commit
+  messages never leave the Mac). Each ticket is a feature named after its most descriptive commit.
+  Select one to highlight its commits in the graph.
 - **Deep links**: `gittree://open?repo=<path|remote URL|name>&commit=<sha>&path=<file>&line=<n>`
   opens the repository (adding it if needed), selects the commit and opens the file's diff scrolled
   to the line. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit

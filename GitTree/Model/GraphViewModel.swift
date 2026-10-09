@@ -250,9 +250,10 @@ import Observation
                                          author: graph.authors[Int(graph.authorOf[index])], date: graph.date(of: commit)))
         }
         let regex = graph.ticketRegex
+        let repositoryID = model.id
         featureProgress = "Grouping \(commits.count) commits…"
         featureTask = Task { [weak self] in
-            await FeatureGrouper.analyze(commits, ticketRegex: regex) { message in
+            await FeatureGrouper.analyze(commits, ticketRegex: regex, repositoryID: repositoryID) { message in
                 self?.featureProgress = message
             } update: { report in
                 self?.features = report
@@ -265,6 +266,13 @@ import Observation
             self.featureProgress = nil
             self.featureTask = nil
         }
+    }
+
+    /// Drops the terms learned for this repository and groups again from scratch.
+    func forgetFeatureTerms() {
+        guard featureTask == nil else { return }
+        FeatureCatalog.forget(repositoryID: model.id)
+        analyzeFeatures()
     }
 
     /// Highlights a feature's commits and jumps to its newest one; nil clears the highlight.
