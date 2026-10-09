@@ -14,10 +14,24 @@ struct FileDiff: Sendable {
         let text: String
     }
 
+    /// A row of the side-by-side view: a removed line next to the line that replaced it, a context
+    /// line on both sides, or a hunk header across both.
+    struct SplitRow: Identifiable, Sendable {
+        let id: Int
+        let left: Line?
+        let right: Line?
+        /// Spans both sides (hunk headers and notes).
+        let full: Line?
+    }
+
     let lines: [Line]
     let isBinary: Bool
     let addedCount: Int
     let removedCount: Int
+    /// Syntax colors for each line, by line id; empty when the language isn't known.
+    var tokens: [[SyntaxToken]] = []
+    /// The lines paired up for the side-by-side view.
+    var splitRows: [SplitRow] = []
 
     /// Whether a line of the new file is shown (a change or its context).
     func contains(newLine number: Int) -> Bool {
@@ -26,6 +40,54 @@ struct FileDiff: Sendable {
 
     func lineID(forNewLine number: Int) -> Int? {
         lines.first { $0.newNumber == number && $0.kind != .removed }?.id
+    }
+
+    func tokens(forLine id: Int) -> [SyntaxToken] {
+        id < tokens.count ? tokens[id] : []
+    }
+
+    /// The side-by-side row that shows a line.
+    func splitRowID(containing lineID: Int) -> Int? {
+        splitRows.first { $0.left?.id == lineID || $0.right?.id == lineID || $0.full?.id == lineID }?.id
+    }
+
+    /// Pairs each run of removed lines with the added lines that follow it. Notes ("No newline at
+    /// end of file") go after the pair they belong to instead of splitting it.
+    static func splitRows(_ lines: [Line]) -> [SplitRow] {
+        var rows: [SplitRow] = []
+        var removed: [Line] = []
+        var added: [Line] = []
+        var notes: [Line] = []
+        func flush() {
+            for k in 0..<max(removed.count, added.count) {
+                let left = k < removed.count ? removed[k] : nil
+                let right = k < added.count ? added[k] : nil
+                rows.append(SplitRow(id: left?.id ?? right?.id ?? 0, left: left, right: right, full: nil))
+            }
+            rows += notes.map { SplitRow(id: $0.id, left: nil, right: nil, full: $0) }
+            removed = []
+            added = []
+            notes = []
+        }
+        for line in lines {
+            switch line.kind {
+            case .removed:
+                if !added.isEmpty { flush() }
+                removed.append(line)
+            case .added:
+                added.append(line)
+            case .note:
+                notes.append(line)
+            case .context:
+                flush()
+                rows.append(SplitRow(id: line.id, left: line, right: line, full: nil))
+            case .hunk:
+                flush()
+                rows.append(SplitRow(id: line.id, left: nil, right: nil, full: line))
+            }
+        }
+        flush()
+        return rows
     }
 }
 
@@ -49,7 +111,10 @@ enum FileDiffLoader {
             arguments = ["show", "--no-color", "--no-ext-diff", "--format=", context, commit, "--", path]
         }
         let output = try await Git.run(arguments, in: directory)
-        return parse(String(decoding: output, as: UTF8.self))
+        var diff = parse(String(decoding: output, as: UTF8.self))
+        diff.tokens = SyntaxHighlighter(path: path)?.tokens(for: diff) ?? []
+        diff.splitRows = FileDiff.splitRows(diff.lines)
+        return diff
     }
 
     static func parse(_ text: String) -> FileDiff {

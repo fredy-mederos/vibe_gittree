@@ -56,8 +56,10 @@ permission to access that folder.
 - **Branches, remotes and tags** in the sidebar, grouped by folder (`feature/`, `release/`…) and by
   version for tags, newest first with their age. Click one to jump to it; double-click (or Return)
   to show only its history.
-- **Changes**: click a file in the inspector to open its diff in its own window, with a Whole File
-  toggle, a link to the file on GitHub, and Copy Link.
+- **Changes**: click a file in the inspector to open its diff in its own window, with syntax colors
+  (Swift, Kotlin, Java, JavaScript/TypeScript, Python, Go, Rust, C/Objective-C, Ruby, shell, JSON,
+  YAML, XML/HTML, Markdown and more), a Side by Side toggle that puts the old and new file next to
+  each other, a Whole File toggle, a link to the file on GitHub, and Copy Link.
 - **Pull requests** (GitHub, through the `gh` command): an open pull request's number next to its
   branch in the graph and sidebar, with its checks (✓ passed, ✗ failed, clock running). Stacked pull
   requests (based on another open PR's branch) show their position, like `#8161 · 5/5`. The sidebar
