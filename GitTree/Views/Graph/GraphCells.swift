@@ -1,0 +1,369 @@
+import AppKit
+
+enum GraphMetrics {
+    static let rowHeight: CGFloat = 24
+    static let laneWidth: CGFloat = 12
+    static let lanePadding: CGFloat = 8
+    static let lineWidth: CGFloat = 1.6
+    static let dotRadius: CGFloat = 3.8
+
+    static func x(forLane lane: Int) -> CGFloat {
+        lanePadding + CGFloat(lane) * laneWidth + laneWidth / 2
+    }
+
+    static func width(forLanes lanes: Int) -> CGFloat {
+        lanePadding * 2 + CGFloat(lanes) * laneWidth
+    }
+}
+
+/// System colors, so lanes adapt to light, dark and increased-contrast appearances.
+enum LanePalette {
+    static let colors: [NSColor] = [
+        .systemBlue, .systemGreen, .systemPink, .systemTeal,
+        .systemPurple, .systemOrange, .systemRed, .systemIndigo,
+    ]
+
+    static func color(_ index: UInt8) -> NSColor {
+        colors[Int(index) % colors.count]
+    }
+}
+
+/// Draws one row of the commit graph: the lines crossing the row and the commit's dot.
+final class GraphCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("GraphCell")
+
+    private var layout: GraphLayout?
+    private var row = 0
+    private var isHead = false
+    private var isMerge = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        identifier = Self.identifier
+        // Its own layer, so a merge dot's hollow centre can be punched through to the row background.
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { if backgroundStyle != oldValue { needsDisplay = true } }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    func configure(layout: GraphLayout, row: Int, isHead: Bool, isMerge: Bool) {
+        self.layout = layout
+        self.row = row
+        self.isHead = isHead
+        self.isMerge = isMerge
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let layout, row < layout.rowCount, let context = NSGraphicsContext.current?.cgContext else { return }
+        let height = bounds.height
+        let middle = height / 2
+
+        context.setLineWidth(GraphMetrics.lineWidth)
+        context.setLineCap(.round)
+        for segment in layout.segments(inRow: row) {
+            let a = GraphMetrics.x(forLane: Int(segment.from))
+            let b = GraphMetrics.x(forLane: Int(segment.to))
+            context.setStrokeColor(LanePalette.color(segment.color).cgColor)
+            context.beginPath()
+            switch segment.kind {
+            case .through:
+                context.move(to: CGPoint(x: a, y: 0))
+                context.addLine(to: CGPoint(x: a, y: height))
+            case .incoming:
+                context.move(to: CGPoint(x: a, y: 0))
+                if a == b {
+                    context.addLine(to: CGPoint(x: b, y: middle))
+                } else {
+                    context.addQuadCurve(to: CGPoint(x: b, y: middle), control: CGPoint(x: a, y: middle))
+                }
+            case .outgoing:
+                context.move(to: CGPoint(x: a, y: middle))
+                if a == b {
+                    context.addLine(to: CGPoint(x: b, y: height))
+                } else {
+                    context.addQuadCurve(to: CGPoint(x: b, y: height), control: CGPoint(x: b, y: middle))
+                }
+            }
+            context.strokePath()
+        }
+
+        let center = CGPoint(x: GraphMetrics.x(forLane: Int(layout.column[row])), y: middle)
+        let laneColor = LanePalette.color(layout.color[row]).cgColor
+        let emphasized = backgroundStyle == .emphasized
+        func circle(_ radius: CGFloat) -> CGRect {
+            CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+        }
+
+        if isHead {
+            // The checked-out commit: an accent ring around a dot.
+            context.setFillColor(NSColor.controlAccentColor.cgColor)
+            context.fillEllipse(in: circle(6.2))
+            context.setBlendMode(.clear)
+            context.fillEllipse(in: circle(4.2))
+            context.setBlendMode(.normal)
+            context.fillEllipse(in: circle(2.6))
+        } else if isMerge {
+            context.setFillColor(laneColor)
+            context.fillEllipse(in: circle(GraphMetrics.dotRadius + 0.6))
+            context.setBlendMode(.clear)
+            context.fillEllipse(in: circle(GraphMetrics.dotRadius - 1.4))
+            context.setBlendMode(.normal)
+        } else {
+            context.setFillColor(laneColor)
+            context.fillEllipse(in: circle(GraphMetrics.dotRadius))
+        }
+        if emphasized {
+            context.setStrokeColor(NSColor.white.withAlphaComponent(0.9).cgColor)
+            context.setLineWidth(1.2)
+            context.strokeEllipse(in: circle(isHead ? 6.8 : GraphMetrics.dotRadius + 1.2))
+        }
+    }
+}
+
+/// Branch and tag labels followed by the commit subject, drawn in one pass.
+final class DescriptionCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("DescriptionCell")
+
+    struct Badge {
+        enum Style {
+            case head, branch, remote, tag, overflow
+        }
+
+        let style: Style
+        let text: String
+        var prefix = ""
+        var color: NSColor = .secondaryLabelColor
+        /// A local branch at the same commit as its remote counterpart.
+        var synced = false
+    }
+
+    private var badges: [Badge] = []
+    private var subject = ""
+    private var isMerge = false
+    private var ticketRegex: NSRegularExpression?
+    private var highlight: String?
+
+    private static let subjectFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    private static let ticketFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .medium)
+    private static let badgeFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
+    private static let badgePrefixFont = NSFont.systemFont(ofSize: 11, weight: .regular)
+    private static let tagFont = NSFont.systemFont(ofSize: 11, weight: .medium)
+    private static let lineHeight = ceil(NSLayoutManager().defaultLineHeight(for: subjectFont))
+    private static let badgeLineHeight = ceil(NSLayoutManager().defaultLineHeight(for: badgeFont))
+    private static let pullRequestRegex = try! NSRegularExpression(pattern: #"\(#\d+\)"#)
+
+    private static let tailTruncating: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        return style
+    }()
+
+    private static let middleTruncating: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingMiddle
+        return style
+    }()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        identifier = Self.identifier
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
+    }
+
+    override var isFlipped: Bool { true }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { if backgroundStyle != oldValue { needsDisplay = true } }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    func configure(badges: [Badge], subject: String, isMerge: Bool, ticketRegex: NSRegularExpression?, highlight: String?) {
+        self.badges = badges
+        self.subject = subject
+        self.isMerge = isMerge
+        self.ticketRegex = ticketRegex
+        self.highlight = highlight
+        let labels = badges.map { $0.prefix + $0.text }
+        setAccessibilityLabel((labels + [subject]).joined(separator: ", "))
+        toolTip = labels.isEmpty ? nil : labels.joined(separator: "  ·  ")
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let emphasized = backgroundStyle == .emphasized
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        var x: CGFloat = 4
+        let badgeLimit = bounds.width * 0.6
+        for badge in badges {
+            let room = badgeLimit - x
+            guard room > 36 else { break }
+            x += drawBadge(badge, x: x, maxWidth: min(260, room), emphasized: emphasized, isDark: isDark) + 4
+        }
+        if !badges.isEmpty { x += 2 }
+        let rect = NSRect(x: x, y: floor((bounds.height - Self.lineHeight) / 2),
+                          width: max(0, bounds.width - x - 4), height: Self.lineHeight)
+        attributedSubject(emphasized: emphasized).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+    }
+
+    private func attributedSubject(emphasized: Bool) -> NSAttributedString {
+        let base: NSColor = emphasized ? .alternateSelectedControlTextColor : (isMerge ? .secondaryLabelColor : .labelColor)
+        let text = NSMutableAttributedString(string: subject, attributes: [
+            .font: Self.subjectFont, .foregroundColor: base, .paragraphStyle: Self.tailTruncating,
+        ])
+        let full = NSRange(location: 0, length: (subject as NSString).length)
+        if let ticketRegex {
+            for match in ticketRegex.matches(in: subject, range: full) {
+                text.addAttribute(.font, value: Self.ticketFont, range: match.range)
+            }
+        }
+        let dim: NSColor = emphasized ? NSColor.alternateSelectedControlTextColor.withAlphaComponent(0.7) : .tertiaryLabelColor
+        for match in Self.pullRequestRegex.matches(in: subject, range: full) {
+            text.addAttribute(.foregroundColor, value: dim, range: match.range)
+        }
+        if let highlight, !highlight.isEmpty {
+            let string = subject as NSString
+            var searchRange = full
+            while searchRange.length > 0 {
+                let found = string.range(of: highlight, options: [.caseInsensitive, .diacriticInsensitive], range: searchRange)
+                guard found.location != NSNotFound, found.length > 0 else { break }
+                text.addAttributes([.backgroundColor: NSColor.findHighlightColor, .foregroundColor: NSColor.black], range: found)
+                let next = found.location + found.length
+                searchRange = NSRange(location: next, length: full.length - next)
+            }
+        }
+        return text
+    }
+
+    /// Returns the badge's width.
+    private func drawBadge(_ badge: Badge, x: CGFloat, maxWidth: CGFloat, emphasized: Bool, isDark: Bool) -> CGFloat {
+        var textColor: NSColor
+        var fill: NSColor?
+        var stroke: NSColor?
+        var dashed = false
+        var symbol: String?
+        switch badge.style {
+        case .head:
+            fill = .controlAccentColor
+            textColor = .white
+        case .branch:
+            fill = badge.color.withAlphaComponent(isDark ? 0.24 : 0.13)
+            stroke = badge.color.withAlphaComponent(0.55)
+            textColor = Self.readable(badge.color, isDark: isDark)
+        case .remote:
+            stroke = badge.color.withAlphaComponent(0.7)
+            dashed = true
+            textColor = Self.readable(badge.color, isDark: isDark)
+        case .tag:
+            fill = .quaternaryLabelColor
+            textColor = .secondaryLabelColor
+            symbol = "tag.fill"
+        case .overflow:
+            stroke = .separatorColor
+            textColor = .secondaryLabelColor
+        }
+        if emphasized {
+            textColor = .white
+            fill = .white.withAlphaComponent(badge.style == .head ? 0.32 : 0.16)
+            if stroke != nil { stroke = .white.withAlphaComponent(0.55) }
+        }
+
+        let label = NSMutableAttributedString()
+        if !badge.prefix.isEmpty {
+            label.append(NSAttributedString(string: badge.prefix, attributes: [
+                .font: Self.badgePrefixFont, .foregroundColor: textColor.withAlphaComponent(0.65), .paragraphStyle: Self.middleTruncating,
+            ]))
+        }
+        label.append(NSAttributedString(string: badge.text, attributes: [
+            .font: badge.style == .tag ? Self.tagFont : Self.badgeFont, .foregroundColor: textColor, .paragraphStyle: Self.middleTruncating,
+        ]))
+
+        let padding: CGFloat = 5
+        let leadingSymbolWidth: CGFloat = symbol == nil ? 0 : 11
+        let trailingSymbolWidth: CGFloat = badge.synced ? 12 : 0
+        let textWidth = min(ceil(label.size().width), max(16, maxWidth - padding * 2 - leadingSymbolWidth - trailingSymbolWidth))
+        let width = textWidth + padding * 2 + leadingSymbolWidth + trailingSymbolWidth
+        let height: CGFloat = 16
+        let rect = NSRect(x: x, y: floor((bounds.height - height) / 2), width: width, height: height)
+
+        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
+        if let fill {
+            fill.setFill()
+            path.fill()
+        }
+        if let stroke {
+            stroke.setStroke()
+            path.lineWidth = 1
+            if dashed { path.setLineDash([3, 2], count: 2, phase: 0) }
+            path.stroke()
+        }
+
+        var cursor = rect.minX + padding
+        if let symbol {
+            drawSymbol(symbol, color: textColor, leadingX: cursor, midY: rect.midY)
+            cursor += leadingSymbolWidth
+        }
+        label.draw(with: NSRect(x: cursor, y: rect.minY + floor((height - Self.badgeLineHeight) / 2), width: textWidth, height: Self.badgeLineHeight),
+                   options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        if badge.synced {
+            drawSymbol("cloud.fill", color: textColor.withAlphaComponent(0.75), leadingX: rect.maxX - padding - 10, midY: rect.midY)
+        }
+        return width
+    }
+
+    private func drawSymbol(_ name: String, color: NSColor, leadingX: CGFloat, midY: CGFloat) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
+        guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return }
+        let size = image.size
+        let rect = NSRect(x: leadingX, y: midY - size.height / 2, width: size.width, height: size.height)
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+
+    /// Lane colors are tuned for lines; text needs a little more contrast against the tinted fill.
+    private static func readable(_ color: NSColor, isDark: Bool) -> NSColor {
+        isDark ? (color.blended(withFraction: 0.25, of: .white) ?? color) : (color.blended(withFraction: 0.3, of: .black) ?? color)
+    }
+}
+
+/// A plain text column (author, date, hash).
+final class TextCellView: NSTableCellView {
+    convenience init(identifier: NSUserInterfaceItemIdentifier, font: NSFont, color: NSColor) {
+        self.init(frame: .zero)
+        self.identifier = identifier
+        let field = NSTextField(labelWithString: "")
+        field.font = font
+        field.textColor = color
+        field.lineBreakMode = .byTruncatingTail
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        addSubview(field)
+        textField = field
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            field.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
+            field.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+}

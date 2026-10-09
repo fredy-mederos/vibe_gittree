@@ -1,0 +1,992 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>/*__TITLE__*/</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@75..100,400..700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a framed three-pane git client: branch tree | virtualized commit graph + year rail | commit inspector */
+:root {
+  --bg: #E9ECF0;
+  --panel: #FFFFFF;
+  --side: #F5F6F8;
+  --line: #DCE0E6;
+  --line-soft: #EDEFF2;
+  --fg: #151C26;
+  --muted: #536071;
+  --faint: #8790A0;
+  --accent: #C2410C;
+  --accent-ink: #FFFFFF;
+  --sel: #FCEEE6;
+  --hover: #F4F6F9;
+  --mark: #FFF0B3;
+  --mark-tick: #D49A00;
+  --band: #F1F3F6;
+  --shadow: 0 10px 30px rgba(20, 28, 40, .16);
+  --l0: #2563EB; --l1: #15803D; --l2: #DB2777; --l3: #0D9488;
+  --l4: #7C3AED; --l5: #B45309; --l6: #DC2626; --l7: #4D7C0F;
+  --font-ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --row: 26px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C0F13; --panel: #141920; --side: #11151B; --line: #262D37; --line-soft: #1C222A;
+    --fg: #E3E7ED; --muted: #9AA4B3; --faint: #6A7483;
+    --accent: #FF8A3D; --accent-ink: #1A0E05; --sel: #2A1E16; --hover: #19202A;
+    --mark: #3D3413; --mark-tick: #F2C14E; --band: #171D25; --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    --l0: #6EA8FE; --l1: #4ADE80; --l2: #F472B6; --l3: #2DD4BF;
+    --l4: #A78BFA; --l5: #FBBF24; --l6: #F87171; --l7: #A3E635;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C0F13; --panel: #141920; --side: #11151B; --line: #262D37; --line-soft: #1C222A;
+  --fg: #E3E7ED; --muted: #9AA4B3; --faint: #6A7483;
+  --accent: #FF8A3D; --accent-ink: #1A0E05; --sel: #2A1E16; --hover: #19202A;
+  --mark: #3D3413; --mark-tick: #F2C14E; --band: #171D25; --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+  --l0: #6EA8FE; --l1: #4ADE80; --l2: #F472B6; --l3: #2DD4BF;
+  --l4: #A78BFA; --l5: #FBBF24; --l6: #F87171; --l7: #A3E635;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-ui); font-size: 13px; line-height: 1.4;
+  overflow: hidden;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); padding-inline: 16px; padding-block: 0 16px; gap: 0; }
+
+/* ---------- header ---------- */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-block: 12px; }
+.repo { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.repo h1 {
+  margin: 0; font-size: 19px; font-weight: 650; font-stretch: 82%; letter-spacing: -.01em;
+  text-wrap: balance;
+}
+.repo h1 span { color: var(--faint); font-weight: 500; }
+.stats { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); padding: 2px; }
+.seg button { border: 0; background: none; padding: 3px 10px; border-radius: 5px; color: var(--muted); font-size: 12px; font-weight: 550; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--panel); }
+.toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 4px 10px; font-size: 12px; color: var(--muted); font-weight: 550; }
+.toggle[aria-pressed="true"] { color: var(--fg); border-color: var(--faint); }
+.toggle .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; }
+.toggle[aria-pressed="true"] .dot { background: var(--accent); border-color: var(--accent); }
+.iso-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: var(--accent-ink); border-radius: 7px; padding: 4px 6px 4px 10px; font-size: 12px; font-weight: 600; max-width: 280px; }
+.iso-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iso-chip button { border: 0; background: rgba(0,0,0,.15); color: inherit; border-radius: 4px; width: 18px; height: 18px; line-height: 1; padding: 0; }
+
+.search { display: flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px 4px 2px 8px; }
+.search:focus-within { border-color: var(--accent); }
+.search svg { flex: none; color: var(--faint); }
+.search input { border: 0; outline: 0; background: none; width: 200px; padding: 3px 2px; font-size: 12.5px; }
+.search .count { font-size: 11px; color: var(--faint); min-width: 54px; text-align: right; white-space: nowrap; }
+.icon-btn { border: 0; background: none; width: 24px; height: 24px; border-radius: 5px; display: grid; place-items: center; color: var(--muted); padding: 0; }
+.icon-btn:hover { background: var(--hover); color: var(--fg); }
+.icon-btn:disabled { opacity: .35; cursor: default; background: none; }
+.side-toggle { display: none; }
+
+/* ---------- frame ---------- */
+.frame {
+  position: relative; min-height: 0; display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+}
+
+/* ---------- sidebar ---------- */
+.side { background: var(--side); border-right: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.side-head { padding: 10px 12px 8px; border-bottom: 1px solid var(--line-soft); }
+.side-head input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 5px 8px; font-size: 12px; outline: 0; }
+.side-head input:focus { border-color: var(--accent); }
+.tree { overflow: auto; padding: 6px 0 16px; }
+.sec { margin-top: 6px; }
+.sec-h, .fold-h {
+  display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; text-align: left;
+  padding: 4px 12px; color: var(--muted);
+}
+.sec-h { font-size: 10.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.sec-h .n, .fold-h .n { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--faint); letter-spacing: 0; font-weight: 400; }
+.fold-h { font-size: 12px; padding-left: 18px; color: var(--fg); }
+.fold-h:hover, .sec-h:hover { color: var(--fg); }
+.chev { width: 10px; height: 10px; flex: none; transition: transform .12s; color: var(--faint); }
+[aria-expanded="true"] > .chev { transform: rotate(90deg); }
+.refrow { display: flex; align-items: center; position: relative; }
+.refrow:hover { background: var(--hover); }
+.refrow.cur .ref { color: var(--accent); font-weight: 600; }
+.ref {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 0; background: none; text-align: left;
+  padding: 3px 8px 3px 26px; font-size: 12px; color: var(--fg); height: 24px;
+}
+.in-fold .ref { padding-left: 40px; }
+.ref .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ref .age { margin-left: auto; font-size: 10.5px; color: var(--faint); font-family: var(--font-mono); flex: none; }
+.ref svg { flex: none; color: var(--faint); }
+.iso { opacity: 0; border: 0; background: none; color: var(--muted); padding: 0 8px; height: 24px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.refrow:hover .iso, .iso:focus-visible { opacity: 1; }
+.iso:hover { color: var(--accent); }
+.more { padding: 4px 26px; color: var(--faint); font-size: 11.5px; }
+
+/* ---------- graph list ---------- */
+.graph { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; container-type: inline-size; }
+.cols {
+  display: grid; grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 150px 128px 78px 44px;
+  border-bottom: 1px solid var(--line); font-size: 10.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--faint);
+}
+.cols > div { padding: 7px 10px; white-space: nowrap; overflow: hidden; }
+.cols > div:first-child { padding-left: 12px; }
+.list-wrap { position: relative; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+.scroller { overflow-y: auto; overflow-x: hidden; position: relative; outline: 0; scrollbar-width: none; }
+.scroller::-webkit-scrollbar { display: none; }
+.spacer { position: relative; }
+.rows { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+#lanes { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 2; }
+.row {
+  height: var(--row); display: grid; grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 150px 128px 78px;
+  align-items: center; cursor: default; border-bottom: 1px solid transparent;
+}
+.row:hover { background: var(--hover); }
+.row.hit { background: var(--mark); }
+.row.sel { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.row > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px; min-width: 0; }
+.row > .g { padding: 0; }
+.desc { display: flex; align-items: center; gap: 5px; }
+.subj { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.row.merge .subj { color: var(--muted); }
+.tk { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--fg); }
+.row.merge .tk { color: var(--muted); }
+.prn { color: var(--faint); }
+mark { background: var(--mark-tick); color: #111; border-radius: 2px; padding: 0 1px; }
+.au { color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.av { flex: none; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; font-size: 8.5px; font-weight: 700; color: #fff; letter-spacing: 0; }
+.au .an { overflow: hidden; text-overflow: ellipsis; }
+.dt, .hs { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.hs { color: var(--faint); }
+
+/* ref pills */
+.pill {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 17px; padding: 0 6px; border-radius: 4px;
+  font-size: 11px; font-weight: 600; line-height: 1; border: 1px solid var(--pc, var(--faint)); color: var(--pc, var(--fg));
+  background: color-mix(in srgb, var(--pc, var(--faint)) 10%, var(--panel)); max-width: 260px;
+}
+.pill > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill.remote { border-style: dashed; background: none; }
+.pill.remote .o { color: var(--faint); font-weight: 500; }
+.pill .sync { font-weight: 500; color: var(--faint); font-size: 10px; }
+.pill.tag { border-color: var(--line); color: var(--muted); background: var(--band); font-weight: 500; clip-path: polygon(5px 0, 100% 0, 100% 100%, 5px 100%, 0 50%); padding-left: 9px; border-left: 0; }
+.pill.head { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pill.head .sync { color: inherit; opacity: .75; }
+.pill.extra { border-color: var(--line); color: var(--faint); background: none; font-weight: 500; }
+
+/* year rail */
+.rail { position: relative; border-left: 1px solid var(--line-soft); background: var(--side); cursor: pointer; touch-action: none; }
+#railc { position: absolute; inset: 0; }
+
+/* ---------- inspector ---------- */
+.inspect { width: 360px; border-left: 1px solid var(--line); background: var(--panel); overflow: auto; display: flex; flex-direction: column; }
+.inspect[hidden] { display: none !important; }
+.ins-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 0 16px; }
+.ins-top .lbl { font-size: 10.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.ins-body { padding: 6px 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+.ins-subj { font-size: 15px; font-weight: 600; line-height: 1.35; margin: 0; text-wrap: pretty; overflow-wrap: anywhere; }
+.ins-subj .tk { font-size: 13px; }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.links a { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--fg); text-decoration: none; font-size: 12px; font-weight: 550; }
+.links a:hover { border-color: var(--accent); color: var(--accent); }
+.kv { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 7px 10px; font-size: 12.5px; margin: 0; }
+.kv dt { color: var(--faint); font-size: 11.5px; }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.hash-line { display: flex; align-items: center; gap: 6px; }
+.hash-line code { font-family: var(--font-mono); font-size: 11.5px; overflow-wrap: anywhere; }
+.copy { border: 1px solid var(--line); background: none; border-radius: 5px; font-size: 11px; padding: 1px 7px; color: var(--muted); flex: none; }
+.copy:hover { color: var(--fg); border-color: var(--faint); }
+.blk h3 { margin: 0 0 6px; font-size: 10.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); display: flex; justify-content: space-between; }
+.blk h3 span { letter-spacing: 0; text-transform: none; font-weight: 500; font-family: var(--font-mono); }
+.clist { display: flex; flex-direction: column; border: 1px solid var(--line-soft); border-radius: 7px; overflow: hidden; }
+.citem { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 8px; align-items: baseline; text-align: left; border: 0; background: none; padding: 6px 10px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.citem:first-child { border-top: 0; }
+.citem:hover { background: var(--hover); }
+.citem code { font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+.citem span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.release { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; background: var(--band); font-size: 12.5px; }
+.release b { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.release .when { color: var(--faint); margin-left: auto; font-size: 11.5px; white-space: nowrap; }
+.release.none { color: var(--muted); }
+.pills-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+.pills-wrap .pill { cursor: pointer; }
+.showall { border: 0; background: none; color: var(--accent); font-size: 12px; padding: 4px 0 0; font-weight: 550; }
+.note { color: var(--faint); font-size: 11.5px; }
+
+.backdrop { display: none; }
+
+/* ---------- responsive ---------- */
+@container (max-width: 760px) {
+  .cols, .row { grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 0 96px 0 !important; }
+  .cols { grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 0 96px 0 44px !important; }
+  .row > .au, .row > .hs, .cols > .c-au, .cols > .c-hs { padding: 0; visibility: hidden; }
+  .dt .tm { display: none; }
+}
+@container (max-width: 460px) {
+  .row, .cols { grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 0 0 0 !important; }
+  .cols { grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 0 0 0 0 !important; }
+  .row > .dt, .cols > .c-dt { padding: 0; visibility: hidden; }
+}
+@media (max-width: 1240px) {
+  .inspect { position: absolute; right: 0; top: 0; bottom: 0; z-index: 6; box-shadow: var(--shadow); }
+}
+@media (max-width: 920px) {
+  .frame { grid-template-columns: minmax(0, 1fr); }
+  .side { position: absolute; left: 0; top: 0; bottom: 0; width: min(300px, 86%); z-index: 7; box-shadow: var(--shadow); }
+  .side:not(.open) { display: none; }
+  .side-toggle { display: inline-flex; }
+  .backdrop.open { display: block; position: absolute; inset: 0; z-index: 5; background: rgba(0,0,0,.25); }
+  .tools { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  .list-wrap { grid-template-columns: minmax(0, 1fr) 30px; }
+  .cols { grid-template-columns: var(--gw, 60px) minmax(0, 1fr) 0 0 0 30px !important; }
+  .inspect { top: auto; left: 0; width: auto; max-height: 72%; border-left: 0; border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; }
+  .search input { width: 120px; }
+  .stats { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="repo">
+      <h1 id="repoName"></h1>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="tools">
+      <button class="toggle side-toggle" id="sideToggle" aria-pressed="false" aria-controls="side">Branches</button>
+      <div class="seg" role="group" aria-label="Which commits to show" id="scopeSeg">
+        <button data-scope="all" aria-pressed="true" title="Every commit reachable from any branch or tag">All refs</button>
+        <button data-scope="local" aria-pressed="false" title="Commits reachable from local branches">Local</button>
+        <button data-scope="head" aria-pressed="false" title="Commits reachable from the checked-out branch">HEAD</button>
+      </div>
+      <div id="isoSlot"></div>
+      <button class="toggle" id="tagToggle" aria-pressed="true"><span class="dot"></span>Tags</button>
+      <div class="search" role="search">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input id="q" type="search" placeholder="Message, author, hash" aria-label="Search commits" autocomplete="off" spellcheck="false">
+        <span class="count mono" id="qcount"></span>
+        <button class="icon-btn" id="qprev" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 7.5L6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="icon-btn" id="qnext" title="Next match (Enter)" aria-label="Next match" disabled><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="frame" id="frame">
+    <aside class="side" id="side" aria-label="Branches and tags">
+      <div class="side-head"><input id="refq" type="search" placeholder="Filter branches and tags" aria-label="Filter branches and tags" autocomplete="off" spellcheck="false"></div>
+      <nav class="tree" id="tree"></nav>
+    </aside>
+    <div class="backdrop" id="backdrop"></div>
+
+    <section class="graph" aria-label="Commit graph">
+      <div class="cols" id="cols"><div>Graph</div><div>Description</div><div class="c-au">Author</div><div class="c-dt">Date</div><div class="c-hs">Commit</div><div></div></div>
+      <div class="list-wrap" id="listWrap">
+        <div class="scroller" id="scroller" tabindex="0" aria-label="Commits, newest first. Use arrow keys to move the selection.">
+          <div class="spacer" id="spacer"><div class="rows" id="rows"></div></div>
+        </div>
+        <canvas id="lanes" aria-hidden="true"></canvas>
+        <div class="rail" id="rail" title="Jump through history"><canvas id="railc" aria-hidden="true"></canvas></div>
+      </div>
+    </section>
+
+    <aside class="inspect" id="inspect" aria-label="Commit details" hidden></aside>
+  </div>
+</div>
+
+<script type="application/json" id="graph-data">/*__DATA__*/</script>
+<script>
+(() => {
+'use strict';
+const D = JSON.parse(document.getElementById('graph-data').textContent);
+const C = D.commits, N = C.length, AUTH = D.authors;
+const RH = 26, LW = 12, GP = 10, NCOL = 8;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtN = (n) => n.toLocaleString('en-US');
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+/* ---------- static indexes ---------- */
+const children = Array.from({ length: N }, () => []);
+let merges = 0;
+for (let i = 0; i < N; i++) {
+  const ps = C[i][1];
+  if (ps.length > 1) merges++;
+  for (const p of ps) if (p >= 0) children[p].push(i);
+}
+const refsAt = new Map();
+const refs = { local: [], remote: [], tag: [] };
+for (const [t, n, i] of D.refs) {
+  let o = refsAt.get(i);
+  if (!o) refsAt.set(i, o = { local: [], remote: [], tag: [] });
+  o[t].push(n);
+  refs[t].push({ t, n, i });
+}
+const headRef = refs.local.find((b) => b.n === D.head);
+// D.headCommit also covers a detached HEAD, where there is no branch to look up
+const headIdx = D.headCommit >= 0 ? D.headCommit : headRef ? headRef.i : 0;
+let firstTs = Infinity;
+for (let i = 0; i < N; i++) if (C[i][3] < firstTs) firstTs = C[i][3];
+
+/* ---------- formatting ---------- */
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad = (n) => String(n).padStart(2, '0');
+function fmtDate(ts, withTime) {
+  const d = new Date(ts * 1000);
+  const s = `${pad(d.getDate())} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+  return withTime ? `${s}<span class="tm"> ${pad(d.getHours())}:${pad(d.getMinutes())}</span>` : s;
+}
+function fmtLong(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function ago(ts) {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm';
+  if (s < 86400) return Math.round(s / 3600) + 'h';
+  if (s < 86400 * 45) return Math.round(s / 86400) + 'd';
+  if (s < 86400 * 365) return Math.round(s / (86400 * 30.4)) + 'mo';
+  return (s / (86400 * 365.25)).toFixed(s < 86400 * 365 * 3 ? 1 : 0).replace(/\.0$/, '') + 'y';
+}
+function agoLong(ts) {
+  const a = ago(ts), n = parseFloat(a), u = a.replace(/[\d.]/g, '');
+  const w = { m: 'minute', h: 'hour', d: 'day', mo: 'month', y: 'year' }[u];
+  return `${a.replace(u, '')} ${w}${n === 1 ? '' : 's'} ago`;
+}
+function hue(str) { let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0; return Math.abs(h) % 360; }
+const avatarCache = AUTH.map((a) => {
+  const parts = a.replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  const ini = ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  return `<span class="av" style="background:hsl(${hue(a)} 45% 46%)">${esc(ini)}</span>`;
+});
+// ticket keys (e.g. PROJ-1234) use the prefixes the build script detected; with none, the regex never matches
+const TK = (D.tickets || []).length ? new RegExp(`\\b((?:${D.tickets.join('|')})-\\d{1,6})\\b`, 'g') : /(?!)/g;
+const RELEASE = D.releaseTag ? new RegExp(D.releaseTag) : null;
+function fmtSubject(s, q) {
+  let h = esc(s).replace(/\(#(\d+)\)/g, '<span class="prn">(#$1)</span>').replace(TK, '<span class="tk">$1</span>');
+  if (q) {
+    const qe = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(qe, 'gi');
+    h = h.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : part.replace(re, (m) => `<mark>${m}</mark>`))).join('');
+  }
+  return h;
+}
+
+/* ---------- ref labels ---------- */
+let showTags = store.get('gg.tags') !== '0';
+function labelsFor(i) {
+  const o = refsAt.get(i);
+  if (!o) return null;
+  const out = [];
+  const rem = new Set(o.remote);
+  for (const b of o.local) {
+    const synced = rem.delete('origin/' + b);
+    out.push({ k: 'local', n: b, synced, head: b === D.head });
+  }
+  for (const r of rem) out.push({ k: 'remote', n: r });
+  if (showTags) for (const t of o.tag) out.push({ k: 'tag', n: t });
+  out.sort((a, b) => (b.head ? 1 : 0) - (a.head ? 1 : 0) || ['local', 'remote', 'tag'].indexOf(a.k) - ['local', 'remote', 'tag'].indexOf(b.k));
+  return out;
+}
+function pillHtml(l, color) {
+  const pc = color ? ` style="--pc:${color}"` : '';
+  if (l.k === 'tag') return `<span class="pill tag" title="Tag ${esc(l.n)}"><span>${esc(l.n)}</span></span>`;
+  if (l.k === 'remote') {
+    const sl = l.n.indexOf('/');
+    return `<span class="pill remote"${pc} title="Remote branch ${esc(l.n)}"><span><span class="o">${esc(l.n.slice(0, sl + 1))}</span>${esc(l.n.slice(sl + 1))}</span></span>`;
+  }
+  const sync = l.synced ? `<span class="sync" title="Same commit as origin/${esc(l.n)}">⇅</span>` : '';
+  return `<span class="pill${l.head ? ' head' : ''}"${l.head ? '' : pc} title="${l.head ? 'HEAD · checked out: ' : 'Local branch '}${esc(l.n)}${l.synced ? ' (in sync with origin)' : ''}"><span>${esc(l.n)}</span>${sync}</span>`;
+}
+
+/* ---------- theme-aware colors ---------- */
+let laneColors = [], themeVars = {};
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  laneColors = Array.from({ length: NCOL }, (_, k) => cs.getPropertyValue('--l' + k).trim());
+  for (const k of ['panel', 'fg', 'muted', 'faint', 'accent', 'band', 'side', 'line', 'line-soft', 'mark-tick']) themeVars[k] = cs.getPropertyValue('--' + k).trim();
+}
+readTheme();
+
+/* ---------- scope + lane layout ---------- */
+let scope = { kind: 'all' };
+let rowCommit, rowOf = new Int32Array(N), colOf, colorOf, segs, rowW, nRows = 0;
+
+function computeList() {
+  if (scope.kind === 'all') { const a = new Int32Array(N); for (let i = 0; i < N; i++) a[i] = i; return a; }
+  let heads;
+  if (scope.kind === 'local') heads = refs.local.map((r) => r.i);
+  else if (scope.kind === 'head') heads = [headIdx];
+  else heads = [scope.i];
+  const mark = new Uint8Array(N), st = heads.slice();
+  while (st.length) {
+    const i = st.pop();
+    if (mark[i]) continue;
+    mark[i] = 1;
+    for (const p of C[i][1]) if (p >= 0 && !mark[p]) st.push(p);
+  }
+  const out = [];
+  for (let i = 0; i < N; i++) if (mark[i]) out.push(i);
+  return Int32Array.from(out);
+}
+
+function layout() {
+  rowCommit = computeList();
+  nRows = rowCommit.length;
+  rowOf.fill(-1);
+  for (let r = 0; r < nRows; r++) rowOf[rowCommit[r]] = r;
+  colOf = new Int16Array(nRows); colorOf = new Uint8Array(nRows); rowW = new Uint8Array(nRows); segs = new Array(nRows);
+  const lanes = [], lcol = [], lbirth = [];
+  let nextColor = 0;
+  const alloc = (r) => {
+    let j = lanes.indexOf(-1);
+    if (j < 0) { j = lanes.length; lanes.push(-1); }
+    lcol[j] = nextColor++ % NCOL; lbirth[j] = r;
+    return j;
+  };
+  for (let r = 0; r < nRows; r++) {
+    const c = rowCommit[r];
+    const seg = [];
+    // the lane this commit lands in: the longest-lived lane waiting for it keeps its color
+    let my = -1;
+    for (let i = 0; i < lanes.length; i++) if (lanes[i] === c && (my < 0 || lbirth[i] < lbirth[my])) my = i;
+    if (my < 0) my = alloc(r);
+    const color = lcol[my];
+    for (let i = 0; i < lanes.length; i++) {
+      if (lanes[i] === c) { seg.push(i, my, 1, lcol[i]); if (i !== my) lanes[i] = -1; }
+      else if (lanes[i] >= 0) seg.push(i, i, 0, lcol[i]);
+    }
+    lanes[my] = -1;
+    const ps = C[c][1].filter((p) => p >= 0 && rowOf[p] >= 0);
+    if (ps.length) {
+      const ex = lanes.indexOf(ps[0]);
+      if (ex >= 0) seg.push(my, ex, 2, color);
+      else { lanes[my] = ps[0]; lcol[my] = color; seg.push(my, my, 2, color); }
+      for (let k = 1; k < ps.length; k++) {
+        let j = lanes.indexOf(ps[k]);
+        if (j < 0) { j = alloc(r); lanes[j] = ps[k]; }
+        seg.push(my, j, 2, lcol[j]);
+      }
+    }
+    while (lanes.length && lanes[lanes.length - 1] === -1) lanes.pop();
+    let w = Math.max(lanes.length, my + 1);
+    for (let s = 0; s < seg.length; s += 4) w = Math.max(w, seg[s] + 1, seg[s + 1] + 1);
+    colOf[r] = my; colorOf[r] = color; rowW[r] = Math.min(255, w); segs[r] = seg;
+  }
+  $('spacer').style.height = nRows * RH + 'px';
+}
+
+/* ---------- virtual list ---------- */
+const scroller = $('scroller'), rowsEl = $('rows'), lanesCv = $('lanes'), listWrap = $('listWrap');
+let selected = headIdx, gw = 60, lastR0 = -1, lastR1 = -1, rafPending = false;
+let query = '', hitRows = new Uint8Array(0), hits = [], hitPos = -1;
+
+function laneX(i) { return GP + i * LW + LW / 2; }
+
+function updateGraphWidth(r0, r1) {
+  let m = 3;
+  for (let r = Math.max(0, r0); r < Math.min(nRows, r1); r++) if (rowW[r] > m) m = rowW[r];
+  const cap = Math.max(80, Math.floor(scroller.clientWidth * 0.42));
+  const want = Math.min(cap, GP * 2 + m * LW);
+  // grow at once, shrink only when the difference is noticeable, so the text column doesn't twitch while scrolling
+  if (want > gw || gw - want > LW * 2) {
+    gw = want;
+    $('frame').style.setProperty('--gw', gw + 'px');
+    return true;
+  }
+  return false;
+}
+
+function rowHtml(r) {
+  const c = rowCommit[r], cm = C[c];
+  const labels = labelsFor(c);
+  let pills = '';
+  if (labels) {
+    const col = laneColors[colorOf[r]];
+    const maxShow = 3;
+    labels.slice(0, maxShow).forEach((l) => { pills += pillHtml(l, col); });
+    if (labels.length > maxShow) pills += `<span class="pill extra" title="${esc(labels.slice(maxShow).map((l) => l.n).join(', '))}"><span>+${labels.length - maxShow}</span></span>`;
+  }
+  const cls = 'row' + (c === selected ? ' sel' : '') + (hitRows[r] ? ' hit' : '') + (cm[1].length > 1 ? ' merge' : '');
+  return `<div class="${cls}" data-r="${r}"><div class="g"></div><div class="desc">${pills}<span class="subj">${fmtSubject(cm[4], hitRows[r] ? query : '')}</span></div>` +
+    `<div class="au">${avatarCache[cm[2]]}<span class="an">${esc(AUTH[cm[2]])}</span></div><div class="dt">${fmtDate(cm[3], true)}</div><div class="hs">${cm[0].slice(0, 8)}</div></div>`;
+}
+
+function render(force) {
+  rafPending = false;
+  const top = scroller.scrollTop, h = scroller.clientHeight;
+  const v0 = Math.floor(top / RH), v1 = Math.ceil((top + h) / RH);
+  const widened = updateGraphWidth(v0, v1 + 1);
+  const r0 = Math.max(0, v0 - 10), r1 = Math.min(nRows, v1 + 10);
+  if (force || widened || r0 !== lastR0 || r1 !== lastR1) {
+    let html = '';
+    for (let r = r0; r < r1; r++) html += rowHtml(r);
+    rowsEl.style.transform = `translateY(${r0 * RH}px)`;
+    rowsEl.innerHTML = html;
+    lastR0 = r0; lastR1 = r1;
+  }
+  drawLanes(top, h, v0, v1);
+  drawRail();
+}
+function schedule(force) {
+  if (force) { lastR0 = -1; }
+  if (!rafPending) { rafPending = true; requestAnimationFrame(() => render(false)); }
+}
+
+function drawLanes(top, h, v0, v1) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = gw;
+  if (lanesCv.width !== Math.round(w * dpr) || lanesCv.height !== Math.round(h * dpr)) {
+    lanesCv.width = Math.round(w * dpr); lanesCv.height = Math.round(h * dpr);
+    lanesCv.style.width = w + 'px'; lanesCv.style.height = h + 'px';
+  }
+  const ctx = lanesCv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, w - 2, h); ctx.clip();
+  const paths = Array.from({ length: NCOL }, () => new Path2D());
+  const ra = Math.max(0, v0 - 1), rb = Math.min(nRows, v1 + 1);
+  for (let r = ra; r < rb; r++) {
+    const y0 = r * RH - top, yc = y0 + RH / 2, y1 = y0 + RH;
+    const seg = segs[r];
+    for (let s = 0; s < seg.length; s += 4) {
+      const a = laneX(seg[s]), b = laneX(seg[s + 1]), kind = seg[s + 2], p = paths[seg[s + 3]];
+      if (kind === 0) { p.moveTo(a, y0); p.lineTo(a, y1); }
+      else if (kind === 1) { p.moveTo(a, y0); if (a === b) p.lineTo(b, yc); else p.bezierCurveTo(a, yc, a, yc, b, yc); }
+      else { p.moveTo(a, yc); if (a === b) p.lineTo(b, y1); else p.bezierCurveTo(b, yc, b, yc, b, y1); }
+    }
+  }
+  ctx.lineWidth = 1.75; ctx.lineCap = 'round';
+  for (let k = 0; k < NCOL; k++) { ctx.strokeStyle = laneColors[k]; ctx.stroke(paths[k]); }
+  for (let r = ra; r < rb; r++) {
+    const c = rowCommit[r], x = laneX(colOf[r]), y = r * RH - top + RH / 2;
+    const isMerge = C[c][1].length > 1;
+    ctx.fillStyle = laneColors[colorOf[r]];
+    if (c === headIdx) {
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fillStyle = themeVars.accent; ctx.fill();
+      ctx.globalCompositeOperation = 'destination-out'; ctx.beginPath(); ctx.arc(x, y, 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
+    } else if (isMerge) {
+      ctx.beginPath(); ctx.arc(x, y, 4.2, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'destination-out'; ctx.beginPath(); ctx.arc(x, y, 2.1, 0, Math.PI * 2); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/* ---------- year rail ---------- */
+const rail = $('rail'), railCv = $('railc');
+let yearMarks = [];
+function computeYears() {
+  yearMarks = [];
+  let lastY = null;
+  for (let r = 0; r < nRows; r++) {
+    const y = new Date(C[rowCommit[r]][3] * 1000).getFullYear();
+    if (lastY === null || y < lastY) { yearMarks.push({ y, r }); lastY = y; }
+  }
+}
+function drawRail() {
+  const dpr = window.devicePixelRatio || 1, w = rail.clientWidth, h = rail.clientHeight;
+  if (!w || !h) return;
+  if (railCv.width !== Math.round(w * dpr) || railCv.height !== Math.round(h * dpr)) { railCv.width = Math.round(w * dpr); railCv.height = Math.round(h * dpr); }
+  const ctx = railCv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const yOf = (r) => (r / Math.max(1, nRows)) * h;
+  // alternating year bands
+  for (let k = 0; k < yearMarks.length; k++) {
+    const a = yOf(yearMarks[k].r), b = k + 1 < yearMarks.length ? yOf(yearMarks[k + 1].r) : h;
+    if (k % 2) { ctx.fillStyle = themeVars.band; ctx.fillRect(0, a, w, b - a); }
+  }
+  // search hits
+  if (hits.length) {
+    ctx.fillStyle = themeVars['mark-tick'];
+    let lastPx = -2;
+    for (const r of hits) { const y = Math.round(yOf(r)); if (y !== lastPx) { ctx.fillRect(w - 9, y, 7, 2); lastPx = y; } }
+  }
+  // selected commit
+  const sr = rowOf[selected];
+  if (sr >= 0) { ctx.fillStyle = themeVars.accent; ctx.fillRect(0, Math.round(yOf(sr)) - 1, w, 2); }
+  // viewport thumb
+  const t = yOf(scroller.scrollTop / RH), th = Math.max(6, yOf(scroller.clientHeight / RH));
+  ctx.strokeStyle = themeVars.muted; ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(127,127,127,.12)';
+  ctx.fillRect(1.5, t, w - 3, th); ctx.strokeRect(1.5, t + .5, w - 3, th - 1);
+  // year labels (skip when crowded)
+  ctx.font = `500 10px ${getComputedStyle(document.body).getPropertyValue('--font-mono') || 'monospace'}`;
+  ctx.textBaseline = 'top'; ctx.fillStyle = themeVars.muted;
+  const narrow = w < 40;
+  let lastLabel = -100;
+  for (const m of yearMarks) {
+    const y = yOf(m.r);
+    if (y - lastLabel < 13 || y > h - 10) continue;
+    ctx.fillText(narrow ? "'" + String(m.y).slice(2) : String(m.y), 4, y + 2);
+    ctx.fillStyle = themeVars.faint; ctx.fillRect(0, Math.round(y), 4, 1); ctx.fillStyle = themeVars.muted;
+    lastLabel = y;
+  }
+}
+let railDrag = false;
+function railJump(e) {
+  const rect = rail.getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+  scroller.scrollTop = f * nRows * RH - scroller.clientHeight / 2;
+}
+rail.addEventListener('pointerdown', (e) => { railDrag = true; rail.setPointerCapture(e.pointerId); railJump(e); });
+rail.addEventListener('pointermove', (e) => { if (railDrag) railJump(e); });
+rail.addEventListener('pointerup', () => { railDrag = false; });
+rail.addEventListener('pointercancel', () => { railDrag = false; });
+
+/* ---------- selection + inspector ---------- */
+const inspect = $('inspect');
+const wideEnough = () => window.matchMedia('(min-width: 1241px)').matches;
+
+function scrollToRow(r, center) {
+  const top = r * RH, h = scroller.clientHeight;
+  if (center || top < scroller.scrollTop || top + RH > scroller.scrollTop + h) scroller.scrollTop = top - h / 2 + RH / 2;
+}
+function select(c, opts = {}) {
+  selected = c;
+  let r = rowOf[c];
+  if (r < 0 && opts.ensure) { setScope({ kind: 'all' }); r = rowOf[c]; }
+  if (r >= 0 && opts.scroll) scrollToRow(r, opts.center);
+  if (opts.open !== false) openInspector(c);
+  schedule(true);
+}
+
+function containment(c) {
+  const seen = new Uint8Array(N), st = [c];
+  const local = new Set(), remote = new Set(), tags = [];
+  while (st.length) {
+    const i = st.pop();
+    if (seen[i]) continue;
+    seen[i] = 1;
+    const o = refsAt.get(i);
+    if (o) {
+      o.local.forEach((n) => local.add(n));
+      o.remote.forEach((n) => remote.add(n));
+      o.tag.forEach((n) => tags.push({ n, i }));
+    }
+    for (const k of children[i]) if (!seen[k]) st.push(k);
+  }
+  const branches = [...local];
+  for (const r of remote) if (!local.has(r.replace(/^origin\//, ''))) branches.push(r);
+  branches.sort();
+  let release = null, firstTag = null;
+  for (const t of tags) {
+    if (!firstTag || C[t.i][3] < C[firstTag.i][3]) firstTag = t;
+    if (RELEASE && RELEASE.test(t.n) && (!release || C[t.i][3] < C[release.i][3])) release = t;
+  }
+  return { branches, tags: tags.length, release, firstTag };
+}
+
+function clistHtml(list) {
+  return `<div class="clist">${list.map((i) => `<button class="citem" data-go="${i}"><code>${C[i][0].slice(0, 8)}</code><span>${esc(C[i][4])}</span></button>`).join('')}</div>`;
+}
+
+function openInspector(c) {
+  const cm = C[c];
+  const labels = labelsFor(c) || [];
+  const allTagsHere = (refsAt.get(c) || { tag: [] }).tag;
+  const tickets = [...new Set(cm[4].match(TK) || [])];
+  const prs = new Set();
+  let m;
+  const prRe = /(?:Merge pull request #(\d+)|\(#(\d+)\))/g;
+  while ((m = prRe.exec(cm[4]))) prs.add(m[1] || m[2]);
+  const ct = containment(c);
+  const jiraPrefixes = D.jiraPrefixes || [];
+  const links = [
+    D.remote ? `<a href="${D.remote}/commit/${cm[0]}" target="_blank" rel="noopener">GitHub commit ↗</a>` : '',
+    ...(D.remote ? [...prs] : []).map((n) => `<a href="${D.remote}/pull/${n}" target="_blank" rel="noopener">PR #${n} ↗</a>`),
+    ...(D.jira ? tickets.filter((t) => jiraPrefixes.includes(t.split('-')[0])) : []).map((t) => `<a href="${D.jira}${t}" target="_blank" rel="noopener">${t} ↗</a>`),
+  ].join('');
+  const shownBranches = ct.branches.slice(0, 14);
+  const releaseHtml = ct.release
+    ? `<div class="release"><span>Shipped in</span><b>${esc(ct.release.n)}</b><span class="when">${fmtDate(C[ct.release.i][3])}</span></div>`
+    : ct.firstTag
+      ? `<div class="release"><span>First tag</span><b>${esc(ct.firstTag.n)}</b><span class="when">no production tag yet</span></div>`
+      : `<div class="release none">Not in any tag yet</div>`;
+  inspect.innerHTML = `
+    <div class="ins-top"><span class="lbl">Commit</span><button class="icon-btn" id="insClose" aria-label="Close details" title="Close (Esc)"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="ins-body">
+      <p class="ins-subj">${fmtSubject(cm[4], '')}</p>
+      ${labels.length || allTagsHere.length ? `<div class="pills-wrap">${(labelsFor(c) || []).map((l) => pillHtml(l, null)).join('')}${!showTags ? allTagsHere.map((t) => pillHtml({ k: 'tag', n: t })).join('') : ''}</div>` : ''}
+      <div class="links">${links}</div>
+      <dl class="kv">
+        <dt>Commit</dt><dd><div class="hash-line"><code id="fullHash">${cm[0]}</code><button class="copy" id="copyHash">Copy</button></div></dd>
+        <dt>Author</dt><dd>${esc(AUTH[cm[2]])}</dd>
+        <dt>Date</dt><dd>${fmtLong(cm[3])} <span class="note">· ${agoLong(cm[3])}</span></dd>
+        <dt>Type</dt><dd>${cm[1].length > 1 ? `Merge of ${cm[1].length} parents` : cm[1].length ? 'Commit' : 'Root commit'}</dd>
+      </dl>
+      <div class="blk"><h3>Release</h3>${releaseHtml}</div>
+      ${cm[1].length ? `<div class="blk"><h3>Parents <span>${cm[1].length}</span></h3>${clistHtml(cm[1].filter((p) => p >= 0))}</div>` : ''}
+      ${children[c].length ? `<div class="blk"><h3>Children <span>${children[c].length}</span></h3>${clistHtml(children[c].slice(0, 12))}</div>` : ''}
+      <div class="blk"><h3>Contained in <span>${fmtN(ct.branches.length)} branches · ${fmtN(ct.tags)} tags</span></h3>
+        <div class="pills-wrap" id="contBranches">${shownBranches.map((b) => branchChip(b)).join('')}</div>
+        ${ct.branches.length > shownBranches.length ? `<button class="showall" id="showAllBr">Show all ${fmtN(ct.branches.length)}</button>` : ''}
+      </div>
+    </div>`;
+  inspect.hidden = false;
+  inspect.scrollTop = 0;
+  $('insClose').onclick = closeInspector;
+  $('copyHash').onclick = (e) => {
+    const btn = e.currentTarget;
+    const done = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1400); };
+    try {
+      navigator.clipboard.writeText(cm[0]).then(done, () => selectText($('fullHash')));
+    } catch (err) { selectText($('fullHash')); }
+  };
+  const sa = $('showAllBr');
+  if (sa) sa.onclick = () => { $('contBranches').innerHTML = ct.branches.map((b) => branchChip(b)).join(''); sa.remove(); };
+  syncBackdrop();
+}
+function branchChip(name) {
+  const isRemote = refs.remote.some((r) => r.n === name) && !refs.local.some((r) => r.n === name);
+  return pillHtml(isRemote ? { k: 'remote', n: name } : { k: 'local', n: name, head: name === D.head }, null).replace('<span class="pill', `<span data-branch="${esc(name)}" role="button" tabindex="0" class="pill`);
+}
+function selectText(el) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+function closeInspector() { inspect.hidden = true; syncBackdrop(); scroller.focus({ preventScroll: true }); }
+
+inspect.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]');
+  if (go) { select(+go.dataset.go, { scroll: true, ensure: true }); return; }
+  const br = e.target.closest('[data-branch]');
+  if (br) jumpToBranch(br.dataset.branch);
+});
+inspect.addEventListener('keydown', (e) => {
+  const br = e.target.closest('[data-branch]');
+  if (br && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); jumpToBranch(br.dataset.branch); }
+});
+function jumpToBranch(name) {
+  const r = refs.local.find((x) => x.n === name) || refs.remote.find((x) => x.n === name);
+  if (r) select(r.i, { scroll: true, center: true, ensure: true });
+}
+
+rowsEl.addEventListener('click', (e) => {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  select(rowCommit[+row.dataset.r]);
+  scroller.focus({ preventScroll: true });
+});
+
+/* ---------- keyboard ---------- */
+scroller.addEventListener('keydown', (e) => {
+  const r = rowOf[selected];
+  let to = null;
+  if (e.key === 'ArrowDown' || e.key === 'j') to = Math.min(nRows - 1, (r < 0 ? -1 : r) + 1);
+  else if (e.key === 'ArrowUp' || e.key === 'k') to = Math.max(0, (r < 0 ? 1 : r) - 1);
+  else if (e.key === 'PageDown') to = Math.min(nRows - 1, Math.max(0, r) + Math.floor(scroller.clientHeight / RH));
+  else if (e.key === 'PageUp') to = Math.max(0, r - Math.floor(scroller.clientHeight / RH));
+  else if (e.key === 'Home') to = 0;
+  else if (e.key === 'End') to = nRows - 1;
+  else if (e.key === 'Enter' && r >= 0) { openInspector(selected); return; }
+  if (to !== null) { e.preventDefault(); select(rowCommit[to], { scroll: true, open: !inspect.hidden }); }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); $('q').focus(); $('q').select(); }
+  else if (e.key === 'Escape') {
+    if ($('side').classList.contains('open')) toggleSide(false);
+    else if (!inspect.hidden) closeInspector();
+    else if (document.activeElement === $('q') && $('q').value) { $('q').value = ''; runSearch(); }
+  }
+});
+
+/* ---------- search ---------- */
+let lowerSubj = null, lowerAuth = null;
+function runSearch() {
+  query = $('q').value.trim();
+  hitRows = new Uint8Array(nRows); hits = []; hitPos = -1;
+  if (query.length >= 2) {
+    if (!lowerSubj) { lowerSubj = C.map((c) => c[4].toLowerCase()); lowerAuth = AUTH.map((a) => a.toLowerCase()); }
+    const q = query.toLowerCase(), isHex = /^[0-9a-f]{4,40}$/.test(q);
+    for (let r = 0; r < nRows; r++) {
+      const c = rowCommit[r];
+      if (lowerSubj[c].includes(q) || lowerAuth[C[c][2]].includes(q) || (isHex && C[c][0].startsWith(q))) { hitRows[r] = 1; hits.push(r); }
+    }
+  }
+  updateCount();
+  if (hits.length) {
+    const top = Math.floor(scroller.scrollTop / RH);
+    hitPos = hits.findIndex((r) => r >= top);
+    if (hitPos < 0) hitPos = 0;
+    goHit(0);
+  }
+  schedule(true);
+}
+function updateCount() {
+  $('qcount').textContent = query.length < 2 ? '' : hits.length ? `${fmtN(hitPos + 1)}/${fmtN(hits.length)}` : 'none';
+  $('qprev').disabled = $('qnext').disabled = !hits.length;
+}
+function goHit(step) {
+  if (!hits.length) return;
+  hitPos = (hitPos + step + hits.length) % hits.length;
+  const r = hits[hitPos];
+  select(rowCommit[r], { scroll: true, center: true, open: !inspect.hidden || wideEnough() });
+  updateCount();
+}
+let qTimer;
+$('q').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(runSearch, 160); });
+$('q').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); clearTimeout(qTimer); if (query !== $('q').value.trim()) runSearch(); else goHit(e.shiftKey ? -1 : 1); }
+});
+$('qnext').onclick = () => goHit(1);
+$('qprev').onclick = () => goHit(-1);
+
+/* ---------- scope controls ---------- */
+function setScope(s) {
+  scope = s;
+  document.querySelectorAll('#scopeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scope === s.kind)));
+  $('isoSlot').innerHTML = s.kind === 'ref' ? `<span class="iso-chip" title="Showing only commits reachable from ${esc(s.name)}"><span>Only ${esc(s.name)}</span><button id="isoClear" aria-label="Show all refs again">×</button></span>` : '';
+  if (s.kind === 'ref') $('isoClear').onclick = () => setScope({ kind: 'all' });
+  const keep = selected;
+  layout();
+  computeYears();
+  gw = 0;
+  if (query) runSearch(); else { hitRows = new Uint8Array(nRows); hits = []; }
+  const r = rowOf[keep];
+  if (r >= 0) scrollToRow(r, true); else scroller.scrollTop = 0;
+  renderStats();
+  schedule(true);
+}
+$('scopeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setScope({ kind: b.dataset.scope }); });
+$('tagToggle').setAttribute('aria-pressed', String(showTags));
+$('tagToggle').onclick = () => {
+  showTags = !showTags;
+  store.set('gg.tags', showTags ? '1' : '0');
+  $('tagToggle').setAttribute('aria-pressed', String(showTags));
+  schedule(true);
+  if (!inspect.hidden) openInspector(selected);
+};
+
+/* ---------- sidebar tree ---------- */
+const tree = $('tree');
+const openState = (() => { try { return JSON.parse(store.get('gg.open') || '{}'); } catch (e) { return {}; } })();
+const isOpen = (k, dflt) => (k in openState ? openState[k] : dflt);
+function verKey(f) { const m = f.match(/(\d+)\.(\d+)/); return m ? +m[1] * 1000 + +m[2] : -1; }
+function buildGroups(items, kind) {
+  const root = [], folders = new Map();
+  for (const it of items) {
+    let name = it.n, folder = '';
+    if (kind === 'remote') name = name.replace(/^origin\//, '');
+    if (kind === 'tag') { const m = name.match(/^v?(\d+)\.(\d+)/); folder = m ? `v${m[1]}.${m[2]}` : 'other'; }
+    else if (name.includes('/')) folder = name.slice(0, name.indexOf('/'));
+    const entry = { ...it, label: kind === 'tag' || !folder ? name : name.slice(folder.length + 1) };
+    if (folder) { if (!folders.has(folder)) folders.set(folder, []); folders.get(folder).push(entry); } else root.push(entry);
+  }
+  const byDate = (a, b) => C[b.i][3] - C[a.i][3];
+  root.sort(byDate);
+  for (const v of folders.values()) v.sort(byDate);
+  const fl = [...folders.entries()];
+  if (kind === 'tag') fl.sort((a, b) => verKey(b[0]) - verKey(a[0]));
+  else fl.sort((a, b) => C[b[1][0].i][3] - C[a[1][0].i][3]);
+  return { root, folders: fl };
+}
+const ICON = {
+  local: '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="3.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="4" cy="12.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 5.3v5.4M12 6.8c0 3-8 2.2-8 3.9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+  remote: '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 12.5h7.2a3 3 0 0 0 .3-6 4 4 0 0 0-7.7-.9A3.5 3.5 0 0 0 4.5 12.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  tag: '<svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2.5h5.5l6.5 6.5-5 5-6.5-6.5V2.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="5" cy="5.5" r="1" fill="currentColor"/></svg>',
+};
+const CHEV = '<svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const groups = { local: buildGroups(refs.local, 'local'), remote: buildGroups(refs.remote, 'remote'), tag: buildGroups(refs.tag, 'tag') };
+const SECTIONS = [['local', 'Local branches', true], ['remote', 'Remote · origin', false], ['tag', 'Tags', false]];
+
+function refRowHtml(it, kind, inFold) {
+  const cur = kind === 'local' && it.n === D.head;
+  return `<div class="refrow${inFold ? ' in-fold' : ''}${cur ? ' cur' : ''}"><button class="ref" data-i="${it.i}" title="${esc(it.n)} · ${esc(C[it.i][4])}">${ICON[kind]}<span class="nm">${esc(it.label)}</span><span class="age">${ago(C[it.i][3])}</span></button><button class="iso" data-iso="${esc(it.n)}" data-i="${it.i}" title="Show only commits reachable from ${esc(it.n)}">ONLY</button></div>`;
+}
+function renderTree() {
+  const f = $('refq').value.trim().toLowerCase();
+  let html = '';
+  for (const [kind, title, dOpen] of SECTIONS) {
+    const g = groups[kind];
+    const total = refs[kind].length;
+    if (f) {
+      const matches = refs[kind].filter((it) => it.n.toLowerCase().includes(f)).sort((a, b) => C[b.i][3] - C[a.i][3]);
+      html += `<div class="sec"><div class="sec-h" aria-expanded="true">${title}<span class="n">${matches.length}</span></div>`;
+      html += matches.slice(0, 200).map((it) => refRowHtml({ ...it, label: it.n }, kind, false)).join('');
+      if (matches.length > 200) html += `<div class="more">${matches.length - 200} more, refine the filter</div>`;
+      html += '</div>';
+      continue;
+    }
+    const so = isOpen('s:' + kind, dOpen);
+    html += `<div class="sec"><button class="sec-h" data-tog="s:${kind}" aria-expanded="${so}">${CHEV}${title}<span class="n">${fmtN(total)}</span></button>`;
+    if (so) {
+      for (const [folder, items] of g.folders) {
+        const fo = isOpen(`f:${kind}:${folder}`, false);
+        html += `<button class="fold-h" data-tog="f:${kind}:${folder}" aria-expanded="${fo}">${CHEV}${esc(folder)}${kind === 'tag' ? '' : '/'}<span class="n">${items.length}</span></button>`;
+        if (fo) html += items.map((it) => refRowHtml(it, kind, true)).join('');
+      }
+      html += g.root.map((it) => refRowHtml(it, kind, false)).join('');
+    }
+    html += '</div>';
+  }
+  tree.innerHTML = html;
+}
+tree.addEventListener('click', (e) => {
+  const tog = e.target.closest('[data-tog]');
+  if (tog) { const k = tog.dataset.tog; openState[k] = tog.getAttribute('aria-expanded') !== 'true'; store.set('gg.open', JSON.stringify(openState)); renderTree(); return; }
+  const iso = e.target.closest('[data-iso]');
+  if (iso) { const i = +iso.dataset.i; selected = i; setScope({ kind: 'ref', name: iso.dataset.iso, i }); select(i, { scroll: true, center: true, open: wideEnough() }); toggleSide(false); return; }
+  const ref = e.target.closest('.ref');
+  if (ref) { select(+ref.dataset.i, { scroll: true, center: true, ensure: true }); toggleSide(false); }
+});
+let rTimer;
+$('refq').addEventListener('input', () => { clearTimeout(rTimer); rTimer = setTimeout(renderTree, 120); });
+
+/* ---------- small-screen drawers ---------- */
+function toggleSide(open) {
+  $('side').classList.toggle('open', open);
+  $('sideToggle').setAttribute('aria-pressed', String(open));
+  syncBackdrop();
+}
+function syncBackdrop() {
+  const sideOpen = $('side').classList.contains('open') && window.matchMedia('(max-width: 920px)').matches;
+  $('backdrop').classList.toggle('open', sideOpen);
+}
+$('sideToggle').onclick = () => toggleSide(!$('side').classList.contains('open'));
+$('backdrop').onclick = () => toggleSide(false);
+
+/* ---------- header stats ---------- */
+function renderStats() {
+  const shown = scope.kind === 'all' ? '' : `<span><b>${fmtN(nRows)}</b> shown</span>`;
+  $('stats').innerHTML = `${shown}<span><b>${fmtN(N)}</b> commits</span><span><b>${fmtN(merges)}</b> merges</span><span><b>${AUTH.length}</b> authors</span>` +
+    `<span><b>${refs.local.length}</b> local · <b>${refs.remote.length}</b> remote · <b>${fmtN(refs.tag.length)}</b> tags</span>` +
+    `<span title="Data is a snapshot of the local clone">since ${fmtDate(firstTs)} · snapshot ${fmtDate(D.generated)}</span>`;
+}
+
+/* ---------- boot ---------- */
+scroller.addEventListener('scroll', () => schedule(false), { passive: true });
+new ResizeObserver(() => { lastR0 = -1; schedule(true); }).observe(listWrap);
+const onTheme = () => { readTheme(); schedule(true); };
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onTheme);
+new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => schedule(true));
+
+$('repoName').innerHTML = (D.owner ? `<span>${esc(D.owner)} /</span> ` : '') + esc(D.repo);
+if ((D.tickets || []).length) $('q').placeholder = `Message, author, hash, ${D.tickets[0]}-…`;
+
+layout();
+computeYears();
+renderStats();
+renderTree();
+if (wideEnough()) openInspector(selected);
+render(true);
+})();
+</script>

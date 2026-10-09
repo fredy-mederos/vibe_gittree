@@ -1,0 +1,9 @@
+# built pages embed a repo's full commit history
+dist/
+__pycache__/
+.DS_Store
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
