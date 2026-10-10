@@ -105,14 +105,18 @@ Both integrations are deliberately gentle, so scrolling or reloading can never t
 requests:
 
 - **GitHub**: two `gh pr list` calls per repository (recent pull requests, then reviews and checks
-  of the open ones). At most one at a time, at most every five minutes (30 seconds when you press
-  Fetch), each with a 30-second timeout; after a failure it waits 5 minutes, then longer.
+  of the open ones), only for repositories a window shows (or when you press Fetch). One refresh
+  runs at a time across all repositories, at most every five minutes per repository (30 seconds
+  after Fetch), each call with a 30-second timeout; after a failure it waits 5 minutes, then longer.
 - **Jira**: only tickets on screen, only once scrolling pauses, only ones not already cached; up to
   50 per request with bulk fetch (one request per screen), one request at a time across all
-  profiles, at most 20 a minute. Statuses are cached on disk per site (`jira-cache.json`) and asked
-  for again only after an hour, when they're on screen. Unknown tickets aren't asked about again for
-  a day. A fix version's tickets are asked for once and reused for ten minutes. A rejected token
-  stops that profile's requests until its settings change; timeouts and rate limits back off.
+  profiles, at most 20 a minute. Statuses are cached on disk per profile (`jira-cache.json`) and
+  asked for again only after an hour, when they're on screen. Unknown tickets aren't asked about
+  again for a day. A fix version's tickets take at most five requests and are reused for ten
+  minutes. A rejected token stops that profile's requests until its settings change; timeouts back
+  off, and Jira's requests to slow down are honored (up to ten minutes). Editing a profile drops
+  anything still queued or in flight with the old credentials. Sites without bulk fetch get JQL
+  search, with smaller batches after a query fails on an unknown key, paced like everything else.
   Repository › Refresh Ticket Statuses asks again for what's on screen.
 
 ### Shortcuts

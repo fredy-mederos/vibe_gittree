@@ -119,9 +119,19 @@ struct SidebarView: View {
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let item = items.first { contextMenu(for: item) }
         } primaryAction: { items in
-            // Double-click or Return on a branch or tag shows only its history.
-            guard case .ref(_, let fullName)? = items.first else { return }
-            state.graph?.showOnly(refNamed: fullName)
+            // Double-click or Return on a branch, tag or open pull request shows only its history.
+            switch items.first {
+            case .ref(_, let fullName)?:
+                state.graph?.showOnly(refNamed: fullName)
+            case .pullRequest(_, let number)?:
+                if let graph = state.graph, let commitGraph = graph.commitGraph,
+                   let pullRequest = graph.model.pullRequests?.byNumber[number], pullRequest.state == .open,
+                   let ref = pullRequest.ref(in: commitGraph) {
+                    graph.showOnly(refNamed: ref.fullName)
+                }
+            default:
+                break
+            }
         }
         .dropDestination(for: URL.self) { urls, _ in
             state.addLocal(urls: urls)
@@ -217,12 +227,18 @@ struct SidebarView: View {
     /// Each group comes with whether it starts expanded.
     private func fold(_ groups: [(id: String, expandedByDefault: Bool)]) -> FoldControl? {
         guard !groups.isEmpty, !isFiltering else { return nil }
-        let anyExpanded = groups.contains { expanded[$0.id] ?? $0.expandedByDefault }
+        let anyExpanded = groups.contains { expanded[scopedKey($0.id)] ?? $0.expandedByDefault }
         return FoldControl(anyExpanded: anyExpanded) {
             withAnimation {
-                for group in groups { expanded[group.id] = !anyExpanded }
+                for group in groups { expanded[scopedKey(group.id)] = !anyExpanded }
             }
         }
+    }
+
+    /// Groups of the shown repository (folders, stacks, terms) are remembered per repository;
+    /// the repository list's own groups are shared.
+    private func scopedKey(_ id: String) -> String {
+        id.hasPrefix("repositories:") ? id : "\(state.repositoryID?.uuidString ?? "") \(id)"
     }
 
     @ViewBuilder
@@ -278,9 +294,8 @@ struct SidebarView: View {
     /// A pull request; selecting it goes to its merge commit (merged) or its branch.
     @ViewBuilder
     private func pullRequestRow(_ pullRequest: PullRequest, commitGraph: CommitGraph, repositoryID: UUID, position: Int? = nil) -> some View {
-        let ref = commitGraph.refs.first { $0.kind == .local && $0.name == pullRequest.head }
-            ?? commitGraph.refs.first { $0.kind == .remote && $0.remoteParts?.branch == pullRequest.head }
-        let mergeCommit = pullRequest.mergeCommit.flatMap { commitGraph.indexByID[$0] != nil ? $0 : nil }
+        let reachable = pullRequest.ref(in: commitGraph) != nil
+            || (pullRequest.state == .merged && pullRequest.mergeCommit.map { commitGraph.indexByID[$0] != nil } == true)
         let row = Label {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
@@ -311,10 +326,9 @@ struct SidebarView: View {
                 .foregroundStyle(.secondary)
         }
         .help(Text(verbatim: "#\(pullRequest.number) \(pullRequest.title)\n\(pullRequest.stateTitle)\(pullRequest.author.map { " · \($0)" } ?? "")"))
-        if pullRequest.state == .merged, let mergeCommit {
-            row.tag(SidebarItem.commit(repositoryID, mergeCommit.hex))
-        } else if let ref {
-            row.tag(SidebarItem.ref(repositoryID, ref.fullName))
+        // Its own selection, not its branch's: selecting it shouldn't also select the branch row.
+        if reachable {
+            row.tag(SidebarItem.pullRequest(repositoryID, pullRequest.number))
         } else {
             row.foregroundStyle(.secondary)
         }
@@ -400,10 +414,12 @@ struct SidebarView: View {
         pullRequestRow(pullRequest, commitGraph: commitGraph, repositoryID: repositoryID, position: position)
     }
 
+    /// Open while filtering, so matches show; clicks then change nothing that outlasts the filter.
     private func expansion(_ id: String, default defaultValue: Bool = false) -> Binding<Bool> {
-        Binding(
-            get: { isFiltering || (expanded[id] ?? defaultValue) },
-            set: { expanded[id] = $0 }
+        let key = scopedKey(id)
+        return Binding(
+            get: { isFiltering || (expanded[key] ?? defaultValue) },
+            set: { if !isFiltering { expanded[key] = $0 } }
         )
     }
 
@@ -418,8 +434,18 @@ struct SidebarView: View {
             if let ref = state.graph?.commitGraph?.refs.first(where: { $0.fullName == fullName }) { refMenu(ref) }
         case .feature:
             Button("Clear Highlight") { state.graph?.showFeature(id: nil) }
-        case .commit:
-            EmptyView()
+        case .pullRequest(_, let number):
+            if let pullRequest = state.graph?.model.pullRequests?.byNumber[number] {
+                Button("Open on GitHub") { NSWorkspace.shared.open(pullRequest.url) }
+                if pullRequest.state == .open, let commitGraph = state.graph?.commitGraph,
+                   let ref = pullRequest.ref(in: commitGraph) {
+                    Button("Show Only This Branch") { state.graph?.showOnly(refNamed: ref.fullName) }
+                }
+                Button("Copy Link") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(pullRequest.url.absoluteString, forType: .string)
+                }
+            }
         }
     }
 

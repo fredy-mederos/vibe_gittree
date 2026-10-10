@@ -20,7 +20,8 @@ private struct ActivityView: View {
 
     @State private var period: ActivityPeriod = .lastTwelveMonths
     @State private var scope: GraphScope = .all
-    @State private var author: Int32?
+    /// By name, so the filter survives reloads (author numbers follow the history's order).
+    @State private var author: String?
     @State private var activity: ActivityData?
     @State private var authors: [(index: Int32, name: String, count: Int)] = []
     @State private var years: [Int] = []
@@ -61,7 +62,9 @@ private struct ActivityView: View {
             guard let graph = model.graph else { return }
             let (period, scope, author) = (self.period, self.scope, self.author)
             let built = await Task.detached(priority: .userInitiated) {
-                ActivityData.build(graph: graph, scope: scope, author: author, period: period)
+                // An author no longer in the history matches nothing.
+                let index = author.map { name in graph.authors.firstIndex(of: name).map(Int32.init) ?? -1 }
+                return ActivityData.build(graph: graph, scope: scope, author: index, period: period)
             }.value
             if authors.isEmpty || activity?.graph !== graph {
                 authors = ActivityData.authors(in: graph)
@@ -76,7 +79,7 @@ private struct ActivityView: View {
     private struct TaskKey: Hashable {
         let period: ActivityPeriod
         let scope: GraphScope
-        let author: Int32?
+        let author: String?
         let generation: Int
     }
 
@@ -101,10 +104,14 @@ private struct ActivityView: View {
         }
         ToolbarItem {
             Picker("Author", selection: $author) {
-                Text("Everyone").tag(Int32?.none)
+                Text("Everyone").tag(String?.none)
                 Divider()
                 ForEach(authors.prefix(60), id: \.index) { entry in
-                    Text(verbatim: "\(entry.name) (\(entry.count))").tag(Int32?.some(entry.index))
+                    Text(verbatim: "\(entry.name) (\(entry.count))").tag(String?.some(entry.name))
+                }
+                // Someone outside the top 60 stays selectable once picked.
+                if let author, !authors.prefix(60).contains(where: { $0.name == author }) {
+                    Text(verbatim: author).tag(String?.some(author))
                 }
             }
             .help("Only count one person's commits")
@@ -117,14 +124,11 @@ private struct ActivityView: View {
         let firstWeekday = calendar.firstWeekday - 1
         return VStack(alignment: .leading, spacing: 4) {
             // Month labels above the week where each month starts.
+            let monthLabels = activity.monthLabels
             HStack(spacing: Self.gap) {
                 Color.clear.frame(width: 28, height: 12)
                 ForEach(0..<activity.weeks, id: \.self) { week in
-                    let first = activity.date(week: week, weekday: 0)
-                    let last = activity.date(week: week, weekday: 6)
-                    let startsMonth = calendar.component(.month, from: first) != calendar.component(.month, from: last)
-                        || calendar.component(.day, from: first) == 1 || week == 0
-                    Text(startsMonth ? last.formatted(.dateTime.month(.abbreviated)) : "")
+                    Text(monthLabels[week] ?? "")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize()
@@ -298,6 +302,6 @@ private struct DayDetails: View {
                 let term = catalog.assignments["ticket:\(key)"].flatMap { catalog.terms[$0]?.name }
                 return (key, term, count)
             }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.key < $1.key }
     }
 }

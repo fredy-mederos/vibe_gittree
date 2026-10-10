@@ -15,7 +15,12 @@ import Observation
     }
 
     var searchText = "" {
-        didSet { if searchText != oldValue { scheduleSearch(jump: true) } }
+        didSet {
+            guard searchText != oldValue else { return }
+            // A search wins over a highlight that's still loading.
+            if !searchText.isEmpty { cancelHighlightLoad() }
+            scheduleSearch(jump: true)
+        }
     }
 
     private(set) var layout: GraphLayout?
@@ -41,7 +46,11 @@ import Observation
     private(set) var highlight: CommitHighlight?
     /// "Loading tickets…" while a ticket filter waits for Jira.
     private(set) var highlightProgress: String?
+    /// A problem with the highlight: Jira couldn't list a fix version, or statuses still missing.
+    private(set) var highlightNote: String?
     @ObservationIgnored private var highlightTask: Task<Void, Never>?
+    /// Loading a ticket or fix version highlight; a newer highlight, a search or Clear cancels it.
+    @ObservationIgnored private var highlightLoadTask: Task<Void, Never>?
 
     @ObservationIgnored private var selectedID: ObjectID?
     @ObservationIgnored private var appliedGeneration = -1
@@ -264,6 +273,7 @@ import Observation
                 // Keep a highlighted feature in sync as the grouping improves.
                 if let id = self?.highlight?.featureID, let refreshed = report.groups.first(where: { $0.id == id }) {
                     self?.highlight = .feature(refreshed)
+                    self?.applyHighlight(jump: false)
                 }
             }
             guard let self else { return }
@@ -306,38 +316,64 @@ import Observation
                 keys.append(key)
             }
         }
+        cancelHighlightLoad()
         highlightProgress = "Loading \(counted(keys.count, "ticket", "tickets"))…"
-        Task { [weak self] in
+        highlightLoadTask = Task { [weak self] in
             await JiraStore.shared.ensure(keys, connection: jira)
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             let matching = Set(keys.filter { key in
                 guard let issue = JiraStore.shared.issue(key, connection: jira) else { return false }
                 return filter.matches(issue)
             })
-            self.highlightProgress = nil
+            let unsettled = keys.filter { !JiraStore.shared.isSettled($0, connection: jira) }.count
             self.setHighlight(.tickets(title: filter.title, keys: matching))
+            if unsettled > 0 {
+                self.highlightNote = "\(counted(unsettled, "status", "statuses")) still loading"
+            }
         }
     }
 
     /// Highlights the commits of every ticket in a fix version, as listed by Jira.
     func highlightFixVersion(_ fixVersion: String) {
         guard let jira = JiraStore.shared.connection(for: model.repository) else { return }
+        cancelHighlightLoad()
         highlightProgress = "Loading fix version \(fixVersion)…"
-        Task { [weak self] in
-            let issues = (try? await JiraStore.shared.issues(inFixVersion: fixVersion, connection: jira)) ?? []
-            guard let self else { return }
-            self.highlightProgress = nil
-            self.setHighlight(.tickets(title: "Fix version \(fixVersion)", keys: Set(issues.map(\.key))))
+        highlightLoadTask = Task { [weak self] in
+            do {
+                let issues = try await JiraStore.shared.issues(inFixVersion: fixVersion, connection: jira)
+                guard let self, !Task.isCancelled else { return }
+                self.setHighlight(.tickets(title: "Fix version \(fixVersion)", keys: Set(issues.map(\.key))))
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.cancelHighlightLoad()
+                self.highlightNote = "Couldn't load fix version \(fixVersion): \(error.localizedDescription)"
+            }
         }
     }
 
+    /// Clears the highlight, a highlight still loading, and its note.
     func clearHighlight() {
+        cancelHighlightLoad()
         guard highlight != nil else { return }
         highlight = nil
         scheduleSearch(jump: false)
     }
 
+    /// Selecting something else in the sidebar ends a feature's highlight (ticket and fix version
+    /// highlights come from the toolbar and stay).
+    func clearFeatureHighlight() {
+        if highlight?.featureID != nil { clearHighlight() }
+    }
+
+    private func cancelHighlightLoad() {
+        highlightLoadTask?.cancel()
+        highlightLoadTask = nil
+        highlightProgress = nil
+        highlightNote = nil
+    }
+
     private func setHighlight(_ newHighlight: CommitHighlight) {
+        cancelHighlightLoad()
         highlight = newHighlight
         if !searchText.isEmpty { searchText = "" }
         applyHighlight(jump: true)

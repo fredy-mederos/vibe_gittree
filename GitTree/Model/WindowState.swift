@@ -7,8 +7,8 @@ enum SidebarItem: Hashable {
     case ref(UUID, String)
     /// A group from the Features section.
     case feature(UUID, String)
-    /// A commit by hash, like a merged pull request's merge commit.
-    case commit(UUID, String)
+    /// A pull request by number: selecting it goes to its merge commit (merged) or its branch.
+    case pullRequest(UUID, Int)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -42,6 +42,19 @@ enum SidebarItem: Hashable {
     private(set) var searchFocusRequest = 0
 
     @ObservationIgnored private let library = RepositoryLibrary.shared
+
+    /// Every window's state, to tell which repositories are on screen.
+    private static var windows: [WeakWindowState] = []
+
+    init() {
+        Self.windows.removeAll { $0.state == nil }
+        Self.windows.append(WeakWindowState(state: self))
+    }
+
+    /// Whether some window shows this repository. Only those load pull requests on their own.
+    static func isShowing(_ id: UUID) -> Bool {
+        windows.contains { $0.state?.repositoryID == id }
+    }
     /// Each repository's selection, scope and search in this window, kept while switching between them.
     @ObservationIgnored private var graphs: [UUID: GraphViewModel] = [:]
 
@@ -85,6 +98,7 @@ enum SidebarItem: Hashable {
                 graph = fresh
             }
             model.loadIfNeeded()
+            model.refreshPullRequests()
             library.markOpened(id)
         }
         if sidebarSelection != .repository(id) {
@@ -98,14 +112,21 @@ enum SidebarItem: Hashable {
             open(id)
         case .ref(let id, let fullName):
             if id != repositoryID { open(id) }
-            graph?.showFeature(id: nil)
+            graph?.clearFeatureHighlight()
             graph?.reveal(refNamed: fullName)
         case .feature(let id, let featureID):
             if id != repositoryID { open(id) }
             graph?.showFeature(id: featureID)
-        case .commit(let id, let hex):
+        case .pullRequest(let id, let number):
             if id != repositoryID { open(id) }
-            if let index = graph?.commitGraph?.index(matching: hex) { graph?.select(index) }
+            graph?.clearFeatureHighlight()
+            guard let graph, let commitGraph = graph.commitGraph,
+                  let pullRequest = graph.model.pullRequests?.byNumber[number] else { break }
+            if pullRequest.state == .merged, let merge = pullRequest.mergeCommit, let index = commitGraph.indexByID[merge] {
+                graph.select(index)
+            } else if let ref = pullRequest.ref(in: commitGraph) {
+                graph.reveal(refNamed: ref.fullName)
+            }
         case nil:
             break
         }
@@ -280,4 +301,8 @@ enum SidebarItem: Hashable {
         guard let url = hosting(for: repository)?.webURL else { return }
         NSWorkspace.shared.open(url)
     }
+}
+
+private struct WeakWindowState {
+    weak var state: WindowState?
 }

@@ -82,6 +82,14 @@ struct PullRequest: Identifiable, Hashable, Sendable, Codable {
     }
 }
 
+extension PullRequest {
+    /// The pull request's branch in the graph: the local one, or else the remote one.
+    func ref(in graph: CommitGraph) -> GitRef? {
+        graph.refs.first { $0.kind == .local && $0.name == head }
+            ?? graph.refs.first { $0.kind == .remote && $0.remoteParts?.branch == head }
+    }
+}
+
 /// Pull requests of one GitHub repository, indexed the ways the graph needs them, plus stacks:
 /// open pull requests whose base branch is another open pull request's branch.
 struct PullRequestIndex: Sendable {
@@ -93,6 +101,17 @@ struct PullRequestIndex: Sendable {
     private let byHead: [String: [PullRequest]]
     private let openByHead: [String: PullRequest]
     private let openChildren: [String: [PullRequest]]
+    /// Open pull requests others can be stacked on, by head branch.
+    private let stackParents: [String: PullRequest]
+
+    /// develop, main, release branches and the like.
+    static func isLongLived(_ branch: String) -> Bool {
+        let name = branch.lowercased()
+        let trunks: Set<String> = ["main", "master", "develop", "development", "dev", "trunk", "staging", "stage",
+                                   "production", "prod", "next"]
+        return trunks.contains(name)
+            || ["release/", "release-", "release_", "releases/", "hotfix/", "rc/"].contains { name.hasPrefix($0) }
+    }
 
     init(_ pullRequests: [PullRequest]) {
         all = pullRequests
@@ -113,6 +132,11 @@ struct PullRequestIndex: Sendable {
         byHead = heads
         openByHead = openHeads
         openChildren = children.mapValues { $0.sorted { $0.number < $1.number } }
+        // A pull request from a long-lived branch (a release PR from develop to main) or one that
+        // many others are based on is a trunk, not the bottom of a stack.
+        stackParents = openHeads.filter { head, _ in
+            !Self.isLongLived(head) && (children[head]?.count ?? 0) < 5
+        }
 
         var found: [[PullRequest]] = []
         var covered: Set<Int> = []
@@ -140,7 +164,7 @@ struct PullRequestIndex: Sendable {
         guard pullRequest.state == .open else { return [] }
         var root = pullRequest
         var seen: Set<Int> = [root.number]
-        while let parent = openByHead[root.base], !seen.contains(parent.number) {
+        while let parent = stackParents[root.base], !seen.contains(parent.number) {
             seen.insert(parent.number)
             root = parent
         }
@@ -149,6 +173,7 @@ struct PullRequestIndex: Sendable {
         func walk(_ node: PullRequest) {
             guard visited.insert(node.number).inserted else { return }
             ordered.append(node)
+            guard stackParents[node.head] != nil else { return }
             for child in openChildren[node.head] ?? [] { walk(child) }
         }
         walk(root)
@@ -271,4 +296,31 @@ struct PullRequestCache: Codable, Sendable {
         encoder.dateEncodingStrategy = .iso8601
         try? encoder.encode(self).write(to: url, options: .atomic)
     }
+}
+
+/// Lets one task through at a time, in the order they asked. `gh` refreshes of every repository go
+/// through `GitHubCLI.gate`, so switching quickly between repositories never runs them in parallel.
+@MainActor final class SerialGate {
+    private var busy = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    func enter() async {
+        guard busy else {
+            busy = true
+            return
+        }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func leave() {
+        if waiting.isEmpty {
+            busy = false
+        } else {
+            waiting.removeFirst().resume()
+        }
+    }
+}
+
+extension GitHubCLI {
+    @MainActor static let gate = SerialGate()
 }

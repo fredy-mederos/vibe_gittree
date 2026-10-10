@@ -45,6 +45,34 @@ struct ActivityData: Sendable {
         Calendar.current.date(byAdding: .day, value: week * 7 + weekday, to: gridStart) ?? gridStart
     }
 
+    /// Month names above the grid, by week column: the period's first month, then each month in the
+    /// week where its first day falls, never past the period and never crowding the previous label.
+    var monthLabels: [Int: String] {
+        let calendar = Calendar.current
+        var labels: [Int: String] = [:]
+        var lastWeek: Int?
+        for week in 0..<weeks {
+            var labelDay: Date?
+            for weekday in 0..<7 {
+                let day = date(week: week, weekday: weekday)
+                guard day >= periodStart, day <= periodEnd else { continue }
+                if day == periodStart || calendar.component(.day, from: day) == 1 {
+                    labelDay = day
+                    break
+                }
+            }
+            guard let labelDay else { continue }
+            if let previous = lastWeek, week - previous < 3 {
+                // Too close: a real month start wins over the partial first month.
+                guard previous == 0 else { continue }
+                labels[previous] = nil
+            }
+            labels[week] = labelDay.formatted(.dateTime.month(.abbreviated))
+            lastWeek = week
+        }
+        return labels
+    }
+
     static func build(graph: CommitGraph, scope: GraphScope, author: Int32?, period: ActivityPeriod) -> ActivityData {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -81,7 +109,8 @@ struct ActivityData: Sendable {
         let thresholds: [Int] = counts.isEmpty ? [] : [0.25, 0.5, 0.75].map { fraction in
             max(2, counts[min(counts.count - 1, Int(Double(counts.count) * fraction))])
         }
-        let busiest = days.max { $0.value.count < $1.value.count }.map { (day: $0.key, count: $0.value.count) }
+        // Ties go to the most recent day, so the summary doesn't change between rebuilds.
+        let busiest = days.max { ($0.value.count, $0.key) < ($1.value.count, $1.key) }.map { (day: $0.key, count: $0.value.count) }
         return ActivityData(graph: graph, gridStart: gridStart, weeks: weeks, periodStart: periodStart, periodEnd: periodEnd,
                             days: days, thresholds: thresholds, total: counts.reduce(0, +), busiest: busiest)
     }
@@ -92,7 +121,7 @@ struct ActivityData: Sendable {
         for author in graph.authorOf { counts[Int(author)] += 1 }
         return counts.enumerated()
             .filter { $0.element > 0 }
-            .sorted { $0.element > $1.element }
+            .sorted { $0.element != $1.element ? $0.element > $1.element : graph.authors[$0.offset] < graph.authors[$1.offset] }
             .map { (Int32($0.offset), graph.authors[$0.offset], $0.element) }
     }
 

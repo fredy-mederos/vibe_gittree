@@ -12,6 +12,7 @@ bulk fetch with 404, to exercise GitTree's fallback to search.
 import json
 import re
 import sys
+import time
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -52,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
         query = json.loads(self.rfile.read(length) or b"{}")
         bulk = self.path.startswith("/rest/api/3/issue/bulkfetch")
         if bulk and SEARCH_ONLY:
-            print(f"request {requests}: bulk fetch refused (404)", file=sys.stderr, flush=True)
+            log(f"request {requests}: bulk fetch refused (404)")
             self.reply(404, {"errorMessages": ["Not found"]})
             return
         jql = query.get("jql", "")
@@ -60,13 +61,13 @@ class Handler(BaseHTTPRequestHandler):
         if version:
             # Every ticket asked about so far whose (mock) fix version matches.
             keys = sorted(key for key in seen if VERSIONS[zlib.crc32(key.encode()) % len(VERSIONS)] == version.group(1))
-            print(f"request {requests}: fixVersion {version.group(1)}, {len(keys)} tickets", file=sys.stderr, flush=True)
+            log(f"request {requests}: fixVersion {version.group(1)}, {len(keys)} tickets")
         else:
             keys = query.get("issueIdsOrKeys", []) if bulk else re.findall(r"[A-Z][A-Z0-9]+-\d+", jql)
             seen.update(key for key in keys if not key.startswith("PRO-"))
         if not version:
             kind = "bulk fetch" if bulk else "search"
-            print(f"request {requests}: {kind}, {len(keys)} keys", file=sys.stderr, flush=True)
+            log(f"request {requests}: {kind}, {len(keys)} keys")
         missing = [key for key in keys if key.startswith("PRO-")]
         if missing and not bulk:
             self.reply(400, {"errorMessages": ["An issue with key 'PRO-…' does not exist for field 'key'."]})
@@ -92,6 +93,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 SEARCH_ONLY = "--search-only" in sys.argv
+
+
+def log(message):
+    """Every request on stderr with the time, so pacing is easy to check."""
+    print(f"{time.strftime('%H:%M:%S')} {message}", file=sys.stderr, flush=True)
 
 if __name__ == "__main__":
     numbers = [arg for arg in sys.argv[1:] if arg.isdigit()]

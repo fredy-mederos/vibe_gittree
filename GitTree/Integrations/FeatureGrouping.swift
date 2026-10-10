@@ -120,7 +120,8 @@ enum TermExtractor {
     private static let ignored: Set<String> = [
         "bug", "bugs", "bugfix", "fix", "fixes", "hotfix", "new", "ref", "refactor", "refactoring", "imp", "improvement",
         "wip", "android", "ios", "test", "tests", "chore", "feat", "feature", "pr media", "merge", "minor", "cleanup",
-        "docs", "doc", "style", "build", "release", "revert", "temp", "todo",
+        "docs", "doc", "style", "build", "release", "revert", "temp", "todo", "skip ci", "ci skip", "skip-ci",
+        "no ci", "draft", "do not merge", "dnm",
     ]
 
     static func terms(in subject: String, ticketRegex: NSRegularExpression?) -> [String] {
@@ -175,6 +176,12 @@ enum FeatureGrouper {
                         progress: @MainActor @escaping (String) -> Void,
                         update: @MainActor @escaping (FeatureReport) -> Void) async {
         var catalog = FeatureCatalog.load(repositoryID: repositoryID)
+        // Uses count this run's work, so the terms shown to the model are the ones in use now.
+        catalog.terms = catalog.terms.mapValues { term in
+            var term = term
+            term.uses = 0
+            return term
+        }
 
         // Tickets and loose commits, newest first.
         var items: [Item] = []
@@ -204,12 +211,21 @@ enum FeatureGrouper {
                     counts[key] = (counts[key]?.term ?? term, (counts[key]?.count ?? 0) + 1, commit.subject)
                 }
             }
-            if let best = counts.max(by: { $0.value.count < $1.value.count }) {
+            // Ties go to the term this work had before, then alphabetically, so it doesn't move
+            // between areas from one run to the next.
+            let saved = catalog.assignments[items[index].key]
+            let best = counts.min { a, b in
+                if a.value.count != b.value.count { return a.value.count > b.value.count }
+                if (a.key == saved) != (b.key == saved) { return a.key == saved }
+                return a.key < b.key
+            }
+            if let best {
                 items[index].termKey = catalog.record(best.value.term, example: best.value.example)
                 catalog.assignments[items[index].key] = items[index].termKey
-            } else if let saved = catalog.assignments[items[index].key], catalog.terms[saved] != nil {
+            } else if let saved, catalog.terms[saved] != nil {
                 // 3. Learned in an earlier run.
                 items[index].termKey = saved
+                catalog.terms[saved]?.uses += 1
             }
         }
         catalog.save(repositoryID: repositoryID)
@@ -229,8 +245,7 @@ enum FeatureGrouper {
                     for (offset, answer) in answers {
                         guard offset < batch.count, let term = answer else { continue }
                         let index = batch[offset]
-                        let existing = catalog.terms.first { $0.key == FeatureCatalog.key(term) }?.key
-                        let key = existing ?? catalog.record(term, example: items[index].commits.first?.subject ?? "", suggested: true)
+                        let key = catalog.record(term, example: items[index].commits.first?.subject ?? "", suggested: true)
                         items[index].termKey = key
                         catalog.assignments[items[index].key] = key
                     }

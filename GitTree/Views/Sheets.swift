@@ -106,10 +106,12 @@ struct RepositorySettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var repository: Repository
     @State private var ticketPrefixes: String
+    private let initialJiraProfileID: UUID?
 
     init(repository: Repository) {
         _repository = State(initialValue: repository)
         _ticketPrefixes = State(initialValue: repository.customTicketPrefixes.joined(separator: ", "))
+        initialJiraProfileID = repository.jiraProfileID
     }
 
     /// The repository's profile; one that was removed reads as none.
@@ -187,10 +189,19 @@ struct RepositorySettingsSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Save") {
-                    repository.name = repository.name.trimmingCharacters(in: .whitespaces)
+                    // Onto the latest copy, so changes made elsewhere meanwhile (pins, fetch times,
+                    // the Jira profile picked in Settings) aren't undone by an older one.
+                    guard var latest = RepositoryLibrary.shared.repository(id: repository.id) else {
+                        dismiss()
+                        return
+                    }
+                    latest.name = repository.name.trimmingCharacters(in: .whitespaces)
+                    latest.issueURLTemplate = repository.issueURLTemplate
+                    latest.releaseTagPattern = repository.releaseTagPattern
+                    if repository.jiraProfileID != initialJiraProfileID { latest.jiraProfileID = repository.jiraProfileID }
                     let prefixes = ticketPrefixes.split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init)
-                    repository.ticketPrefixes = prefixes.isEmpty ? nil : prefixes
-                    RepositoryLibrary.shared.update(repository)
+                    latest.ticketPrefixes = prefixes.isEmpty ? nil : prefixes
+                    RepositoryLibrary.shared.update(latest)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)

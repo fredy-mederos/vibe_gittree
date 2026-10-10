@@ -112,7 +112,11 @@ struct RepositoryWindow: View {
 /// `-GTOpenRepository <path>` adds and opens a local repository, `-GTCloneURL <url>` clones one,
 /// `-GTAddFolder <path>` adds every repository in a folder, `-GTShowSwitcher YES` opens the ⌘K switcher,
 /// `-GTSearch <text>` searches once a repository is open, `-GTScope local|head|<full ref name>`
-/// narrows the graph, and `-GTAppearance dark|light` forces an appearance.
+/// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` groups
+/// features, `-GTHighlightFixVersion <version>` highlights one, `-GTShowActivity YES` opens the
+/// calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES` (with `-settingsTab jira`) open
+/// the settings. Elsewhere: `-GTDataDirectory <folder>` (throwaway library, Jira profiles and test
+/// tokens) and `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`).
 @MainActor enum DebugLaunch {
     private static var didRun = false
 

@@ -144,22 +144,33 @@ import Observation
         return index
     }
 
-    /// Loads pull requests with `gh`, carefully: one request at a time, at most every five minutes
-    /// (every 30 seconds when the user asks with Fetch), with a 30-second timeout and growing waits
-    /// after failures, so reloads and repeated clicks never pile up requests.
+    /// Loads pull requests with `gh`, carefully: only for a repository a window shows (or when the
+    /// user asks with Fetch), one refresh at a time across the app, at most every five minutes
+    /// (every 30 seconds after Fetch), with a 30-second timeout and growing waits after failures,
+    /// so reloads, repeated clicks and quick switching never pile up requests.
     func refreshPullRequests(force: Bool = false) {
         guard let hosting, hosting.provider == .github, pullRequestTask == nil else { return }
+        guard force || WindowState.isShowing(id) else { return }
         let now = Date()
         if let loaded = pullRequestsLoadedAt, now.timeIntervalSince(loaded) < (force ? 30 : 5 * 60) { return }
         if !force, let retry = pullRequestRetryAt, now < retry { return }
         let repositoryPath = hosting.path
+        let id = id
         pullRequestTask = Task { [weak self] in
+            await GitHubCLI.gate.enter()
+            // By the time it's this repository's turn, its window may have moved on.
+            guard force || WindowState.isShowing(id) else {
+                GitHubCLI.gate.leave()
+                self?.pullRequestTask = nil
+                return
+            }
             let result: Result<PullRequestIndex, Error>
             do {
                 result = .success(try await GitHubCLI.pullRequests(repository: repositoryPath))
             } catch {
                 result = .failure(error)
             }
+            GitHubCLI.gate.leave()
             guard let self else { return }
             self.pullRequestTask = nil
             switch result {

@@ -182,11 +182,26 @@ struct GraphStatusBar: View {
                     Image(systemName: highlight.systemImage)
                     Text(highlight.title)
                         .lineLimit(1)
+                    if let note = graph.highlightNote {
+                        Text(verbatim: "· \(note)")
+                            .foregroundStyle(.orange)
+                            .lineLimit(1)
+                    }
                     Button { graph.clearHighlight() } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.borderless)
                         .help("Stop highlighting")
                 }
                 .foregroundStyle(.secondary)
+            } else if let note = graph.highlightNote {
+                HStack(spacing: 4) {
+                    Label(note, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .help(note)
+                    Button { graph.clearHighlight() } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.borderless)
+                        .help("Dismiss")
+                }
             }
             if graph.activeQuery != nil || (graph.highlight != nil && graph.highlightProgress == nil) {
                 searchStatus

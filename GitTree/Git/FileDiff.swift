@@ -30,6 +30,9 @@ struct FileDiff: Sendable {
     let removedCount: Int
     /// Syntax colors for each line, by line id; empty when the language isn't known.
     var tokens: [[SyntaxToken]] = []
+    /// Unchanged lines that read differently in the old file (inside a block the commit commented
+    /// out, say): their colors on the old side.
+    var oldSideTokens: [Int: [SyntaxToken]] = [:]
     /// The lines paired up for the side-by-side view.
     var splitRows: [SplitRow] = []
 
@@ -44,6 +47,11 @@ struct FileDiff: Sendable {
 
     func tokens(forLine id: Int) -> [SyntaxToken] {
         id < tokens.count ? tokens[id] : []
+    }
+
+    /// Colors for the old side of the side-by-side view.
+    func oldSideTokens(forLine id: Int) -> [SyntaxToken] {
+        oldSideTokens[id] ?? tokens(forLine: id)
     }
 
     /// The side-by-side row that shows a line.
@@ -112,7 +120,11 @@ enum FileDiffLoader {
         }
         let output = try await Git.run(arguments, in: directory)
         var diff = parse(String(decoding: output, as: UTF8.self))
-        diff.tokens = SyntaxHighlighter(path: path)?.tokens(for: diff) ?? []
+        if let highlighter = SyntaxHighlighter(path: path) {
+            let highlighted = highlighter.highlight(diff)
+            diff.tokens = highlighted.tokens
+            diff.oldSideTokens = highlighted.oldSide
+        }
         diff.splitRows = FileDiff.splitRows(diff.lines)
         return diff
     }
@@ -130,8 +142,11 @@ enum FileDiffLoader {
             lines.append(FileDiff.Line(id: lines.count, kind: kind, oldNumber: old, newNumber: new, text: text))
         }
 
-        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = String(raw)
+        // Split on bytes: Swift treats "\r\n" as one character, so splitting the string on "\n" would
+        // leave files with Windows line endings in one piece.
+        for raw in text.utf8.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false) {
+            var line = String(decoding: raw, as: UTF8.self)
+            if line.utf8.last == UInt8(ascii: "\r") { line.removeLast() }
             if line.hasPrefix("@@") {
                 // @@ -12,7 +12,9 @@ optional section header
                 let numbers = line.split(separator: " ")

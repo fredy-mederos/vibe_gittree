@@ -215,7 +215,7 @@ private struct SplitRowView: View {
         } else {
             HStack(spacing: 0) {
                 SplitCell(line: row.left, number: row.left?.oldNumber,
-                          tokens: row.left.map { diff.tokens(forLine: $0.id) } ?? [], isTarget: false)
+                          tokens: row.left.map { diff.oldSideTokens(forLine: $0.id) } ?? [], isTarget: false)
                 Divider()
                 SplitCell(line: row.right, number: row.right?.newNumber,
                           tokens: row.right.map { diff.tokens(forLine: $0.id) } ?? [],
