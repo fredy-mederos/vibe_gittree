@@ -391,7 +391,8 @@ final class GraphNSTableView: NSTableView {
             let key = jira == nil ? nil : commitGraph.ticketKey(in: commitGraph.subjects[index])
             var epic: JiraLink?
             if let key, let jira, case .epic(let link) = JiraStore.shared.epic(of: key, connection: jira) { epic = link }
-            cell.configure(key: key, issue: key.flatMap { key in jira.flatMap { JiraStore.shared.issue(key, connection: $0) } }, epic: epic)
+            let issue = key.flatMap { key in jira.flatMap { JiraStore.shared.issue(key, connection: $0) } }
+            cell.configure(key: key, issue: issue, epic: epic, category: issue.map { JiraStore.shared.category(of: $0, connection: jira) })
             return cell
 
         case ColumnID.author:

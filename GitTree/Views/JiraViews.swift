@@ -34,10 +34,10 @@ struct IssueStatusText: View {
     }
 }
 
-/// How far a fix version is: done in green, in progress in blue, the rest gray. On a selected
-/// row, shades of white instead.
-struct ReleaseProgressBar: View {
-    let progress: JiraVersion.Progress
+/// How far a fix version or an epic is: done in green (with a Definition of Done, its statuses
+/// too), in progress in blue, the rest gray. On a selected row, shades of white instead.
+struct TicketProgressBar: View {
+    let progress: TicketProgress
     @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
@@ -59,6 +59,32 @@ struct ReleaseProgressBar: View {
     }
 }
 
+/// The bar with "5/8 done" after it, in a fix version's or an epic's row.
+struct TicketProgressLabel: View {
+    let progress: TicketProgress
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TicketProgressBar(progress: progress)
+                .frame(maxWidth: 80)
+            Text(verbatim: "\(progress.done)/\(progress.total) done")
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+extension TicketProgress {
+    /// "5 of 8 tickets done · 2 in progress".
+    var summary: String? {
+        guard total > 0 else { return nil }
+        var text = "\(done) of \(counted(total, "ticket", "tickets")) done"
+        if inProgress > 0 { text += " · \(inProgress) in progress" }
+        return text
+    }
+}
+
 extension JiraVersion {
     /// "Oct 13", or "Oct 13, 2027" when it isn't this year.
     var shortReleaseDate: String? {
@@ -69,10 +95,5 @@ extension JiraVersion {
     }
 
     /// "5 of 8 tickets done · 2 in progress".
-    var progressSummary: String? {
-        guard let progress, progress.total > 0 else { return nil }
-        var text = "\(progress.done) of \(counted(progress.total, "ticket", "tickets")) done"
-        if progress.inProgress > 0 { text += " · \(progress.inProgress) in progress" }
-        return text
-    }
+    var progressSummary: String? { progress?.summary }
 }

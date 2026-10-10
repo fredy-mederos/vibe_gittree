@@ -29,8 +29,6 @@ struct JiraIssue: Sendable, Hashable, Codable {
     /// The ticket it belongs to: its epic, or for a sub-task the story or task above it.
     var parent: JiraLink?
 
-    var color: NSColor { category.color }
-
     /// Read together with its parent, so its epic is known (or known to be none).
     var knowsParent: Bool { level != nil }
 
@@ -53,7 +51,6 @@ struct JiraLink: Sendable, Hashable, Codable {
     let level: Int
 
     var isEpic: Bool { level >= 1 }
-    var color: NSColor { category.color }
 }
 
 /// Where a ticket's epic stands: found, none, still loading, or the ticket isn't in Jira.
@@ -64,17 +61,18 @@ enum EpicLookup: Hashable, Sendable {
     case notInJira
 }
 
+/// How many tickets (a fix version's, an epic's) are in each status category; with a Definition of
+/// Done, its statuses count as done.
+struct TicketProgress: Sendable, Hashable, Codable {
+    let toDo: Int
+    let inProgress: Int
+    let done: Int
+
+    var total: Int { toDo + inProgress + done }
+}
+
 /// An unreleased fix version of a Jira project: a release the team is working toward.
 struct JiraVersion: Sendable, Hashable, Codable, Identifiable {
-    /// How many of its tickets are in each status category.
-    struct Progress: Sendable, Hashable, Codable {
-        let toDo: Int
-        let inProgress: Int
-        let done: Int
-
-        var total: Int { toDo + inProgress + done }
-    }
-
     let id: String
     let name: String
     /// The project it belongs to, like PROJ.
@@ -83,7 +81,9 @@ struct JiraVersion: Sendable, Hashable, Codable, Identifiable {
     /// `2026-10-13`, as Jira writes it.
     let releaseDate: String?
     let overdue: Bool
-    let progress: Progress?
+    /// Jira's count by status category; counted from the tickets themselves when the project has a
+    /// Definition of Done.
+    var progress: TicketProgress?
 
     /// The release date as a day in the local calendar.
     var releaseDay: Date? {
@@ -111,6 +111,11 @@ enum JiraQuery {
 
     static func fixVersion(named name: String) -> String {
         "fixVersion = \"\(name.replacingOccurrences(of: "\"", with: "\\\""))\" ORDER BY key DESC"
+    }
+
+    /// Several fix versions' tickets at once.
+    static func fixVersions(ids: [String]) -> String {
+        "fixVersion in (\(ids.joined(separator: ","))) ORDER BY key DESC"
     }
 
     /// An epic, its tickets and their sub-tasks.
@@ -150,6 +155,9 @@ struct JiraProfile: Codable, Identifiable, Hashable, Sendable {
     var name: String
     var site: String
     var email: String
+    /// The Definition of Done, by project key: the statuses that count as done on the development
+    /// side ("Dev Done", "Ready for Release"), like Jira's done ones.
+    var doneStatuses: [String: [String]]?
 
     var baseURL: URL? { JiraProfiles.normalizedSite(site) }
     var host: String? { baseURL?.host }
@@ -452,7 +460,7 @@ enum JiraClient {
                 details: version.description.flatMap { $0.isEmpty ? nil : $0 }, releaseDate: version.releaseDate,
                 overdue: version.overdue ?? false,
                 progress: version.issuesStatusForFixVersion.map { counts in
-                    JiraVersion.Progress(toDo: (counts.toDo ?? 0) + (counts.unmapped ?? 0), inProgress: counts.inProgress ?? 0,
+                    TicketProgress(toDo: (counts.toDo ?? 0) + (counts.unmapped ?? 0), inProgress: counts.inProgress ?? 0,
                                          done: counts.done ?? 0)
                 }
             )
@@ -542,6 +550,8 @@ enum JiraClient {
 
     /// Increments when statuses, ticket lists or fix versions arrive, so what shows them redraws.
     private(set) var version = 0
+    /// Increments when a Definition of Done changes in Settings.
+    private(set) var definitionVersion = 0
     /// The Jira sites and accounts set up in Settings.
     private(set) var profiles: [JiraProfile]
     /// Why a profile's requests failed or stopped.
@@ -591,11 +601,13 @@ enum JiraClient {
     /// Tickets of recently asked queries (a fix version's, an epic's), and the requests under way,
     /// so asking again soon doesn't go back to Jira.
     @ObservationIgnored private var listResults: [String: (keys: [String], fetchedAt: Date)] = [:]
-    @ObservationIgnored private var listRequests: [String: Task<[JiraIssue], Error>] = [:]
+    @ObservationIgnored private var listRequests: [String: Task<(issues: [JiraIssue], complete: Bool), Error>] = [:]
     @ObservationIgnored private var versionRequests: [String: Task<Void, Never>] = [:]
     /// Projects Jira didn't list versions for (not a project there, or not visible to the account).
     @ObservationIgnored private var versionFailures: [String: Date] = [:]
     @ObservationIgnored private var knownFixVersionsCache: [UUID: (version: Int, values: [String])] = [:]
+    /// The Definition of Done of each profile's projects, lowercased.
+    @ObservationIgnored private var doneSets: [UUID: [String: Set<String>]] = [:]
 
     /// A cached status is shown right away and asked for again only after an hour, when on screen;
     /// a done ticket's only after a day, since done work rarely changes.
@@ -619,6 +631,7 @@ enum JiraClient {
         let saved = JiraProfiles.load()
         profiles = saved.profiles
         defaultProfileID = saved.defaultProfileID
+        rebuildDoneSets()
         for (key, cache) in JiraCacheFile.load().sites {
             guard let id = UUID(uuidString: key) else { continue }  // caches of earlier versions were per site
             caches[id] = ProfileCache(issues: cache.issues.mapValues { ($0.issue, $0.fetchedAt) }, unknown: cache.unknown,
@@ -673,6 +686,8 @@ enum JiraClient {
         if let index = profiles.firstIndex(where: { $0.id == saved.id }) {
             // Another site or account sees other tickets: start over.
             if profiles[index].host != saved.host || profiles[index].email != saved.email { caches[saved.id] = nil }
+            // The Definition of Done is set elsewhere in Settings › Jira.
+            saved.doneStatuses = profiles[index].doneStatuses
             profiles[index] = saved
         } else {
             profiles.append(saved)
@@ -701,6 +716,7 @@ enum JiraClient {
     /// ignored), forget rejected accounts and unknown tickets, and end any pause.
     private func profilesChanged() {
         generation += 1
+        rebuildDoneSets()
         connections = [:]
         unauthorized = []
         problems = [:]
@@ -723,6 +739,87 @@ enum JiraClient {
 
     func problem(for connection: JiraConnection?) -> String? {
         connection.flatMap { problems[$0.profileID] }
+    }
+
+    // MARK: Definition of Done
+
+    /// A project's Definition of Done, as typed in Settings › Jira.
+    func doneStatuses(project: String, profileID: UUID) -> [String] {
+        profile(id: profileID)?.doneStatuses?[project] ?? []
+    }
+
+    func hasDefinitionOfDone(project: String, connection: JiraConnection) -> Bool {
+        doneSets[connection.profileID]?[project] != nil
+    }
+
+    /// Sets a project's Definition of Done (none when empty); what shows statuses and progress redraws.
+    func setDoneStatuses(_ statuses: [String], project: String, profileID: UUID) {
+        guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { return }
+        let cleaned = statuses.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var all = profiles[index].doneStatuses ?? [:]
+        all[project] = cleaned.isEmpty ? nil : cleaned
+        guard (all.isEmpty ? nil : all) != profiles[index].doneStatuses else { return }
+        profiles[index].doneStatuses = all.isEmpty ? nil : all
+        saveProfiles()
+        rebuildDoneSets()
+        definitionVersion += 1
+        version += 1
+    }
+
+    private func rebuildDoneSets() {
+        doneSets = Dictionary(uniqueKeysWithValues: profiles.map { profile in
+            (profile.id, (profile.doneStatuses ?? [:]).mapValues { Set($0.map(Self.normalized)) })
+        })
+    }
+
+    private static func normalized(_ status: String) -> String {
+        status.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// A ticket's status category, with the statuses its project's Definition of Done names as done.
+    func category(key: String, status: String, category: JiraIssue.Category, connection: JiraConnection?) -> JiraIssue.Category {
+        guard category != .done, let connection, let dash = key.lastIndex(of: "-"),
+              doneSets[connection.profileID]?[String(key[..<dash])]?.contains(Self.normalized(status)) == true else { return category }
+        return .done
+    }
+
+    func category(of issue: JiraIssue, connection: JiraConnection?) -> JiraIssue.Category {
+        category(key: issue.key, status: issue.status, category: issue.category, connection: connection)
+    }
+
+    func category(of link: JiraLink, connection: JiraConnection?) -> JiraIssue.Category {
+        category(key: link.key, status: link.status, category: link.category, connection: connection)
+    }
+
+    /// How far these tickets are, the Definition of Done counting as done.
+    func progress(of keys: [String], connection: JiraConnection) -> TicketProgress {
+        var counts: [JiraIssue.Category: Int] = [:]
+        for key in keys {
+            guard let issue = issue(key, connection: connection) else { continue }
+            counts[category(of: issue, connection: connection), default: 0] += 1
+        }
+        return TicketProgress(toDo: (counts[.toDo] ?? 0) + (counts[.unknown] ?? 0), inProgress: counts[.inProgress] ?? 0,
+                              done: counts[.done] ?? 0)
+    }
+
+    /// The projects to give a Definition of Done: those whose fix versions GitTree lists, and those
+    /// that have one.
+    func knownProjects(profileID: UUID) -> [String] {
+        Set(caches[profileID]?.versions.keys.map { $0 } ?? []).union(profile(id: profileID)?.doneStatuses?.keys.map { $0 } ?? [])
+            .sorted()
+    }
+
+    /// The statuses of a project's tickets GitTree has read: to do first, done last.
+    func knownStatuses(project: String, profileID: UUID) -> [String] {
+        var categories: [String: JiraIssue.Category] = [:]
+        for (key, entry) in caches[profileID]?.issues ?? [:] where key.hasPrefix(project + "-") {
+            categories[entry.issue.status] = entry.issue.category
+        }
+        let order: [JiraIssue.Category] = [.toDo, .unknown, .inProgress, .done]
+        return categories.keys.sorted { a, b in
+            let (left, right) = (order.firstIndex(of: categories[a] ?? .unknown) ?? 0, order.firstIndex(of: categories[b] ?? .unknown) ?? 0)
+            return left == right ? a.localizedStandardCompare(b) == .orderedAscending : left < right
+        }
     }
 
     #if DEBUG
@@ -922,12 +1019,22 @@ enum JiraClient {
         guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { throw JiraError.unauthorized }
         let id = Self.id(connection, jql)
         // The answer under way is the freshest there is.
-        if let running = listRequests[id] { return try await running.value }
-        if !force, let result = listResults[id], Date().timeIntervalSince(result.fetchedAt) < Self.listFreshFor {
+        if listRequests[id] == nil, !force, let result = listResults[id], Date().timeIntervalSince(result.fetchedAt) < Self.listFreshFor {
             let cached = result.keys.compactMap { issue($0, connection: connection) }
             if cached.count == result.keys.count { return cached }
         }
-        let request = Task { [weak self] () throws -> [JiraIssue] in
+        let sentIn = generation
+        let issues = try await pages(jql, maxPages: 5, connection: connection).issues
+        if sentIn == generation { listResults[id] = (issues.map(\.key), Date()) }
+        return issues
+    }
+
+    /// Tickets matching a query, a page of 100 at a time (at most `maxPages`), and whether that was
+    /// all of them. Every ticket goes into the cache; asking while the same is loading waits for it.
+    private func pages(_ jql: String, maxPages: Int, connection: JiraConnection) async throws -> (issues: [JiraIssue], complete: Bool) {
+        let id = Self.id(connection, jql)
+        if let running = listRequests[id] { return try await running.value }
+        let request = Task { [weak self] () throws -> (issues: [JiraIssue], complete: Bool) in
             var collected: [JiraIssue] = []
             var pageToken: String?
             var pages = 0
@@ -938,22 +1045,21 @@ enum JiraClient {
                 collected += page.issues
                 pageToken = page.nextPageToken
                 pages += 1
-            } while pageToken != nil && pages < 5
-            return collected
+            } while pageToken != nil && pages < maxPages
+            return (collected, pageToken == nil)
         }
         listRequests[id] = request
         let sentIn = generation
         do {
-            let issues = try await request.value
+            let result = try await request.value
             if listRequests[id] == request { listRequests[id] = nil }
-            guard sentIn == generation else { return issues }
+            guard sentIn == generation else { return result }
             let now = Date()
-            for issue in issues { caches[connection.profileID, default: ProfileCache()].issues[issue.key] = (issue, now) }
-            listResults[id] = (issues.map(\.key), now)
+            for issue in result.issues { caches[connection.profileID, default: ProfileCache()].issues[issue.key] = (issue, now) }
             problems[connection.profileID] = nil
             version += 1
             scheduleSave()
-            return issues
+            return result
         } catch {
             if listRequests[id] == request { listRequests[id] = nil }
             // A query Jira doesn't understand (an unknown fix version, say) isn't a reason to pause.
@@ -962,6 +1068,66 @@ enum JiraClient {
             }
             throw error
         }
+    }
+
+    /// The tickets of these fix versions in one query (up to ten pages), filed under each as if it
+    /// had been asked for on its own: the progress of a fix version whose project has a Definition
+    /// of Done counts them. Only those not asked about in the last hour, unless `force`; nothing's
+    /// filed when Jira has more than that. Returns, for each fix version asked about, the tickets
+    /// it had before.
+    @discardableResult
+    func refreshTickets(of versions: [JiraVersion], connection: JiraConnection, force: Bool = false) async -> [String: [String]] {
+        guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return [:] }
+        let now = Date()
+        let due = versions.filter { version in
+            force || listResults[Self.id(connection, JiraQuery.fixVersion(id: version.id))]
+                .map { now.timeIntervalSince($0.fetchedAt) >= Self.versionsFreshFor } ?? true
+        }
+        guard !due.isEmpty else { return [:] }
+        let before = Dictionary(uniqueKeysWithValues: due.map { ($0.id, cachedTickets(inFixVersionID: $0.id, connection: connection) ?? []) })
+        let sentIn = generation
+        guard let (issues, complete) = try? await pages(JiraQuery.fixVersions(ids: due.map(\.id)), maxPages: 10, connection: connection),
+              complete, sentIn == generation else { return [:] }
+        // A ticket names its fix versions, and in its project a name is one fix version.
+        let ids = Dictionary(due.map { ("\($0.project) \($0.name)", $0.id) }, uniquingKeysWith: { first, _ in first })
+        var lists = Dictionary(uniqueKeysWithValues: due.map { ($0.id, [String]()) })
+        for issue in issues {
+            guard let dash = issue.key.lastIndex(of: "-") else { continue }
+            for name in issue.fixVersions {
+                if let id = ids["\(issue.key[..<dash]) \(name)"] { lists[id, default: []].append(issue.key) }
+            }
+        }
+        let fetched = Date()
+        for (id, keys) in lists { listResults[Self.id(connection, JiraQuery.fixVersion(id: id))] = (keys, fetched) }
+        version += 1
+        return before
+    }
+
+    /// The stories and tasks of these epics in one query (up to ten pages), filed under each epic:
+    /// their progress counts them. Only epics not asked about in the last hour, unless `force`.
+    func refreshChildren(ofEpics keys: [String], connection: JiraConnection, force: Bool = false) async {
+        guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return }
+        let now = Date()
+        let due = keys.filter { key in
+            force || listResults[Self.id(connection, JiraQuery.children(of: [key]))]
+                .map { now.timeIntervalSince($0.fetchedAt) >= Self.versionsFreshFor } ?? true
+        }
+        guard !due.isEmpty else { return }
+        let sentIn = generation
+        guard let (issues, complete) = try? await pages(JiraQuery.children(of: due), maxPages: 10, connection: connection),
+              complete, sentIn == generation else { return }
+        var lists = Dictionary(uniqueKeysWithValues: due.map { ($0, [String]()) })
+        for issue in issues {
+            if let parent = issue.parent?.key, lists[parent] != nil { lists[parent]?.append(issue.key) }
+        }
+        let fetched = Date()
+        for (key, children) in lists { listResults[Self.id(connection, JiraQuery.children(of: [key]))] = (children, fetched) }
+        version += 1
+    }
+
+    /// The stories and tasks of an epic as last asked; nil before the first answer.
+    func cachedChildren(ofEpic key: String, connection: JiraConnection) -> [String]? {
+        listResults[Self.id(connection, JiraQuery.children(of: [key]))]?.keys
     }
 
     // MARK: Fix versions

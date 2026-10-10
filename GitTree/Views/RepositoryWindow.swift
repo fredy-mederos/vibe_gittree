@@ -187,7 +187,8 @@ struct RepositoryWindow: View {
             lines.append("Epics: \(epics.groups.count) groups, \(epics.ticketCount) tickets, \(epics.pending) pending, \(epics.notInJira) not in Jira")
             for group in epics.groups {
                 let tickets = group.tickets.prefix(8).map { "\($0.key)×\($0.commits)" }.joined(separator: ", ")
-                lines.append("  \(group.id.isEmpty ? "(no epic)" : group.id) \(group.epic?.summary ?? "") [\(group.epic?.status ?? "")]: \(group.tickets.count) tickets, \(group.commits) commits: \(tickets)")
+                let progress = group.progress.map { " (\($0.done) of \($0.total) done, \($0.inProgress) in progress)" } ?? ""
+                lines.append("  \(group.id.isEmpty ? "(no epic)" : group.id) \(group.epic?.summary ?? "") [\(group.epic?.status ?? "")]\(progress): \(group.tickets.count) tickets, \(group.commits) commits: \(tickets)")
             }
         }
         if let progress = graph.epicProgress { lines.append("Epic progress: \(progress)") }
@@ -236,9 +237,12 @@ struct RepositoryWindow: View {
             let version = graph.releases?.all.first { value == "first" || $0.name == value }
             return version.map { .release(id, $0.id) }
         case "ticket":
-            // The row of an opened fix version that lists it, when there's one.
+            // The row of an opened fix version or an epic that lists it, when there's one.
             if let release = graph.releaseTickets.first(where: { $0.value.contains { $0.key == value } })?.key {
                 return .ticket(id, value, under: "release:\(release)")
+            }
+            if let epic = graph.epics?.groups.first(where: { $0.tickets.contains { $0.key == value } })?.id {
+                return .ticket(id, value, under: "epic:\(epic)")
             }
             return .ticket(id, value, under: "")
         case "ref":

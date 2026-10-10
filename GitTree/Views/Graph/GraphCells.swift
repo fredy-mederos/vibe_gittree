@@ -387,6 +387,8 @@ final class TicketStatusCellView: NSTableCellView {
     private static let lineHeight = ceil(NSLayoutManager().defaultLineHeight(for: font))
 
     private var issue: JiraIssue?
+    /// Its status category's color, its project's Definition of Done counting as done.
+    private var color: NSColor = .systemGray
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -404,8 +406,9 @@ final class TicketStatusCellView: NSTableCellView {
         didSet { if backgroundStyle != oldValue { needsDisplay = true } }
     }
 
-    func configure(key: String?, issue: JiraIssue?, epic: JiraLink? = nil) {
+    func configure(key: String?, issue: JiraIssue?, epic: JiraLink? = nil, category: JiraIssue.Category? = nil) {
         self.issue = issue
+        color = (category ?? issue?.category ?? .unknown).color
         if let issue {
             let versions = issue.fixVersions.isEmpty ? "" : " · fix version \(issue.fixVersions.joined(separator: ", "))"
             let epicLine = epic.map { $0.key == issue.key ? "" : "\nEpic: \($0.key) \($0.summary)" } ?? ""
@@ -423,15 +426,15 @@ final class TicketStatusCellView: NSTableCellView {
         let emphasized = backgroundStyle == .emphasized
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let textColor: NSColor = emphasized ? .white
-            : (isDark ? (issue.color.blended(withFraction: 0.25, of: .white) ?? issue.color)
-                      : (issue.color.blended(withFraction: 0.3, of: .black) ?? issue.color))
+            : (isDark ? (color.blended(withFraction: 0.25, of: .white) ?? color)
+                      : (color.blended(withFraction: 0.3, of: .black) ?? color))
         let style = NSMutableParagraphStyle()
         style.lineBreakMode = .byTruncatingTail
         let text = NSAttributedString(string: issue.status, attributes: [.font: Self.font, .foregroundColor: textColor, .paragraphStyle: style])
         let height: CGFloat = 16
         let width = min(ceil(text.size().width) + 14, bounds.width - 4)
         let rect = NSRect(x: 2, y: floor((bounds.height - height) / 2), width: width, height: height)
-        let fill = emphasized ? NSColor.white.withAlphaComponent(0.2) : issue.color.withAlphaComponent(isDark ? 0.26 : 0.15)
+        let fill = emphasized ? NSColor.white.withAlphaComponent(0.2) : color.withAlphaComponent(isDark ? 0.26 : 0.15)
         fill.setFill()
         NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
         text.draw(with: NSRect(x: rect.minX + 7, y: rect.minY + floor((height - Self.lineHeight) / 2), width: rect.width - 14, height: Self.lineHeight),

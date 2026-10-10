@@ -393,6 +393,9 @@ private struct JiraSettingsView: View {
             } footer: {
                 Text("A profile is a Jira Cloud site and the account GitTree uses there. Ticket keys in commit messages (like ABC-123) show their status in a Ticket column and in the details. GitTree only asks Jira about tickets on screen, in small batches, and caches the answers.")
             }
+            ForEach(store.profiles) { profile in
+                DefinitionOfDoneSection(profile: profile, showsName: store.profiles.count > 1)
+            }
             Section {
                 Picker("New repositories", selection: $store.defaultProfileID) {
                     profileOptions
@@ -431,6 +434,89 @@ private struct JiraSettingsView: View {
             get: { store.profile(id: repository.jiraProfileID)?.id },
             set: { library.setJiraProfile($0, for: repository.id) }
         )
+    }
+}
+
+/// A profile's Definition of Done: per project, the statuses that count as done on the development
+/// side, like Jira's own done ones. The progress of releases and epics, status colors and
+/// highlights count them.
+private struct DefinitionOfDoneSection: View {
+    let profile: JiraProfile
+    let showsName: Bool
+    private let store = JiraStore.shared
+    /// Projects added here by key, before they have statuses of their own.
+    @State private var added: [String] = []
+    @State private var newProject = ""
+
+    var body: some View {
+        let _ = store.version
+        let projects = (store.knownProjects(profileID: profile.id) + added.filter { !store.knownProjects(profileID: profile.id).contains($0) })
+        Section {
+            if projects.isEmpty {
+                Text("Projects show up here once GitTree has listed their releases.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(projects, id: \.self) { project in
+                DoneStatusesRow(project: project, profileID: profile.id)
+            }
+            HStack {
+                TextField("Add project", text: $newProject, prompt: Text("Project key, like PROJ"))
+                    .onSubmit(addProject)
+                Button("Add", action: addProject)
+                    .disabled(newProject.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        } header: {
+            Text(showsName ? "Definition of Done · \(profile.name)" : "Definition of Done")
+        } footer: {
+            Text("Tickets in these statuses count as done on the development side, like Jira's Done and Released: in the progress of releases and epics, in status colors and in Highlight. Separate statuses with commas; + adds one seen in the project's tickets.")
+        }
+    }
+
+    private func addProject() {
+        let key = newProject.trimmingCharacters(in: .whitespaces).uppercased()
+        guard !key.isEmpty else { return }
+        if !added.contains(key) { added.append(key) }
+        newProject = ""
+    }
+}
+
+/// A project's statuses that count as done, typed or picked from the ones seen in its tickets.
+private struct DoneStatusesRow: View {
+    let project: String
+    let profileID: UUID
+    private let store = JiraStore.shared
+    /// As typed; each change is saved.
+    @State private var text = ""
+
+    var body: some View {
+        let chosen = Set(Self.statuses(in: text).map { $0.lowercased() })
+        let others = store.knownStatuses(project: project, profileID: profileID).filter { !chosen.contains($0.lowercased()) }
+        LabeledContent {
+            HStack(spacing: 6) {
+                TextField("Done statuses", text: $text, prompt: Text("Dev Done, Ready for Release"))
+                    .labelsHidden()
+                Menu {
+                    ForEach(others, id: \.self) { status in
+                        Button(status) { text = (Self.statuses(in: text) + [status]).joined(separator: ", ") }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .disabled(others.isEmpty)
+                .help(others.isEmpty ? "No other statuses seen in \(project)'s tickets yet" : "Add a status seen in \(project)'s tickets")
+            }
+        } label: {
+            Text(verbatim: project).monospaced()
+        }
+        .onAppear { text = store.doneStatuses(project: project, profileID: profileID).joined(separator: ", ") }
+        .onChange(of: text) { _, new in store.setDoneStatuses(Self.statuses(in: new), project: project, profileID: profileID) }
+    }
+
+    private static func statuses(in text: String) -> [String] {
+        text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 }
 

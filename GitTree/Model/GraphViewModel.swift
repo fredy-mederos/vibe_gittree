@@ -70,6 +70,7 @@ import Observation
     @ObservationIgnored private var jiraLoadedFor: (layout: GraphLayout, limit: Int, connection: JiraConnection)?
     @ObservationIgnored private var jiraTask: Task<Void, Never>?
     @ObservationIgnored private var jiraRebuild: Task<Void, Never>?
+    @ObservationIgnored private var definitionTask: Task<Void, Never>?
     @ObservationIgnored private var openedReleases: Set<String> = []
 
     /// Commits highlighted by a feature or a ticket filter (a search takes precedence).
@@ -102,6 +103,7 @@ import Observation
         self.model = model
         observeModel()
         observeJira()
+        observeDefinitionOfDone()
         syncWithModel()
     }
 
@@ -366,7 +368,10 @@ import Observation
         let limit = epicCommitLimit
         if let loaded = jiraLoadedFor, loaded.layout === layout, loaded.limit == limit, loaded.connection == jira {
             guard WindowState.isShowing(model.id) else { return }
-            refreshVersions(jira)
+            Task { [weak self] in
+                await self?.refreshReleaseProgress(jira, force: false)
+                await self?.refreshEpicProgress(jira, force: false)
+            }
             // Shown again with tickets Jira hasn't answered about (it was unreachable, say): ask for those.
             if (epics?.pending ?? 0) > 0, epicProgress == nil {
                 let keys = recentTickets.map(\.key)
@@ -394,7 +399,9 @@ import Observation
             await self.readEpics(of: tickets.map(\.key), connection: jira)
             // After the tickets: the projects to ask about are the ones Jira answered tickets for.
             guard !Task.isCancelled else { return }
-            self.refreshVersions(jira)
+            await self.refreshReleaseProgress(jira, force: false)
+            guard !Task.isCancelled else { return }
+            await self.refreshEpicProgress(jira, force: false)
         }
     }
 
@@ -410,6 +417,10 @@ import Observation
             await JiraStore.shared.refresh(keys, connection: jira)
             guard !Task.isCancelled else { return }
             await self.readEpics(of: keys, connection: jira)
+            guard !Task.isCancelled else { return }
+            self.epicProgress = "Reading the epics' stories and tasks…"
+            await self.refreshEpicProgress(jira, force: true)
+            self.epicProgress = nil
         }
     }
 
@@ -425,9 +436,25 @@ import Observation
         return Array(graph.ticketPrefixes.filter(known.contains).prefix(3))
     }
 
-    private func refreshVersions(_ jira: JiraConnection) {
+    /// The fix versions (every hour), then the tickets of those whose project has a Definition of
+    /// Done, which their progress counts (in one query, at most every hour); `force` asks anyway.
+    /// Returns, for each fix version whose tickets were asked for, the ones it had before.
+    @discardableResult
+    private func refreshReleaseProgress(_ jira: JiraConnection, force: Bool) async -> [String: [String]] {
+        let store = JiraStore.shared
         let projects = jiraProjects(jira)
-        if !projects.isEmpty { JiraStore.shared.refreshVersions(projects: projects, connection: jira) }
+        guard !projects.isEmpty else { return [:] }
+        await store.refreshVersions(projects: projects, connection: jira, force: force).value
+        let counted = store.unreleasedVersions(projects: projects, connection: jira)
+            .filter { store.hasDefinitionOfDone(project: $0.project, connection: jira) }
+        return counted.isEmpty ? [:] : await store.refreshTickets(of: counted, connection: jira, force: force)
+    }
+
+    /// The listed epics' stories and tasks, which their progress counts (in one query, at most
+    /// every hour); `force` asks anyway.
+    private func refreshEpicProgress(_ jira: JiraConnection, force: Bool) async {
+        let keys = epics?.groups.compactMap { $0.epic?.key } ?? []
+        if !keys.isEmpty { await JiraStore.shared.refreshChildren(ofEpics: keys, connection: jira, force: force) }
     }
 
     /// Asks Jira about recent tickets it hasn't answered about, then about the stories and tasks
@@ -459,6 +486,29 @@ import Observation
                 self?.scheduleJiraRebuild()
                 self?.observeJira()
             }
+        }
+    }
+
+    /// A project got a Definition of Done (or another one) in Settings: once the typing stops, the
+    /// tickets of its fix versions that aren't listed yet are asked for, so their progress counts it.
+    private func observeDefinitionOfDone() {
+        withObservationTracking {
+            _ = JiraStore.shared.definitionVersion
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.definitionOfDoneChanged()
+                self?.observeDefinitionOfDone()
+            }
+        }
+    }
+
+    private func definitionOfDoneChanged() {
+        guard let jira, ticketIndex != nil, WindowState.isShowing(model.id) else { return }
+        definitionTask?.cancel()
+        definitionTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            await self?.refreshReleaseProgress(jira, force: false)
         }
     }
 
@@ -527,10 +577,11 @@ import Observation
         let refreshing = open.union(highlightedRelease.map { [$0] } ?? [])
         JiraStore.shared.markStale(fixVersionIDs: openedReleases.subtracting(refreshing), connection: jira)
         isRefreshingReleases = true
-        let projects = jiraProjects(jira)
         Task { [weak self] in
-            await JiraStore.shared.refreshVersions(projects: projects, connection: jira, force: true).value
-            for id in refreshing {
+            // Fix versions whose project has a Definition of Done come all together, the open ones too.
+            guard let before = await self?.refreshReleaseProgress(jira, force: true) else { return }
+            await self?.ticketsMoved(before, connection: jira)
+            for id in refreshing where before[id] == nil {
                 // One being loaded or refreshed on its own already gets Jira's latest answer.
                 guard let self, !self.loadingReleases.contains(id) else { continue }
                 await self.reloadRelease(id, connection: jira)
@@ -549,23 +600,35 @@ import Observation
         }
     }
 
-    /// Asks Jira again for a fix version's tickets, showing the last answer meanwhile, then about
-    /// the tickets that left it, so the fix versions shown next to their commits are current too.
+    /// Asks Jira again for a fix version's tickets, showing the last answer meanwhile.
     private func reloadRelease(_ id: String, connection jira: JiraConnection) async {
         let store = JiraStore.shared
-        let before = Set(store.cachedTickets(inFixVersionID: id, connection: jira) ?? [])
+        let before = store.cachedTickets(inFixVersionID: id, connection: jira) ?? []
         loadingReleases.insert(id)
         releaseProblems[id] = nil
         openedReleases.insert(id)
         do {
-            let keys = try await store.tickets(inFixVersion: id, isID: true, force: true, connection: jira).map(\.key)
-            let left = before.subtracting(keys)
-            if !left.isEmpty { await store.refresh(Array(left), connection: jira, timeout: 30) }
-            releaseTicketsChanged(id, keys: keys)
+            _ = try await store.tickets(inFixVersion: id, isID: true, force: true, connection: jira)
+            await ticketsMoved([id: before], connection: jira)
         } catch {
             releaseProblems[id] = error.localizedDescription
         }
         loadingReleases.remove(id)
+        rebuildJiraReports()
+    }
+
+    /// Fix versions' tickets came again (with the ones they had before): the tickets that left them
+    /// are read again, so the fix versions shown next to their commits are current too, and a
+    /// highlighted fix version follows its tickets.
+    private func ticketsMoved(_ before: [String: [String]], connection jira: JiraConnection) async {
+        let store = JiraStore.shared
+        var left: Set<String> = []
+        for (id, keys) in before {
+            let now = store.cachedTickets(inFixVersionID: id, connection: jira) ?? []
+            left.formUnion(Set(keys).subtracting(now))
+            releaseTicketsChanged(id, keys: now)
+        }
+        if !left.isEmpty { await store.refresh(Array(left), connection: jira, timeout: 30) }
         rebuildJiraReports()
     }
 
@@ -659,7 +722,7 @@ import Observation
             guard let self, !Task.isCancelled else { return }
             let matching = Set(keys.filter { key in
                 guard let issue = JiraStore.shared.issue(key, connection: jira) else { return false }
-                return filter.matches(issue)
+                return filter.matches(JiraStore.shared.category(of: issue, connection: jira))
             })
             let unsettled = keys.filter { !JiraStore.shared.isSettled($0, connection: jira) }.count
             self.setHighlight(.tickets(title: filter.title, keys: matching))
@@ -941,11 +1004,12 @@ enum TicketFilter: CaseIterable {
         }
     }
 
-    func matches(_ issue: JiraIssue) -> Bool {
+    /// By the ticket's status category, its project's Definition of Done counting as done.
+    func matches(_ category: JiraIssue.Category) -> Bool {
         switch self {
-        case .notDone: issue.category != .done
-        case .inProgress: issue.category == .inProgress
-        case .toDo: issue.category == .toDo
+        case .notDone: category != .done
+        case .inProgress: category == .inProgress
+        case .toDo: category == .toDo
         }
     }
 }

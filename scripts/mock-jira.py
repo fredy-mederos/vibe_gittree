@@ -9,7 +9,9 @@ Every ticket gets a made-up status, type and fix version. Most belong to one of 
 (PROJ-90001…90004); a quarter are sub-tasks of mock tasks (PROJ-80000…80004), whose parents are
 the epics, like in a real project. Every project it has answered tickets for lists six unreleased
 fix versions, Android and iOS ones, each with two extra tickets that no commit mentions; other
-projects get 404 (--projects=A,B names the projects instead).
+projects get 404 (--projects=A,B names the projects instead). List queries can ask for a fix
+version (by id or name) or several (`fixVersion in (...)`), an epic (`parentEpic`) or the children
+of tickets (`parent in (...)`).
 
 Keys starting with PRO- (a near miss of PROJ-; --unknown=PREFIX picks another) are treated as
 unknown: bulk fetch leaves them out (reporting them in issueErrors), and JQL search fails with 400
@@ -221,6 +223,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def list_for(self, jql):
         """The tickets a list query asks for, "search" for plain key searches, None when answered with an error."""
+        versions = re.search(r"fixVersion in \(([^)]*)\)", jql)
+        if versions:
+            wanted = [i.strip() for i in versions.group(1).split(",")]
+            keys = sorted({key for i, n, _ in VERSIONS if i in wanted for key in tickets_in(n) + extra_tickets(i)}, reverse=True)
+            log(f"request {requests}: fixVersion in {len(wanted)} versions, {len(keys)} tickets")
+            return keys
         version = re.search(r'fixVersion = (?:"([^"]+)"|(\d+))', jql)
         if version:
             name = version.group(1) or next((n for i, n, _ in VERSIONS if i == version.group(2)), version.group(2))

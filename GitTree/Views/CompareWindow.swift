@@ -342,7 +342,7 @@ private struct SideColumn: View {
                 Section {
                     ForEach(group.tickets) { ticket in
                         CompareTicketRow(ticket: ticket, issue: jira.flatMap { store.issue(ticket.key, connection: $0) },
-                                         alsoOn: otherKeys.contains(ticket.key) ? other.ref.name : nil)
+                                         alsoOn: otherKeys.contains(ticket.key) ? other.ref.name : nil, connection: jira)
                     }
                 } header: {
                     if let epic = group.epic {
@@ -470,6 +470,7 @@ private struct CompareTicketRow: View {
     let issue: JiraIssue?
     /// The other branch, when it has commits for this ticket too.
     let alsoOn: String?
+    let connection: JiraConnection?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -488,7 +489,7 @@ private struct CompareTicketRow: View {
                     .help("Some of this ticket's commits are on \(alsoOn) too")
             }
             if let issue {
-                IssueStatusText(status: issue.status, category: issue.category)
+                IssueStatusText(status: issue.status, category: JiraStore.shared.category(of: issue, connection: connection))
                     .font(.caption.weight(.semibold))
             }
             Text(ticket.commits.formatted())

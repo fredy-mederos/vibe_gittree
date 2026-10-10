@@ -442,13 +442,13 @@ struct SidebarView: View {
 
     private func epicGroup(_ group: EpicReport.Group, graph: GraphViewModel, repositoryID: UUID) -> some View {
         DisclosureGroup(isExpanded: expansion("epic:\(group.id)")) {
-            ForEach(group.tickets) { ticket in
-                SidebarTicketRow(key: ticket.key, issue: graph.jira.flatMap { JiraStore.shared.issue(ticket.key, connection: $0) },
-                                 commits: ticket.commits, latest: ticket.latest)
-                    .tag(SidebarItem.ticket(repositoryID, ticket.key, under: "epic:\(group.id)"))
+            ForEach(ticketRows(group.tickets, key: \.key, under: "epic:\(group.id)", repositoryID: repositoryID), id: \.item) { row in
+                SidebarTicketRow(key: row.ticket.key, issue: graph.jira.flatMap { JiraStore.shared.issue(row.ticket.key, connection: $0) },
+                                 commits: row.ticket.commits, latest: row.ticket.latest, connection: graph.jira)
+                    .tag(row.item)
             }
         } label: {
-            EpicRow(group: group)
+            EpicRow(group: group, connection: graph.jira, doneStatuses: doneStatuses(ofTicket: group.id, graph: graph))
                 .tag(SidebarItem.epic(repositoryID, group.id))
         }
     }
@@ -511,9 +511,10 @@ struct SidebarView: View {
             : nil
         return DisclosureGroup(isExpanded: isExpanded) {
             if let tickets = graph.releaseTickets[version.id] {
-                ForEach(tickets) { ticket in
-                    SidebarTicketRow(key: ticket.key, issue: ticket.issue, commits: ticket.commits, latest: ticket.latest)
-                        .tag(SidebarItem.ticket(repositoryID, ticket.key, under: "release:\(version.id)"))
+                ForEach(ticketRows(tickets, key: \.key, under: "release:\(version.id)", repositoryID: repositoryID), id: \.item) { row in
+                    SidebarTicketRow(key: row.ticket.key, issue: row.ticket.issue, commits: row.ticket.commits, latest: row.ticket.latest,
+                                     connection: graph.jira)
+                        .tag(row.item)
                 }
                 if tickets.isEmpty {
                     Text("No tickets in this fix version.")
@@ -529,9 +530,23 @@ struct SidebarView: View {
             }
         } label: {
             ReleaseRow(version: version, problem: graph.releaseTickets[version.id] == nil ? nil : graph.releaseProblems[version.id],
-                       refresh: refresh)
+                       refresh: refresh, doneStatuses: doneStatuses(ofTicket: "\(version.project)-", graph: graph))
                 .tag(SidebarItem.release(repositoryID, version.id))
         }
+    }
+
+    /// Ticket rows with the sidebar item each one is, which also identifies the row: identified by
+    /// key alone, an epic's own ticket (commits can name the epic) was the epic's row too, and the
+    /// epic couldn't be folded away.
+    private func ticketRows<Ticket>(_ tickets: [Ticket], key: KeyPath<Ticket, String>, under: String,
+                                    repositoryID: UUID) -> [(item: SidebarItem, ticket: Ticket)] {
+        tickets.map { (SidebarItem.ticket(repositoryID, $0[keyPath: key], under: under), $0) }
+    }
+
+    /// The Definition of Done of a ticket's project (Settings › Jira), which progress counts as done.
+    private func doneStatuses(ofTicket key: String, graph: GraphViewModel) -> [String] {
+        guard let jira = graph.jira, let dash = key.lastIndex(of: "-") else { return [] }
+        return JiraStore.shared.doneStatuses(project: String(key[..<dash]), profileID: jira.profileID)
     }
 
     // MARK: Features
@@ -899,6 +914,9 @@ private struct FeatureRow: View {
 /// An epic: its summary and commits, then its key, status, tickets and latest activity.
 private struct EpicRow: View {
     let group: EpicReport.Group
+    let connection: JiraConnection?
+    /// The epic's project's Definition of Done, which its progress counts as done.
+    var doneStatuses: [String] = []
 
     var body: some View {
         Label {
@@ -917,7 +935,7 @@ private struct EpicRow: View {
                     if let epic = group.epic {
                         Text(verbatim: epic.key).monospaced()
                         Text(verbatim: "·")
-                        IssueStatusText(status: epic.status, category: epic.category)
+                        IssueStatusText(status: epic.status, category: JiraStore.shared.category(of: epic, connection: connection))
                         Text(verbatim: "·")
                     }
                     Text(counted(group.tickets.count, "ticket", "tickets"))
@@ -926,6 +944,10 @@ private struct EpicRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                if let progress = group.progress, progress.total > 0 {
+                    TicketProgressLabel(progress: progress)
+                        .padding(.top, 2)
+                }
             }
         } icon: {
             if group.epic != nil {
@@ -947,7 +969,13 @@ private struct EpicRow: View {
         let tickets = counted(group.tickets.count, "ticket", "tickets")
         let commits = counted(group.commits, "commit", "commits")
         guard let epic = group.epic else { return "Tickets without an epic\n\(tickets), \(commits)" }
-        return "\(epic.key) \(epic.summary)\n\(epic.status) · \(tickets), \(commits)\nSelect to highlight every commit of the epic's tickets"
+        var lines = ["\(epic.key) \(epic.summary)", "\(epic.status) · \(tickets) in the latest commits, \(commits)"]
+        if let progress = group.progress?.summary {
+            lines.append("All its stories and tasks: \(progress)")
+            if !doneStatuses.isEmpty { lines.append("Done counts \(doneStatuses.joined(separator: ", ")) (Settings › Jira)") }
+        }
+        lines.append("Select to highlight every commit of the epic's tickets")
+        return lines.joined(separator: "\n")
     }
 }
 
@@ -958,6 +986,7 @@ private struct SidebarTicketRow: View {
     let issue: JiraIssue?
     let commits: Int
     let latest: Date?
+    let connection: JiraConnection?
     @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
@@ -979,7 +1008,7 @@ private struct SidebarTicketRow: View {
                     Text(verbatim: key).monospaced()
                     if let issue {
                         Text(verbatim: "·")
-                        IssueStatusText(status: issue.status, category: issue.category)
+                        IssueStatusText(status: issue.status, category: JiraStore.shared.category(of: issue, connection: connection))
                     }
                     if let latest {
                         Text(verbatim: "· \(RelativeAge.short(latest))")
@@ -1017,6 +1046,8 @@ private struct ReleaseRow: View {
     /// Why asking Jira again failed, when its tickets are listed anyway.
     var problem: String?
     var refresh: RefreshControl?
+    /// Its project's Definition of Done, which its progress counts as done.
+    var doneStatuses: [String] = []
 
     var body: some View {
         Label {
@@ -1038,12 +1069,7 @@ private struct ReleaseRow: View {
                 if progress != nil || refresh != nil {
                     HStack(spacing: 6) {
                         if let progress {
-                            ReleaseProgressBar(progress: progress)
-                                .frame(maxWidth: 80)
-                            Text(verbatim: "\(progress.done)/\(progress.total) done")
-                                .font(.caption)
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
+                            TicketProgressLabel(progress: progress)
                         }
                         Spacer(minLength: 4)
                         if let problem {
@@ -1070,7 +1096,10 @@ private struct ReleaseRow: View {
         var lines = [version.name]
         if let details = version.details { lines.append(details) }
         if let date = version.shortReleaseDate { lines.append((version.overdue ? "Overdue, was due " : "Release date ") + date) }
-        if let progress = version.progressSummary { lines.append(progress) }
+        if let progress = version.progressSummary {
+            lines.append(progress)
+            if !doneStatuses.isEmpty { lines.append("Done counts \(doneStatuses.joined(separator: ", ")) (Settings › Jira)") }
+        }
         lines.append("Select to highlight its tickets' commits")
         return lines.joined(separator: "\n")
     }

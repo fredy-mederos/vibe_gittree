@@ -75,6 +75,8 @@ struct EpicReport: Sendable {
         /// Newest first.
         let tickets: [RecentTicket]
         let commits: Int
+        /// How far all of the epic's stories and tasks are, once Jira has listed them.
+        var progress: TicketProgress?
 
         var latest: Date { tickets.first?.latest ?? .distantPast }
     }
@@ -116,7 +118,8 @@ struct EpicReport: Sendable {
             members[group, default: []].append(ticket)
         }
         var groups = order.filter { !$0.isEmpty }.map { key in
-            Group(id: key, epic: epics[key], tickets: members[key] ?? [], commits: (members[key] ?? []).reduce(0) { $0 + $1.commits })
+            Group(id: key, epic: epics[key], tickets: members[key] ?? [], commits: (members[key] ?? []).reduce(0) { $0 + $1.commits },
+                  progress: store.cachedChildren(ofEpic: key, connection: connection).map { store.progress(of: $0, connection: connection) })
         }
         if let loose = members[""] {
             groups.append(Group(id: "", epic: nil, tickets: loose, commits: loose.reduce(0) { $0 + $1.commits }))
@@ -139,7 +142,15 @@ struct ReleaseReport: Sendable {
 
     @MainActor static func build(projects: [String], index: TicketIndex, connection: JiraConnection) -> ReleaseReport {
         let store = JiraStore.shared
-        let versions = store.unreleasedVersions(projects: projects, connection: connection)
+        let versions = store.unreleasedVersions(projects: projects, connection: connection).map { version in
+            // With a Definition of Done, its tickets are counted here once they're listed, since
+            // Jira only counts by status category.
+            guard store.hasDefinitionOfDone(project: version.project, connection: connection),
+                  let keys = store.cachedTickets(inFixVersionID: version.id, connection: connection) else { return version }
+            var counted = version
+            counted.progress = store.progress(of: keys, connection: connection)
+            return counted
+        }
         guard !versions.isEmpty else { return ReleaseReport(used: [], other: []) }
         var names: Set<String> = []
         for key in index.commits.keys {

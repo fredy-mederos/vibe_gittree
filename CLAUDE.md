@@ -52,7 +52,8 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   `RepositoryModel.refreshPullRequests`; pull request timelines on selection, through the same
   gate); Jira goes through `JiraStore` (every request through its gate and per-minute budget:
   visible rows first, then recent tickets the Epics section hasn't seen, batched bulk fetch; fix
-  versions and ticket lists cached; on-disk cache per profile). Each repository picks a Jira
+  versions and ticket lists cached; the progress of epics and of fix versions with a Definition of
+  Done comes from one paged query each, at most hourly; on-disk cache per profile). Each repository picks a Jira
   profile (a site and account, token in the keychain) or none. Test Jira with
   `scripts/mock-jira.py`, which logs every request; `-GTJiraSite http://127.0.0.1:<port>` points
   every repository at it.

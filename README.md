@@ -81,9 +81,14 @@ permission to access that folder.
   each commit's ticket status and fix version (its tooltip names the epic), and a Ticket section in
   the inspector with summary, type, assignee, fix version, the story or task a sub-task belongs
   to, and the epic (click it to highlight the whole epic).
+- **Definition of Done** (Settings › Jira): per Jira project, the statuses that count as done on
+  the development side, like "Dev Done" or "Ready for Release", typed or picked from the statuses
+  seen in that project's tickets. They count as done like Jira's Done and Released: in the
+  progress of releases and epics (green), in the status colors and in Highlight.
 - **Epics** (with Jira connected): the sidebar's Epics section lists the tickets in the latest
   commits (500 by default, 200 to 2,000 in its menu) under their Jira epics, most recently worked on
-  first, with each epic's key, status, tickets and commits; tickets without an epic come last. A
+  first, with each epic's key, status, tickets and commits, and a bar of how many of all its
+  stories and tasks are done, in progress or to do; tickets without an epic come last. A
   sub-task's epic is the one above its story or task, as in projects where commits mention
   sub-tasks. Select an epic to highlight its commits: right away those of the tickets listed, then,
   once Jira answers, every commit in the history that mentions any ticket in the epic (one
@@ -92,7 +97,8 @@ permission to access that folder.
   header asks Jira again about the recent tickets, after you've changed them there.
 - **Releases** (with Jira connected): the unreleased fix versions of the repository's Jira projects
   (taken from its ticket keys), soonest release date first, with the date (orange when overdue) and
-  a bar of how many of their tickets are done, in progress or to do. Versions this repository's
+  a bar of how many of their tickets are done, in progress or to do (with a Definition of Done,
+  counted from the tickets themselves). Versions this repository's
   tickets are in come first; the others (another platform's, say) are under Other Fix Versions.
   Select one to highlight the commits of its tickets and their sub-tasks; it opens to list its
   tickets with their status and commits here, dimming those no commit mentions. After changing
@@ -100,7 +106,7 @@ permission to access that folder.
   versions (dates and progress) and the tickets of the open ones; an open fix version has a ↻ of
   its own (and Refresh in its context menu). Tickets that left a fix version are read again too,
   so the fix version next to their commits is current.
-- **Highlight** (toolbar, with Jira connected): tint the commits of tickets that aren't Done, are in
+- **Highlight** (toolbar, with Jira connected): tint the commits of tickets that aren't done, are in
   progress or to do (among the latest 500 commits), or of every ticket in a fix version (asked of
   Jira directly, so it covers tickets beyond what's on screen). The status bar steps through them.
 - **Compare branches** (Repository › Compare Branches…, ⇧⌘B, or right-click a branch or tag ›
@@ -167,18 +173,22 @@ requests:
   requests the first time a 500-commit stretch of a busy repository opens, then only new tickets),
   plus once the stories and tasks above sub-tasks, since a sub-task's parent doesn't name the epic;
   tickets on screen go ahead of those. A repository's unreleased fix versions are one request per
-  project at most every hour, and only for projects Jira has returned tickets for. A fix version's
-  or an epic's tickets take at most five requests, only when you select or open one, and are reused
-  for ten minutes. A rejected token stops that profile's requests until its settings change;
+  project at most every hour, and only for projects Jira has returned tickets for. For their
+  progress, the stories and tasks of the epics listed are one query (a request per 100 tickets) at
+  most every hour, and so are the tickets of the fix versions of projects with a Definition of Done
+  (Jira counts a fix version's tickets only by status category). A fix version's or an epic's
+  tickets take at most five requests, only when you select or open one, and are reused for ten
+  minutes. A rejected token stops that profile's requests until its settings change;
   timeouts back off, and Jira's requests to slow down are honored (up to ten minutes). Editing a
   profile drops anything still queued or in flight with the old credentials. Sites without bulk
   fetch get JQL search, with smaller batches after a query fails on an unknown key, paced like
   everything else; sites without `parentEpic` get an epic's tickets level by level. Asking again
   is up to you, never automatic: Repository › Refresh Ticket Statuses asks again for what's on
-  screen; the Epics section's ↻ for the recent tickets and fix versions; the Releases section's ↻
-  for the fix versions (one request per project) and the tickets of the open ones (one request
-  each, plus one for any tickets that left them), and the other fix versions' tickets when they're
-  next opened; an open fix version's own ↻ for its project's fix versions and its tickets.
+  screen; the Epics section's ↻ for the recent tickets, fix versions and the epics' stories and
+  tasks; the Releases section's ↻ for the fix versions (one request per project), all the tickets
+  of those with a Definition of Done (one query) and those of the other open ones (one request
+  each), plus one for any tickets that left them, the rest waiting until they're next opened; an
+  open fix version's own ↻ for its project's fix versions and its tickets.
 
 ### Shortcuts
 

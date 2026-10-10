@@ -396,12 +396,14 @@ private struct TicketRow: View {
                 }
                 .help("Open \(key) in Jira")
                 if let issue {
+                    // In its category's color, its project's Definition of Done counting as done.
+                    let color = store.category(of: issue, connection: connection).color
                     Text(issue.status)
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
-                        .foregroundStyle(Color(nsColor: issue.color))
-                        .background(Color(nsColor: issue.color).opacity(0.15), in: Capsule())
+                        .foregroundStyle(Color(nsColor: color.readable))
+                        .background(Color(nsColor: color).opacity(0.15), in: Capsule())
                 } else if isMissing {
                     Text("Not found in Jira")
                         .font(.caption)
