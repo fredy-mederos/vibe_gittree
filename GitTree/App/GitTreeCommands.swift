@@ -14,6 +14,13 @@ struct GitTreeCommands: Commands {
         ToolbarCommands()
         InspectorCommands()
 
+        CommandGroup(after: .appInfo) {
+            Button(AppUpdater.shared.isChecking ? "Checking for Updates…" : "Check for Updates…") {
+                AppUpdater.shared.checkFromMenu()
+            }
+            .disabled(AppUpdater.shared.isChecking)
+        }
+
         CommandGroup(after: .newItem) {
             Divider()
             Button("Switch to Repository…") { window?.isSwitcherPresented = true }

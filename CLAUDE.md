@@ -46,6 +46,15 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   Release, replaces /Applications/GitTree.app (quitting the running copy) and opens it. Report the
   version, build number and commit it was built from (Settings › General shows them too). It's
   only about GitTree; it doesn't mean tagging or publishing anything.
+- **Publishing a release** (a signed, notarized `GitTree.dmg` on GitHub) is the `release-gittree`
+  skill in `skills/` (linked from `.claude/skills`): version (`scripts/version.sh`), Developer ID
+  build and notarization (`scripts/release.sh`), tag and `gh release create` with
+  `scripts/release-notes.sh`. Only when asked to release or publish; "prepare a release" never does.
+- Installed copies check GitHub for the newest release (`App/AppUpdater.swift`): at launch (at most
+  hourly), daily, and from GitTree › Check for Updates… and Settings › General, which shows the same
+  About and Updates rows as the user's other apps. `App/UpdateCheck.swift` is the same file in Vibe
+  Notepad and KeepMyMacClean: keep them identical. Debug builds check only when asked
+  (`-GTCheckForUpdates YES`, or `-GTUpdateRepository owner/name` to try another repository's releases).
 - Network integrations must stay gentle (the user asked for this explicitly): one request at a
   time per service, caching, minimum intervals, timeouts and backoff, and never trigger a request
   from a redraw. GitHub goes through `gh` in `Integrations/GitHub.swift` (rate-limited in

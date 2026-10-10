@@ -160,8 +160,9 @@ struct RepositoryWindow: View {
 /// for a script to capture each), `-GTRefresh releases|release|epics` refreshes those sections or the
 /// selected fix version after `-GTRefreshAfter` seconds (10 by default), and
 /// `-GTCompare <base>...<head>` opens the branch comparison. Elsewhere:
-/// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds)
-/// and `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`).
+/// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds),
+/// `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`), and
+/// `-GTCheckForUpdates YES` or `-GTUpdateRepository <owner/name>` (`AppUpdater`).
 @MainActor enum DebugLaunch {
     private static var didRun = false
     private static var didOpenTab = false

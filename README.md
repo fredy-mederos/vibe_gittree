@@ -1,7 +1,13 @@
 # vibe_gittree
 
+[![Latest release](https://img.shields.io/github/v/release/fredy-mederos/vibe_gittree)](https://github.com/fredy-mederos/vibe_gittree/releases/latest)
+
 **GitTree** is a fast, read-only explorer for git history: a native macOS app (SwiftUI + AppKit) for
 browsing any number of repositories, local or remote.
+
+<p align="center">
+  <img src="screenshots/gittree.png" alt="GitTree showing a repository's branches, merges and tags, with a commit's details on the right" width="900" />
+</p>
 
 Ideas queued for later are in [TODO.md](TODO.md). It's a personal project under the
 [MIT license](LICENSE): clone it and fork it freely, and open an issue for bugs or ideas; pull
@@ -9,7 +15,18 @@ requests aren't accepted (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## GitTree for macOS
 
-### Install and run
+### Download
+
+**[Download GitTree.dmg](https://github.com/fredy-mederos/vibe_gittree/releases/latest/download/GitTree.dmg)**
+(the latest release, for macOS 15 or later on Apple silicon and Intel), open it and drag GitTree into
+Applications. Every version is on the [releases page](https://github.com/fredy-mederos/vibe_gittree/releases).
+
+GitTree tells you when there's a new version: it asks GitHub when it opens and once a day, and shows
+an alert once per new version. GitTree › Check for Updates… and Settings › General check any time.
+The disk image doesn't include the `gittree` command; copy [`scripts/gittree`](scripts/gittree) into
+a folder on your `PATH`, or build GitTree yourself as below.
+
+### Build and install from source
 
 Requires macOS 15 or later and Xcode (built with Xcode 27).
 
@@ -140,8 +157,12 @@ permission to access that folder.
   `^android-v[\d.]+$` when releases are tagged `android-v2.12`).
 - **Appearance**: Settings › General › Appearance picks Light, Dark or System.
 - **About**: Settings › General shows the version, the build number (the commit count when
-  `scripts/install.sh` built it), the commit, whether it's a Debug or Release build, and when it
-  was built, with Copy Version Info.
+  `scripts/install.sh` or `scripts/release.sh` built it), the commit, whether it's a Debug or
+  Release build, and when it was built, with Copy Version Info.
+- **Updates**: GitTree asks GitHub for the newest release a few seconds after it opens and once a
+  day while it's open. A new version gets an alert, once, with Download (the disk image) and Release
+  Notes; Settings › General keeps showing it until you update. GitTree › Check for Updates… and
+  Settings › General › Check Now ask any time.
 
 GitTree never changes your repositories. The only git command that writes anything is `fetch`,
 and only when you ask for it (or when a remote repository GitTree cloned itself is opened).
@@ -149,8 +170,13 @@ and only when you ask for it (or when a remote repository GitTree cloned itself 
 ### How GitTree talks to GitHub and Jira
 
 Both integrations are deliberately gentle, so scrolling or reloading can never turn into a storm of
-requests:
+requests (and so is the update check):
 
+- **Updates**: one request to GitHub's API for the latest release of this repository, a few seconds
+  after GitTree opens (at most once an hour) and once a day while it's open, plus whenever you ask.
+  It has a 20-second timeout and sends nothing about you or your repositories. GitHub allows 60 such
+  requests an hour per network; when they're used up, GitTree reads the website's "latest release"
+  link instead. Nothing is downloaded until you choose Download.
 - **GitHub**: two `gh pr list` calls per refresh (pull requests, then reviews and checks of the
   open ones), only for repositories a window shows (or when you press Fetch). One refresh runs at a
   time across all repositories, at most every five minutes per repository (30 seconds after
@@ -219,7 +245,7 @@ GitTree deletes its clone; removing a local one never touches the folder.
 
 ```
 GitTree/
-  App/           app entry point and menu commands
+  App/           app entry point, menu commands, version info and update checks
   Git/           running git, parsing history, lane layout, diffs, clone, file watching, hosting links
   Integrations/  GitHub (gh, pull request timelines), Jira (REST + keychain), feature grouping (Foundation Models)
   Model/         repository library, per-repository model, per-window state, sidebar tree, deep links,
@@ -255,8 +281,11 @@ setting says), `-GTShowSwitcher YES`, `-GTGroupFeatures YES` (shows the Features
 once it's there; `first` for the first epic or release, `open` for the newest open pull request;
 several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
 (refreshes the Releases or Epics section, or the selected fix version, after `-GTRefreshAfter`
-seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), and `-GTJiraSite <url>`
-(with optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain. Test
+seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), `-GTJiraSite <url>`
+(with optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain,
+`-GTCheckForUpdates YES` (checks for updates at launch, as the installed app does; debug builds
+otherwise only check when asked) and `-GTUpdateRepository <owner/name>` (checks another repository's
+releases, without keeping what it finds; one with a newer version shows the update alert). Test
 runs keep the sidebar's folded sections, the details' width and the Features setting in a
 preferences suite of their own, emptied at launch.
 
@@ -282,6 +311,21 @@ names the projects instead):
 python3 scripts/mock-jira.py 8899
 scripts/snapshot.sh /tmp/gittree.png 8 -GTOpenRepository ~/code/some-repo -GTJiraSite http://127.0.0.1:8899
 ```
+
+### Releasing
+
+`scripts/release.sh` builds a Release for Apple silicon and Intel, signs it with a Developer ID (with
+the hardened runtime), packs it into `build/GitTree.dmg`, has Apple notarize it and staples the ticket:
+
+```bash
+APP_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+  NOTARY_KEYCHAIN_PROFILE=<profile> scripts/release.sh
+```
+
+The `release-gittree` skill (`skills/`, linked for Claude Code and Codex) runs a whole release: it
+picks and confirms the version (`scripts/version.sh`), builds the disk image, tags `vX.Y.Z` and
+publishes the GitHub release with notes from `scripts/release-notes.sh`. Installed copies find it
+within a day.
 
 ## License
 

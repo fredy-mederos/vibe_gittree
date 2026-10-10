@@ -7,3 +7,6 @@ build/
 DerivedData/
 xcuserdata/
 *.xcuserstate
+
+# Claude Code local settings
+.claude/settings.local.json

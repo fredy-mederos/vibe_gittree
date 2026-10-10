@@ -44,7 +44,15 @@ struct GitTreeApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        MainActor.assumeIsolated { AppAppearance.current.apply() }
+        MainActor.assumeIsolated {
+            AppAppearance.current.apply()
+            AppUpdater.shared.start()
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // A new version found while GitTree was in the background is announced when it comes to the front.
+        MainActor.assumeIsolated { AppUpdater.shared.announceIfNew() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

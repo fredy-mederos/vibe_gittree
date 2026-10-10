@@ -7,13 +7,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 destination="${1:-$HOME/Applications}"
-# Settings › General shows these: the build number is the number of commits, and the commit gets a
-# "+" when there were uncommitted changes. The build time comes from the app itself.
+# Settings › General shows these: the build number is the number of commits, the commit gets a "+"
+# when there were uncommitted changes, and the build time. scripts/create_dmg.sh stamps releases the same way.
 build_number=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 commit=$(git rev-parse --short HEAD 2>/dev/null || echo "")
 if [ -n "$commit" ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then commit="$commit+"; fi
+build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 xcodebuild -project GitTree.xcodeproj -scheme GitTree -configuration Release \
-    -derivedDataPath build/DerivedData CURRENT_PROJECT_VERSION="$build_number" GT_BUILD_COMMIT="$commit" build -quiet
+    -derivedDataPath build/DerivedData CURRENT_PROJECT_VERSION="$build_number" GT_BUILD_COMMIT="$commit" \
+    GT_BUILD_DATE="$build_date" build -quiet
 
 mkdir -p "$destination"
 pkill -x GitTree 2>/dev/null || true

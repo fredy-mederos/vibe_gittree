@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release GitTree"
+  short_description: "Run the GitTree release pipeline"
+  default_prompt: "Execute the GitTree release workflow end-to-end: resolve the version, confirm it, build a signed and notarized DMG, tag it, and publish the GitHub release."

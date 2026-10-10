@@ -9,9 +9,11 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<!-- The commit an installed copy was built from; scripts/install.sh fills it in. -->
+	<!-- The commit an installed copy was built from, and when; scripts/install.sh and scripts/release.sh fill them in. -->
 	<key>GTBuildCommit</key>
 	<string>$(GT_BUILD_COMMIT)</string>
+	<key>GTBuildDate</key>
+	<string>$(GT_BUILD_DATE)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
