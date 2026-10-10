@@ -15,6 +15,10 @@ struct RepositoryWindow: View {
         } detail: {
             detail
         }
+        #if DEBUG
+        // Test runs fold and unfold the sidebar in their own preferences, never the user's.
+        .defaultAppStorage(DebugLaunch.appStorage)
+        #endif
         .navigationTitle(state.title)
         .navigationSubtitle(state.subtitle)
         .focusedSceneValue(\.windowState, state)
@@ -69,6 +73,14 @@ struct RepositoryWindow: View {
             graph.select(index)
             state.showInspector = true
         }
+        // One side of a branch comparison.
+        .onReceive(NotificationCenter.default.publisher(for: .gitTreeHighlightCommits)) { notification in
+            guard let id = notification.userInfo?["repository"] as? UUID, id == state.repositoryID,
+                  let commits = notification.userInfo?["commits"] as? [String], let graph = state.graph else { return }
+            graph.highlightCommits(Set(commits.compactMap { ObjectID(hex: $0) }),
+                                   title: notification.userInfo?["title"] as? String ?? "Compared commits",
+                                   systemImage: "arrow.left.arrow.right")
+        }
         .task {
             state.restore(requested: target?.repositoryID)
             #if DEBUG
@@ -76,6 +88,18 @@ struct RepositoryWindow: View {
             if UserDefaults.standard.bool(forKey: "GTShowActivity") {
                 try? await Task.sleep(for: .seconds(2))
                 if let id = state.repositoryID { openWindow(id: "activity", value: id) }
+            }
+            if let spec = UserDefaults.standard.string(forKey: "GTCompare"), DebugLaunch.claimCompare() {
+                // `base...head`, by branch or tag name, once the history is read.
+                for _ in 0..<60 where state.graph?.commitGraph == nil {
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+                if let id = state.repositoryID, let graph = state.graph?.commitGraph {
+                    let names = spec.components(separatedBy: "...")
+                    func fullName(_ name: String?) -> String? { graph.refs.first { $0.name == name }?.fullName }
+                    openWindow(id: "compare", value: CompareTarget(repositoryID: id, base: fullName(names.first),
+                                                                   head: fullName(names.count > 1 ? names[1] : nil)))
+                }
             }
             if let output = UserDefaults.standard.string(forKey: "GTOpenInNewTab"), DebugLaunch.claimNewTab() {
                 try? await Task.sleep(for: .seconds(3))
@@ -130,17 +154,122 @@ struct RepositoryWindow: View {
 /// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` groups
 /// features, `-GTHighlightFixVersion <version>` highlights one, `-GTShowActivity YES` opens the
 /// calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES` (with `-settingsTab jira`) open
-/// the settings. Elsewhere: `-GTDataDirectory <folder>` (throwaway library, Jira profiles and test
-/// tokens) and `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`).
+/// the settings, `-GTSelect epic:<key>|release:<name>|pr:<number>|ticket:<key>` selects that row in
+/// the sidebar once it's there (`first` for the first one, `open` for the newest open pull
+/// request), and `-GTCompare <base>...<head>` opens the branch comparison. Elsewhere:
+/// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds)
+/// and `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`).
 @MainActor enum DebugLaunch {
     private static var didRun = false
     private static var didOpenTab = false
+
+    /// Where the sidebar keeps what's folded: the user's preferences, or for test runs a suite of
+    /// their own that starts empty every launch.
+    static let appStorage: UserDefaults = {
+        guard UserDefaults.standard.string(forKey: "GTDataDirectory") != nil else { return .standard }
+        let suite = "GitTree.test"
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+        return UserDefaults(suiteName: suite) ?? .standard
+    }()
+
+    /// `-GTDescribeJira <file>` (after `-GTDescribeAfter` seconds, 20 by default): what the Epics and
+    /// Releases sections list, the highlight, and the selected pull request's timeline, as text.
+    static func describeJira(_ state: WindowState, to path: String) {
+        guard let graph = state.graph else { return }
+        var lines = ["Selection: \(state.sidebarSelection.map { String(describing: $0) } ?? "none")"]
+        if let epics = graph.epics {
+            lines.append("Epics: \(epics.groups.count) groups, \(epics.ticketCount) tickets, \(epics.pending) pending, \(epics.notInJira) not in Jira")
+            for group in epics.groups {
+                let tickets = group.tickets.prefix(8).map { "\($0.key)×\($0.commits)" }.joined(separator: ", ")
+                lines.append("  \(group.id.isEmpty ? "(no epic)" : group.id) \(group.epic?.summary ?? "") [\(group.epic?.status ?? "")]: \(group.tickets.count) tickets, \(group.commits) commits: \(tickets)")
+            }
+        }
+        if let progress = graph.epicProgress { lines.append("Epic progress: \(progress)") }
+        if let releases = graph.releases {
+            lines.append("Releases used: " + releases.used.map { "\($0.name) (\($0.releaseDate ?? "-"), \($0.progressSummary ?? "-"))" }.joined(separator: " | "))
+            lines.append("Releases other: " + releases.other.map(\.name).joined(separator: " | "))
+        }
+        for (id, tickets) in graph.releaseTickets.sorted(by: { $0.key < $1.key }) {
+            lines.append("Release \(id) tickets: " + tickets.map { "\($0.key)×\($0.commits)" }.joined(separator: ", "))
+        }
+        if let highlight = graph.highlight {
+            lines.append("Highlight: \(highlight.title) [\(highlight.systemImage)] \(graph.matchRows.count) rows, current \(graph.currentMatch.map(String.init) ?? "-")")
+        }
+        if let progress = graph.highlightProgress { lines.append("Highlight progress: \(progress)") }
+        if let note = graph.highlightNote { lines.append("Highlight note: \(note)") }
+        if case .pullRequest(_, let number)? = state.sidebarSelection {
+            if let timeline = graph.model.timelines[number] {
+                lines.append("Timeline #\(number): \(timeline.summary)")
+                for event in timeline.events {
+                    lines.append("  \(event.date.formatted(.iso8601)) \(event.title)")
+                }
+            } else {
+                lines.append("Timeline #\(number): \(graph.model.timelineProblems[number] ?? "not loaded")")
+            }
+        }
+        try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
+    /// The sidebar row `-GTSelect` names, once the repository has loaded it.
+    static func selection(_ text: String, in state: WindowState) -> SidebarItem? {
+        guard let id = state.repositoryID, let graph = state.graph else { return nil }
+        let parts = text.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return nil }
+        let value = parts[1]
+        switch parts[0] {
+        case "epic":
+            guard graph.epicProgress == nil, let groups = graph.epics?.groups, !groups.isEmpty else { return nil }
+            let key = value == "first" ? groups.first { !$0.id.isEmpty }?.id : groups.first { $0.id == value }?.id
+            return key.map { .epic(id, $0) }
+        case "release":
+            let version = graph.releases?.all.first { value == "first" || $0.name == value }
+            return version.map { .release(id, $0.id) }
+        case "ticket":
+            return .ticket(id, value, under: "")
+        case "ref":
+            return graph.commitGraph?.refs.first { $0.name == value }.map { .ref(id, $0.fullName) }
+        case "pr":
+            guard let pullRequests = graph.model.pullRequests else { return nil }
+            let stacked = Set(pullRequests.stacks.flatMap { $0.map(\.number) })
+            let number = value == "open"
+                ? pullRequests.all.filter { $0.state == .open && !$0.isDraft && !stacked.contains($0.number) }.map(\.number).max()
+                : Int(value)
+            return number.map { .pullRequest(id, $0) }
+        default:
+            return nil
+        }
+    }
 
     /// `-GTOpenInNewTab <file>`: the first window opens its repository in a new tab, like the
     /// sidebar's Open in New Tab, then writes the windows and their tabs to the file.
     static func claimNewTab() -> Bool {
         defer { didOpenTab = true }
         return !didOpenTab
+    }
+
+    private static var didOpenCompare = false
+
+    /// `-GTCompare` opens one comparison, from the first window.
+    static func claimCompare() -> Bool {
+        defer { didOpenCompare = true }
+        return !didOpenCompare
+    }
+
+    /// `-GTDescribeCompare <file>`: what a comparison found, as text.
+    static func describeComparison(_ comparison: BranchComparison) {
+        guard let path = UserDefaults.standard.string(forKey: "GTDescribeCompare") else { return }
+        let graph = comparison.graph
+        var lines = ["Base \(comparison.base.ref.name), head \(comparison.head.ref.name)"]
+        if let mergeBase = comparison.mergeBase {
+            lines.append("Merge base \(graph.ids[Int(mergeBase)].short) \(graph.subjects[Int(mergeBase)])")
+        }
+        for side in [comparison.base, comparison.head] {
+            lines.append("Only on \(side.ref.name): \(side.commits.count) commits (\(side.nonMergeCount) not merges), "
+                + "\(side.tickets.count) tickets, authors \(side.authors.prefix(3).map { "\($0.name)×\($0.commits)" }.joined(separator: ", "))")
+            lines.append("  tickets: " + side.tickets.prefix(10).map { "\($0.key)×\($0.commits)" }.joined(separator: ", "))
+            lines.append("  newest: " + side.commits.prefix(3).map { graph.subjects[Int($0)] }.joined(separator: " | "))
+        }
+        try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
     }
 
     static func describeWindows(to path: String) {
@@ -201,6 +330,25 @@ struct RepositoryWindow: View {
             Task {
                 try? await Task.sleep(for: .seconds(2))
                 state.graph?.analyzeFeatures()
+            }
+        }
+        if let output = defaults.string(forKey: "GTDescribeJira") {
+            Task {
+                let after = defaults.integer(forKey: "GTDescribeAfter")
+                try? await Task.sleep(for: .seconds(after > 0 ? after : 20))
+                describeJira(state, to: output)
+            }
+        }
+        if let text = defaults.string(forKey: "GTSelect") {
+            Task {
+                // Up to half a minute for Jira or GitHub to fill the sidebar.
+                for _ in 0..<60 {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    if let item = selection(text, in: state) {
+                        state.sidebarSelection = item
+                        break
+                    }
+                }
             }
         }
         guard query != nil || scope != nil else { return }

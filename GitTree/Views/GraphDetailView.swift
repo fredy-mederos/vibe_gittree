@@ -95,7 +95,13 @@ struct GraphDetailView: View {
                         }
                     }
                     Section("Fix Version") {
-                        ForEach(JiraStore.shared.knownFixVersions(for: jira).prefix(12), id: \.self) { fixVersion in
+                        // The unreleased versions this repository's tickets are in, then others seen in its tickets.
+                        let unreleased = graph.releases?.used ?? []
+                        ForEach(unreleased.prefix(10)) { version in
+                            Button(version.name) { graph.highlightFixVersion(version.name, id: version.id) }
+                        }
+                        let known = JiraStore.shared.knownFixVersions(for: jira).filter { name in !unreleased.contains { $0.name == name } }
+                        ForEach(known.prefix(unreleased.isEmpty ? 12 : 6), id: \.self) { fixVersion in
                             Button(fixVersion) { graph.highlightFixVersion(fixVersion) }
                         }
                         Button("Other Fix Version…") { state.isFixVersionPromptPresented = true }
@@ -182,6 +188,11 @@ struct GraphStatusBar: View {
                     Image(systemName: highlight.systemImage)
                     Text(highlight.title)
                         .lineLimit(1)
+                    if graph.highlightRefining {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .help("Asking Jira for the rest of its tickets")
+                    }
                     if let note = graph.highlightNote {
                         Text(verbatim: "· \(note)")
                             .foregroundStyle(.orange)
@@ -231,7 +242,9 @@ struct GraphStatusBar: View {
             if graph.matchRows.isEmpty {
                 Text("No matches")
             } else {
-                Text("\((graph.currentMatch.map { $0 + 1 } ?? 0).formatted()) of \(graph.matchRows.count.formatted())")
+                // Without a current match the selection is elsewhere (a highlight that didn't move it).
+                Text(graph.currentMatch.map { "\(($0 + 1).formatted()) of \(graph.matchRows.count.formatted())" }
+                     ?? counted(graph.matchRows.count, "match", "matches"))
                     .monospacedDigit()
                 Button { graph.previousMatch() } label: { Image(systemName: "chevron.up") }
                     .help("Previous match (⇧⌘G)")

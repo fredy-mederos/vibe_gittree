@@ -22,6 +22,13 @@ struct GitTreeApp: App {
         .defaultSize(width: 1000, height: 640)
         .handlesExternalEvents(matching: [])
 
+        // Two branches side by side, opened from the Repository menu or a branch's context menu.
+        WindowGroup("Compare Branches", id: "compare", for: CompareTarget.self) { $target in
+            CompareWindow(target: $target)
+        }
+        .defaultSize(width: 1200, height: 760)
+        .handlesExternalEvents(matching: [])
+
         // One window per file diff, opened from the inspector or a deep link.
         WindowGroup("Changes", id: "diff", for: DiffTarget.self) { $target in
             DiffWindow(target: target)

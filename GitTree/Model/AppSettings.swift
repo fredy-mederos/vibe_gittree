@@ -4,6 +4,7 @@ enum AppSettings {
     static let gitPathKey = "gitExecutablePath"
     static let fetchOnOpenKey = "fetchRemotesOnOpen"
     static let showTagsKey = "showTags"
+    static let epicCommitLimitKey = "epicCommitLimit"
 
     /// A git binary the user picked in Settings, if any.
     static var gitExecutableOverride: String? {

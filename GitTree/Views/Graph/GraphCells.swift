@@ -404,11 +404,12 @@ final class TicketStatusCellView: NSTableCellView {
         didSet { if backgroundStyle != oldValue { needsDisplay = true } }
     }
 
-    func configure(key: String?, issue: JiraIssue?) {
+    func configure(key: String?, issue: JiraIssue?, epic: JiraLink? = nil) {
         self.issue = issue
         if let issue {
             let versions = issue.fixVersions.isEmpty ? "" : " · fix version \(issue.fixVersions.joined(separator: ", "))"
-            toolTip = "\(issue.key) · \(issue.status)\(versions)\n\(issue.summary)"
+            let epicLine = epic.map { $0.key == issue.key ? "" : "\nEpic: \($0.key) \($0.summary)" } ?? ""
+            toolTip = "\(issue.key) · \(issue.status)\(versions)\n\(issue.summary)\(epicLine)"
             setAccessibilityLabel("\(issue.key) \(issue.status)")
         } else {
             toolTip = key

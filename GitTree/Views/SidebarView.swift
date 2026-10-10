@@ -13,6 +13,8 @@ struct SidebarView: View {
     @AppStorage("sidebar.stacksExpanded") private var stacksExpanded = true
     @AppStorage("sidebar.pullRequestsExpanded") private var pullRequestsExpanded = false
     @AppStorage("sidebar.featuresExpanded") private var featuresExpanded = true
+    @AppStorage("sidebar.epicsExpanded") private var epicsExpanded = true
+    @AppStorage("sidebar.releasesExpanded") private var releasesExpanded = true
     @State private var expanded: [String: Bool] = [:]
 
     /// Repositories listed before "Show All" takes over.
@@ -137,6 +139,16 @@ struct SidebarView: View {
             state.addLocal(urls: urls)
             return true
         }
+        // A selected epic or fix version opens to show its tickets; a pull request selected
+        // elsewhere is revealed, with its timeline.
+        .onChange(of: state.sidebarSelection) { _, selection in
+            switch selection {
+            case .epic(_, let key)?: expanded[scopedKey("epic:\(key)")] = true
+            case .release(_, let id)?: expanded[scopedKey("release:\(id)")] = true
+            case .pullRequest(_, let number)?: revealPullRequest(number)
+            default: break
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
@@ -147,6 +159,8 @@ struct SidebarView: View {
     @ViewBuilder
     private func refSections(_ tree: RefTree, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
         if let graph = state.graph, !isFiltering {
+            epicsSection(graph, repositoryID: repositoryID)
+            releasesSection(graph, repositoryID: repositoryID)
             featuresSection(graph, repositoryID: repositoryID)
         }
         if let pullRequests = state.graph?.model.pullRequests, !isFiltering {
@@ -333,10 +347,30 @@ struct SidebarView: View {
         }
         .help(Text(verbatim: "#\(pullRequest.number) \(pullRequest.title)\n\(pullRequest.stateTitle)\(pullRequest.author.map { " · \($0)" } ?? "")"))
         // Its own selection, not its branch's: selecting it shouldn't also select the branch row.
-        if reachable {
-            row.tag(SidebarItem.pullRequest(repositoryID, pullRequest.number))
+        // One whose commits aren't in the graph can still be selected to see its timeline.
+        row
+            .foregroundStyle(reachable ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+            .tag(SidebarItem.pullRequest(repositoryID, pullRequest.number))
+        if state.sidebarSelection == .pullRequest(repositoryID, pullRequest.number), let model = state.graph?.model {
+            PullRequestTimelineRow(model: model, pullRequest: pullRequest)
+        }
+    }
+
+    /// Opens the section and group a pull request is listed in (nothing changes when it was
+    /// clicked, since it's on screen already).
+    private func revealPullRequest(_ number: Int) {
+        guard let index = state.graph?.model.pullRequests, let pullRequest = index.byNumber[number] else { return }
+        if let stack = index.stacks.first(where: { $0.contains { $0.number == number } }) {
+            stacksExpanded = true
+            expanded[scopedKey("stack:\(stack.first?.number ?? 0)")] = true
         } else {
-            row.foregroundStyle(.secondary)
+            pullRequestsExpanded = true
+            let group = switch pullRequest.state {
+            case .merged: "pulls:merged"
+            case .closed: "pulls:closed"
+            case .open: pullRequest.isDraft ? "pulls:drafts" : "pulls:open"
+            }
+            expanded[scopedKey(group)] = true
         }
     }
 
@@ -349,18 +383,140 @@ struct SidebarView: View {
         }
     }
 
+    // MARK: Epics and releases
+
+    /// The tickets in the latest commits under their Jira epics. Selecting an epic highlights its
+    /// commits; it opens to list its tickets, and selecting one highlights that ticket's commits.
+    @ViewBuilder
+    private func epicsSection(_ graph: GraphViewModel, repositoryID: UUID) -> some View {
+        if let report = graph.epics, graph.jira != nil {
+            FoldingSection(isExpanded: $epicsExpanded) {
+                if let progress = graph.epicProgress {
+                    ProgressNote(text: progress)
+                }
+                ForEach(report.groups) { group in
+                    epicGroup(group, graph: graph, repositoryID: repositoryID)
+                }
+                if report.groups.isEmpty, graph.epicProgress == nil {
+                    Text(report.ticketCount == 0 ? "No tickets in the latest \(report.commitLimit.formatted()) commits." : "Waiting for Jira…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if report.notInJira > 0 {
+                    Text("\(counted(report.notInJira, "ticket isn't", "tickets aren't")) in Jira.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                HStack {
+                    Text("Epics")
+                    Spacer()
+                    if epicsExpanded, let fold = fold(report.groups.map { ("epic:\($0.id)", false) }) {
+                        FoldButton(fold: fold)
+                    }
+                    Menu {
+                        Picker("Commits to Include", selection: Bindable(graph).epicCommitLimit) {
+                            ForEach([200, 500, 1000, 2000], id: \.self) { Text("Latest \($0.formatted())").tag($0) }
+                        }
+                        Button("Ask Jira Again") { graph.refreshJiraOverview() }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("How many of the latest commits to group by epic")
+                    Text(report.groups.filter { !$0.id.isEmpty }.count.formatted())
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    private func epicGroup(_ group: EpicReport.Group, graph: GraphViewModel, repositoryID: UUID) -> some View {
+        DisclosureGroup(isExpanded: expansion("epic:\(group.id)")) {
+            ForEach(group.tickets) { ticket in
+                SidebarTicketRow(key: ticket.key, issue: graph.jira.flatMap { JiraStore.shared.issue(ticket.key, connection: $0) },
+                                 commits: ticket.commits, latest: ticket.latest)
+                    .tag(SidebarItem.ticket(repositoryID, ticket.key, under: "epic:\(group.id)"))
+            }
+        } label: {
+            EpicRow(group: group)
+                .tag(SidebarItem.epic(repositoryID, group.id))
+        }
+    }
+
+    /// The unreleased fix versions of the repository's Jira projects: the ones its tickets are in
+    /// first, the rest folded away. Selecting one highlights its tickets' commits and lists them.
+    @ViewBuilder
+    private func releasesSection(_ graph: GraphViewModel, repositoryID: UUID) -> some View {
+        if let report = graph.releases, !report.all.isEmpty, graph.jira != nil {
+            FoldingSection(isExpanded: $releasesExpanded) {
+                ForEach(report.used) { version in
+                    releaseGroup(version, graph: graph, repositoryID: repositoryID)
+                }
+                if !report.other.isEmpty {
+                    let isExpanded = expansion("releases:other", default: report.used.isEmpty)
+                    DisclosureGroup(isExpanded: isExpanded) {
+                        ForEach(report.other) { version in
+                            releaseGroup(version, graph: graph, repositoryID: repositoryID)
+                        }
+                    } label: {
+                        CountedLabel(title: report.used.isEmpty ? "All Fix Versions" : "Other Fix Versions", systemImage: "shippingbox",
+                                     count: report.other.count)
+                            .togglesDisclosure(isExpanded)
+                            .help("Unreleased fix versions none of this repository's tickets are in (yet)")
+                    }
+                }
+            } header: {
+                SectionHeader(title: "Releases", count: report.used.isEmpty ? report.other.count : report.used.count,
+                              fold: releasesExpanded ? fold(report.used.map { ("release:\($0.id)", false) }) : nil)
+            }
+        }
+    }
+
+    private func releaseGroup(_ version: JiraVersion, graph: GraphViewModel, repositoryID: UUID) -> some View {
+        let key = scopedKey("release:\(version.id)")
+        // Opening a fix version asks Jira for its tickets (once every ten minutes at most).
+        let isExpanded = Binding(
+            get: { expanded[key] ?? false },
+            set: { open in
+                expanded[key] = open
+                if open { graph.loadRelease(version.id) }
+            }
+        )
+        return DisclosureGroup(isExpanded: isExpanded) {
+            if let tickets = graph.releaseTickets[version.id] {
+                ForEach(tickets) { ticket in
+                    SidebarTicketRow(key: ticket.key, issue: ticket.issue, commits: ticket.commits, latest: ticket.latest)
+                        .tag(SidebarItem.ticket(repositoryID, ticket.key, under: "release:\(version.id)"))
+                }
+                if tickets.isEmpty {
+                    Text("No tickets in this fix version.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let problem = graph.releaseProblems[version.id] {
+                Text(problem)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressNote(text: "Loading tickets…")
+            }
+        } label: {
+            ReleaseRow(version: version)
+                .tag(SidebarItem.release(repositoryID, version.id))
+        }
+    }
+
     // MARK: Features
 
     @ViewBuilder
     private func featuresSection(_ graph: GraphViewModel, repositoryID: UUID) -> some View {
         FoldingSection(isExpanded: $featuresExpanded) {
             if let progress = graph.featureProgress {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(progress)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+                ProgressNote(text: progress)
             }
             if let report = graph.features {
                 ForEach(report.areas, id: \.name) { area in
@@ -440,6 +596,23 @@ struct SidebarView: View {
             if let ref = state.graph?.commitGraph?.refs.first(where: { $0.fullName == fullName }) { refMenu(ref) }
         case .feature:
             Button("Clear Highlight") { state.graph?.showFeature(id: nil) }
+        case .epic(_, let key):
+            if !key.isEmpty {
+                ticketMenu(key)
+                Divider()
+            }
+            Button("Clear Highlight") { state.graph?.clearHighlight() }
+        case .release(_, let id):
+            if let graph = state.graph, let jira = graph.jira, let version = graph.releases?.version(id: id) {
+                Button("Open in Jira") { NSWorkspace.shared.open(jira.versionURL(version)) }
+                Button("Copy Name") { copy(version.name) }
+                Divider()
+            }
+            Button("Clear Highlight") { state.graph?.clearHighlight() }
+        case .ticket(_, let key, _):
+            ticketMenu(key)
+            Divider()
+            Button("Clear Highlight") { state.graph?.clearHighlight() }
         case .pullRequest(_, let number):
             if let pullRequest = state.graph?.model.pullRequests?.byNumber[number] {
                 Button("Open on GitHub") { NSWorkspace.shared.open(pullRequest.url) }
@@ -453,6 +626,19 @@ struct SidebarView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func ticketMenu(_ key: String) -> some View {
+        if let graph = state.graph, let jira = graph.jira {
+            Button("Open in Jira") { NSWorkspace.shared.open(graph.model.repository.issueURL(for: key) ?? jira.browseURL(key)) }
+        }
+        Button("Copy Key") { copy(key) }
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     @ViewBuilder
@@ -490,6 +676,21 @@ struct SidebarView: View {
         Button("Copy Name") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(ref.remoteParts?.branch ?? ref.name, forType: .string)
+        }
+        if let id = state.repositoryID, let graph = state.graph?.commitGraph {
+            Divider()
+            // The usual base (develop, main…) and the checked-out branch, when they're another branch.
+            let bases = [BranchComparison.defaultBase(in: graph, other: ref.fullName), graph.refs.first { $0.isHead && $0.kind == .local }]
+                .compactMap { $0 }
+                .filter { $0.fullName != ref.fullName }
+            ForEach(Array(Set(bases.map(\.fullName))).sorted(), id: \.self) { base in
+                Button("Compare with “\(GitRef.shortName(fullName: base))”") {
+                    openWindow(id: "compare", value: CompareTarget(repositoryID: id, base: base, head: ref.fullName))
+                }
+            }
+            Button("Compare with…") {
+                openWindow(id: "compare", value: CompareTarget(repositoryID: id, head: ref.fullName))
+            }
         }
         if let hosting = state.graph?.model.hosting {
             Divider()
@@ -663,6 +864,203 @@ private struct FeatureRow: View {
                 .foregroundStyle(.secondary)
         }
         .help(Text(verbatim: "\(group.name)\n\(group.commits.count) commits by \(group.authors.prefix(3).joined(separator: ", "))"))
+    }
+}
+
+/// An epic: its summary and commits, then its key, status, tickets and latest activity.
+private struct EpicRow: View {
+    let group: EpicReport.Group
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Text(group.commits.formatted())
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary)
+                }
+                HStack(spacing: 4) {
+                    if let epic = group.epic {
+                        Text(verbatim: epic.key).monospaced()
+                        Text(verbatim: "·")
+                        IssueStatusText(status: epic.status, category: epic.category)
+                        Text(verbatim: "·")
+                    }
+                    Text(counted(group.tickets.count, "ticket", "tickets"))
+                    Text(verbatim: "· \(RelativeAge.short(group.latest))")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+        } icon: {
+            if group.epic != nil {
+                IssueTypeIcon(type: "Epic", level: 1)
+            } else {
+                Image(systemName: "tray")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .help(Text(verbatim: help))
+    }
+
+    private var title: String {
+        guard let epic = group.epic else { return "No Epic" }
+        return epic.summary.isEmpty ? epic.key : epic.summary
+    }
+
+    private var help: String {
+        let tickets = counted(group.tickets.count, "ticket", "tickets")
+        let commits = counted(group.commits, "commit", "commits")
+        guard let epic = group.epic else { return "Tickets without an epic\n\(tickets), \(commits)" }
+        return "\(epic.key) \(epic.summary)\n\(epic.status) · \(tickets), \(commits)\nSelect to highlight every commit of the epic's tickets"
+    }
+}
+
+/// A ticket under an epic or a fix version: its summary and commits here, then its key, status
+/// and latest commit. Dimmed when no commit in this history mentions it.
+private struct SidebarTicketRow: View {
+    let key: String
+    let issue: JiraIssue?
+    let commits: Int
+    let latest: Date?
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(issue.map { $0.summary.isEmpty ? key : $0.summary } ?? key)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    if commits > 0 {
+                        Text(commits.formatted())
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                HStack(spacing: 4) {
+                    Text(verbatim: key).monospaced()
+                    if let issue {
+                        Text(verbatim: "·")
+                        IssueStatusText(status: issue.status, category: issue.category)
+                    }
+                    if let latest {
+                        Text(verbatim: "· \(RelativeAge.short(latest))")
+                    } else if commits == 0 {
+                        Text("· no commits here")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+        } icon: {
+            IssueTypeIcon(type: issue?.type, level: issue?.level)
+        }
+        .opacity(commits == 0 ? 0.6 : 1)
+        .help(Text(verbatim: help))
+    }
+
+    private var help: String {
+        var lines = [[key, issue?.summary].compactMap { $0 }.joined(separator: " ")]
+        if let issue {
+            lines.append([issue.type, issue.status, issue.assignee].compactMap { $0 }.joined(separator: " · "))
+            if let parent = issue.parent { lines.append("In \(parent.key) \(parent.summary)") }
+        }
+        lines.append(commits == 0 ? "No commit in this history mentions it" : counted(commits, "commit", "commits"))
+        return lines.joined(separator: "\n")
+    }
+}
+
+/// An unreleased fix version: its name and release date, and how far its tickets are.
+private struct ReleaseRow: View {
+    let version: JiraVersion
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(version.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    if let date = version.shortReleaseDate {
+                        Text(date)
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(version.overdue ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+                    }
+                }
+                if let progress = version.progress, progress.total > 0 {
+                    HStack(spacing: 6) {
+                        ReleaseProgressBar(progress: progress)
+                            .frame(maxWidth: 80)
+                        Text(verbatim: "\(progress.done)/\(progress.total) done")
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } icon: {
+            Image(systemName: "shippingbox")
+                .foregroundStyle(.secondary)
+        }
+        .help(Text(verbatim: help))
+    }
+
+    private var help: String {
+        var lines = [version.name]
+        if let details = version.details { lines.append(details) }
+        if let date = version.shortReleaseDate { lines.append((version.overdue ? "Overdue, was due " : "Release date ") + date) }
+        if let progress = version.progressSummary { lines.append(progress) }
+        lines.append("Select to highlight its tickets' commits")
+        return lines.joined(separator: "\n")
+    }
+}
+
+/// Under the selected pull request: its timeline, once `gh` has told.
+private struct PullRequestTimelineRow: View {
+    let model: RepositoryModel
+    let pullRequest: PullRequest
+
+    var body: some View {
+        Group {
+            if let timeline = model.timelines[pullRequest.number] {
+                PullRequestTimelineView(timeline: timeline)
+            } else if let problem = model.timelineProblems[pullRequest.number] {
+                Text(problem)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ProgressNote(text: "Loading timeline…")
+            }
+        }
+        .padding(.leading, 24)
+        .padding(.vertical, 3)
+    }
+}
+
+/// A small spinner with what it's waiting for.
+private struct ProgressNote: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
     }
 }
 

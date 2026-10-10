@@ -74,6 +74,11 @@ struct GitTreeCommands: Commands {
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
             .disabled(window?.repositoryID == nil)
+            Button("Compare Branches…") {
+                if let id = window?.repositoryID { openWindow(id: "compare", value: CompareTarget(repositoryID: id)) }
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
+            .disabled(window?.repositoryID == nil)
 
             Divider()
 

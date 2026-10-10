@@ -271,6 +271,240 @@ enum GitHubCLI {
     }
 }
 
+/// What happened to a pull request, oldest first: opened, commits added, reviews asked for and
+/// given, and merged or closed.
+struct PullRequestTimeline: Sendable {
+    struct Event: Identifiable, Sendable {
+        enum Kind: Sendable, Equatable {
+            /// With the commits it was opened with.
+            case opened(commits: Int, draft: Bool)
+            /// Commits added in one go (close together in time; GitHub doesn't say when they were pushed).
+            case commits(Int)
+            case forcePushed
+            case reviewRequested([String])
+            case approved
+            case changesRequested
+            case commented
+            case dismissed
+            case readyForReview
+            case convertedToDraft
+            case merged
+            case closed
+            case reopened
+        }
+
+        let id: Int
+        let date: Date
+        let kind: Kind
+        let actor: String?
+    }
+
+    let number: Int
+    let createdAt: Date
+    /// When it was merged or closed; nil while it's open.
+    let endedAt: Date?
+    let state: PullRequest.State
+    let events: [Event]
+    /// When GitTree asked GitHub.
+    let loadedAt: Date
+
+    /// "Merged after 21 hours, approved after 20 hours".
+    var summary: String {
+        var parts: [String] = []
+        switch state {
+        case .merged: parts.append("Merged after \(Self.duration(from: createdAt, to: endedAt ?? loadedAt))")
+        case .closed: parts.append("Closed after \(Self.duration(from: createdAt, to: endedAt ?? loadedAt))")
+        case .open: parts.append("Open for \(Self.duration(from: createdAt, to: Date()))")
+        }
+        if let approval = events.first(where: { $0.kind == .approved }) {
+            parts.append("approved after \(Self.duration(from: createdAt, to: approval.date))")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// "12 minutes", "5 hours", "3 days".
+    static func duration(from start: Date, to end: Date) -> String {
+        let seconds = max(0, end.timeIntervalSince(start))
+        switch seconds {
+        case ..<(90 * 60): return counted(max(1, Int(seconds / 60)), "minute", "minutes")
+        case ..<(36 * 3600): return counted(Int((seconds / 3600).rounded()), "hour", "hours")
+        default: return counted(Int((seconds / 86_400).rounded()), "day", "days")
+        }
+    }
+}
+
+extension GitHubCLI {
+    private static let timelineQuery = """
+    query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          createdAt state isDraft mergedAt closedAt
+          author { login }
+          commits(last: 100) { nodes { commit { committedDate } } }
+          timelineItems(last: 100, itemTypes: [HEAD_REF_FORCE_PUSHED_EVENT, PULL_REQUEST_REVIEW, READY_FOR_REVIEW_EVENT, \
+    CONVERT_TO_DRAFT_EVENT, REVIEW_REQUESTED_EVENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT]) {
+            nodes {
+              __typename
+              ... on HeadRefForcePushedEvent { createdAt actor { login } }
+              ... on PullRequestReview { state submittedAt author { __typename login } }
+              ... on ReadyForReviewEvent { createdAt actor { login } }
+              ... on ConvertToDraftEvent { createdAt actor { login } }
+              ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } ... on Team { name } ... on Bot { login } } }
+              ... on MergedEvent { createdAt actor { login } }
+              ... on ClosedEvent { createdAt actor { login } }
+              ... on ReopenedEvent { createdAt actor { login } }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    /// One `gh api graphql` call for a pull request's timeline. `repository` is `owner/name`.
+    static func timeline(repository: String, number: Int) async throws -> PullRequestTimeline {
+        guard let gh = executableURL else {
+            throw CommandError(command: "gh", status: 127, output: "Install the GitHub CLI (brew install gh) and run `gh auth login` to see pull request timelines.")
+        }
+        let parts = repository.split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { throw CommandError(command: "gh", status: 1, output: "\(repository) isn't a GitHub repository.") }
+        let output = try await ProcessRunner.run(
+            gh,
+            ["api", "graphql", "-f", "owner=\(parts[0])", "-f", "name=\(parts[1])", "-F", "number=\(number)", "-f", "query=\(timelineQuery)"],
+            environment: Git.environment, timeout: 30
+        )
+        return try await Task.detached(priority: .utility) {
+            try decodeTimeline(output, number: number)
+        }.value
+    }
+
+    private struct TimelineResponse: Decodable {
+        struct Actor: Decodable {
+            let login: String?
+            let name: String?
+            let kind: String?
+
+            enum CodingKeys: String, CodingKey {
+                case login, name
+                case kind = "__typename"
+            }
+        }
+        struct Item: Decodable {
+            let kind: String
+            let createdAt: Date?
+            let submittedAt: Date?
+            let state: String?
+            let actor: Actor?
+            let author: Actor?
+            let requestedReviewer: Actor?
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "__typename"
+                case createdAt, submittedAt, state, actor, author, requestedReviewer
+            }
+        }
+        struct Commit: Decodable {
+            struct Inner: Decodable { let committedDate: Date }
+            let commit: Inner
+        }
+        struct Nodes<Node: Decodable>: Decodable { let nodes: [Node?] }
+        struct PullRequestData: Decodable {
+            let createdAt: Date
+            let state: String
+            let isDraft: Bool
+            let mergedAt: Date?
+            let closedAt: Date?
+            let author: Actor?
+            let commits: Nodes<Commit>
+            let timelineItems: Nodes<Item>
+        }
+        struct Repository: Decodable { let pullRequest: PullRequestData? }
+        struct Payload: Decodable { let repository: Repository? }
+        struct Problem: Decodable { let message: String }
+        let data: Payload?
+        let errors: [Problem]?
+    }
+
+    private static func decodeTimeline(_ data: Data, number: Int) throws -> PullRequestTimeline {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let response = try decoder.decode(TimelineResponse.self, from: data)
+        guard let pullRequest = response.data?.repository?.pullRequest else {
+            throw CommandError(command: "gh api", status: 1, output: response.errors?.first?.message ?? "GitHub didn't return pull request #\(number).")
+        }
+        let created = pullRequest.createdAt
+        let items = pullRequest.timelineItems.nodes.compactMap { $0 }
+        var events: [(date: Date, kind: PullRequestTimeline.Event.Kind, actor: String?)] = []
+
+        // Opened as a draft when the first draft change made it ready (or it's still a draft).
+        let firstDraftChange = items.first { $0.kind == "ReadyForReviewEvent" || $0.kind == "ConvertToDraftEvent" }
+        let openedAsDraft = firstDraftChange.map { $0.kind == "ReadyForReviewEvent" } ?? pullRequest.isDraft
+
+        // Commits made before it was opened came with it; later ones are grouped when they're
+        // within ten minutes of each other, roughly one push each.
+        let commitDates = pullRequest.commits.nodes.compactMap { $0?.commit.committedDate }.sorted()
+        let initial = commitDates.filter { $0 <= created.addingTimeInterval(60) }.count
+        events.append((created, .opened(commits: initial, draft: openedAsDraft), pullRequest.author?.login))
+        var run: [Date] = []
+        func endRun() {
+            if let last = run.last { events.append((last, .commits(run.count), nil)) }
+            run = []
+        }
+        for date in commitDates.dropFirst(initial) {
+            if let last = run.last, date.timeIntervalSince(last) > 10 * 60 { endRun() }
+            run.append(date)
+        }
+        endRun()
+
+        let mergedAt = pullRequest.mergedAt
+        for item in items {
+            guard let date = item.createdAt ?? item.submittedAt else { continue }
+            let actor = item.actor?.login ?? item.author?.login
+            switch item.kind {
+            case "PullRequestReview":
+                switch item.state {
+                case "APPROVED": events.append((date, .approved, actor))
+                case "CHANGES_REQUESTED": events.append((date, .changesRequested, actor))
+                // Bots comment on every pull request; their notes aren't part of its story.
+                case "COMMENTED" where item.author?.kind != "Bot": events.append((date, .commented, actor))
+                case "DISMISSED": events.append((date, .dismissed, actor))
+                default: break
+                }
+            case "ReviewRequestedEvent":
+                let reviewer = item.requestedReviewer?.login ?? item.requestedReviewer?.name ?? "someone"
+                // Code owners are asked together; one line for all of them.
+                if let last = events.last, case .reviewRequested(let names) = last.kind, date.timeIntervalSince(last.date) < 60 {
+                    events[events.count - 1] = (last.date, .reviewRequested(names + [reviewer]), nil)
+                } else {
+                    events.append((date, .reviewRequested([reviewer]), nil))
+                }
+            case "HeadRefForcePushedEvent": events.append((date, .forcePushed, actor))
+            case "ReadyForReviewEvent": events.append((date, .readyForReview, actor))
+            case "ConvertToDraftEvent": events.append((date, .convertedToDraft, actor))
+            case "MergedEvent": events.append((date, .merged, actor))
+            case "ClosedEvent":
+                // Merging closes it too.
+                if let mergedAt, abs(date.timeIntervalSince(mergedAt)) < 10 { continue }
+                events.append((date, .closed, actor))
+            case "ReopenedEvent": events.append((date, .reopened, actor))
+            default: break
+            }
+        }
+
+        let state = PullRequest.State(rawValue: pullRequest.state) ?? .closed
+        let ordered = events.enumerated().sorted { a, b in
+            a.element.date == b.element.date ? a.offset < b.offset : a.element.date < b.element.date
+        }
+        return PullRequestTimeline(
+            number: number, createdAt: created,
+            endedAt: state == .merged ? mergedAt : (state == .closed ? pullRequest.closedAt : nil),
+            state: state,
+            events: ordered.enumerated().map { PullRequestTimeline.Event(id: $0.offset, date: $0.element.element.date,
+                                                                         kind: $0.element.element.kind, actor: $0.element.element.actor) },
+            loadedAt: Date()
+        )
+    }
+}
+
 /// `PullRequests/<repository>.json`: the last pull requests seen, so they show right away after a
 /// relaunch while a fresh copy loads under the usual limits.
 struct PullRequestCache: Codable, Sendable {

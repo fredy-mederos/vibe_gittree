@@ -24,7 +24,15 @@ import Observation
     private(set) var pullRequestProblem: String?
     /// Increments when pull requests or ticket statuses change, so visible rows redraw.
     private(set) var annotationVersion = 0
+    /// Timelines of the pull requests selected so far, by number.
+    private(set) var timelines: [Int: PullRequestTimeline] = [:]
+    /// The pull request whose timeline is loading.
+    private(set) var timelineLoading: Int?
+    private(set) var timelineProblems: [Int: String] = [:]
 
+    @ObservationIgnored private var timelineTask: Task<Void, Never>?
+    @ObservationIgnored private var timelineFailedAt: [Int: Date] = [:]
+    @ObservationIgnored private var ticketIndexCache: (graph: CommitGraph, index: TicketIndex)?
     @ObservationIgnored private var pullRequestTask: Task<Void, Never>?
     @ObservationIgnored private var pullRequestsLoadedAt: Date?
     @ObservationIgnored private var pullRequestRetryAt: Date?
@@ -142,6 +150,54 @@ import Observation
         let index = await Task.detached(priority: .userInitiated) { SearchIndex(graph: graph) }.value
         searchIndexCache = (graph, index)
         return index
+    }
+
+    func ticketIndex(for graph: CommitGraph) async -> TicketIndex {
+        if let cached = ticketIndexCache, cached.graph === graph { return cached.index }
+        let index = await Task.detached(priority: .userInitiated) { TicketIndex(graph: graph) }.value
+        ticketIndexCache = (graph, index)
+        return index
+    }
+
+    /// Loads a pull request's timeline with `gh` when it's selected: after a short pause (so
+    /// arrowing through the list doesn't ask for every row), one call at a time with the other
+    /// `gh` calls, and not again for five minutes while it's open (merged and closed ones don't
+    /// change). After a failure it waits a minute before trying that pull request again.
+    func loadTimeline(for pullRequest: PullRequest) {
+        guard let hosting, hosting.provider == .github else { return }
+        let number = pullRequest.number
+        if let cached = timelines[number], pullRequest.state != .open || Date().timeIntervalSince(cached.loadedAt) < 5 * 60 { return }
+        if let failed = timelineFailedAt[number], Date().timeIntervalSince(failed) < 60 { return }
+        timelineTask?.cancel()
+        timelineLoading = number
+        let repositoryPath = hosting.path
+        timelineTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            await GitHubCLI.gate.enter()
+            guard !Task.isCancelled else {
+                GitHubCLI.gate.leave()
+                return
+            }
+            let result: Result<PullRequestTimeline, Error>
+            do {
+                result = .success(try await GitHubCLI.timeline(repository: repositoryPath, number: number))
+            } catch {
+                result = .failure(error)
+            }
+            GitHubCLI.gate.leave()
+            guard let self else { return }
+            if self.timelineLoading == number { self.timelineLoading = nil }
+            switch result {
+            case .success(let timeline):
+                self.timelines[number] = timeline
+                self.timelineProblems[number] = nil
+                self.timelineFailedAt[number] = nil
+            case .failure(let error):
+                self.timelineProblems[number] = error.localizedDescription
+                self.timelineFailedAt[number] = Date()
+            }
+        }
     }
 
     /// Loads pull requests with `gh`, carefully: only for a repository a window shows (or when the

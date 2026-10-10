@@ -30,7 +30,8 @@ what's shipped), and `TODO.md` for what's still open or was dropped.
   override what the user clicks for that run and make the UI look broken.
 - Screenshots only work while GitTree is frontmost; with Stage Manager, a window behind the user's
   current app captures as a thumbnail. If the user is working in another app, don't keep stealing
-  focus: verify with logs (`mock-jira.py`) or debug output files instead.
+  focus: verify with logs (`mock-jira.py`) or debug output files instead (`-GTDescribeJira`,
+  `-GTDescribeCompare`, with the app launched by `open -g -n` so it stays in the background).
 - Install for daily use with `scripts/install.sh` (Release build into ~/Applications, or the folder
   passed to it, plus the `gittree` command into ~/.local/bin).
 - **"Prepare a release"** is the user's shorthand for: commit and push any pending work first (so
@@ -41,10 +42,13 @@ what's shipped), and `TODO.md` for what's still open or was dropped.
 - Network integrations must stay gentle (the user asked for this explicitly): one request at a
   time per service, caching, minimum intervals, timeouts and backoff, and never trigger a request
   from a redraw. GitHub goes through `gh` in `Integrations/GitHub.swift` (rate-limited in
-  `RepositoryModel.refreshPullRequests`); Jira goes through `JiraStore` (visible rows only, batched
-  bulk fetch, on-disk cache per site, queued per profile). Each repository picks a Jira profile (a
-  site and account, token in the keychain) or none. Test Jira with `scripts/mock-jira.py`, which
-  logs every request; `-GTJiraSite http://127.0.0.1:<port>` points every repository at it.
+  `RepositoryModel.refreshPullRequests`; pull request timelines on selection, through the same
+  gate); Jira goes through `JiraStore` (every request through its gate and per-minute budget:
+  visible rows first, then recent tickets the Epics section hasn't seen, batched bulk fetch; fix
+  versions and ticket lists cached; on-disk cache per profile). Each repository picks a Jira
+  profile (a site and account, token in the keychain) or none. Test Jira with
+  `scripts/mock-jira.py`, which logs every request; `-GTJiraSite http://127.0.0.1:<port>` points
+  every repository at it.
 - Apple's on-device model (Foundation Models) is used only to sort commits into features. The user
   decided against generated text (summaries, release notes); don't add it back. Keep it behind
   `#if canImport(FoundationModels)` and `@available(macOS 26.0, *)`, with a plain fallback; commit

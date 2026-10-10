@@ -103,7 +103,9 @@ private struct CommitDetailView: View {
             if !ticketKeys.isEmpty, let jira = JiraStore.shared.connection(for: graph.model.repository) {
                 Section(ticketKeys.count > 1 ? "Tickets" : "Ticket") {
                     ForEach(ticketKeys, id: \.self) { key in
-                        TicketRow(key: key, url: graph.model.repository.issueURL(for: key) ?? jira.browseURL(key), connection: jira)
+                        TicketRow(key: key, url: graph.model.repository.issueURL(for: key) ?? jira.browseURL(key), connection: jira) { epic in
+                            graph.highlightEpic(epic.key, title: "\(epic.key) \(epic.summary)")
+                        }
                     }
                     JiraProblemNote(connection: jira)
                 }
@@ -113,7 +115,7 @@ private struct CommitDetailView: View {
             if !pullRequests.isEmpty, let index = graph.model.pullRequests {
                 Section(pullRequests.count > 1 ? "Pull Requests" : "Pull Request") {
                     ForEach(pullRequests) { pullRequest in
-                        PullRequestRow(pullRequest: pullRequest, stack: index.stack(containing: pullRequest)) { branch in
+                        PullRequestRow(pullRequest: pullRequest, stack: index.stack(containing: pullRequest), model: graph.model) { branch in
                             graph.revealBranch(named: branch)
                         }
                     }
@@ -245,15 +247,22 @@ private struct CommitDetailView: View {
         .formStyle(.grouped)
         // Reload when the history does too: new branches may now contain this commit.
         .task(id: "\(id.hex) \(ObjectIdentifier(commitGraph).hashValue)") {
-            if let jira = JiraStore.shared.connection(for: graph.model.repository) {
-                let keys = commitGraph.ticketKeys(in: subject)
-                if !keys.isEmpty { JiraStore.shared.request(keys, connection: jira) }
-            }
             async let loadedDetails = graph.model.details(for: commit, in: commitGraph)
             async let loadedContainment = graph.model.containment(of: commit, in: commitGraph)
             details = await loadedDetails
             containment = await loadedContainment
             didLoad = true
+        }
+        // The tickets' statuses, then the story or task above a sub-task, whose parent is the epic.
+        .task(id: id) {
+            guard let jira = JiraStore.shared.connection(for: graph.model.repository) else { return }
+            let keys = commitGraph.ticketKeys(in: subject)
+            guard !keys.isEmpty else { return }
+            JiraStore.shared.request(keys, connection: jira)
+            await JiraStore.shared.ensure(keys, connection: jira)
+            guard !Task.isCancelled else { return }
+            let parents = JiraStore.shared.parentsToRead(of: keys, connection: jira)
+            if !parents.isEmpty { JiraStore.shared.request(parents, connection: jira) }
         }
     }
 
@@ -366,12 +375,13 @@ private struct CommitDetailView: View {
     }
 }
 
-/// A Jira ticket mentioned in the commit: its status and details. Reads the store itself so it
-/// updates when the status arrives.
+/// A Jira ticket mentioned in the commit: its status and details, the story or task a sub-task
+/// belongs to, and its epic. Reads the store itself so it updates when the status arrives.
 private struct TicketRow: View {
     let key: String
     let url: URL
     let connection: JiraConnection
+    let highlightEpic: (JiraLink) -> Void
     private let store = JiraStore.shared
 
     var body: some View {
@@ -412,6 +422,34 @@ private struct TicketRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if let parent = issue.parent, !parent.isEpic {
+                    Label {
+                        Text(verbatim: "\(parent.key) \(parent.summary)")
+                            .lineLimit(2)
+                    } icon: {
+                        IssueTypeIcon(type: parent.type, level: parent.level)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(Text(verbatim: "\(key) is part of \(parent.key)"))
+                }
+                if case .epic(let epic) = store.epic(of: key, connection: connection), epic.key != key {
+                    Button {
+                        highlightEpic(epic)
+                    } label: {
+                        Label {
+                            Text(verbatim: "\(epic.key) \(epic.summary)")
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        } icon: {
+                            IssueTypeIcon(type: "Epic", level: 1)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .help(Text(verbatim: "Epic \(epic.key): click to highlight the commits of all its tickets"))
+                }
             }
         }
         .padding(.vertical, 2)
@@ -431,10 +469,12 @@ private struct JiraProblemNote: View {
     }
 }
 
-/// A pull request with its state, branches, review and checks, and its stack when it's stacked.
+/// A pull request with its state, branches, review and checks, its stack when it's stacked, and
+/// its timeline (asked of GitHub on request).
 private struct PullRequestRow: View {
     let pullRequest: PullRequest
     let stack: [PullRequest]
+    let model: RepositoryModel
     let revealBranch: (String) -> Void
 
     var body: some View {
@@ -506,6 +546,28 @@ private struct PullRequestRow: View {
                 }
                 .padding(8)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+            }
+            if let timeline = model.timelines[pullRequest.number] {
+                PullRequestTimelineView(timeline: timeline, limit: 6)
+                    .padding(8)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+            } else if model.timelineLoading == pullRequest.number {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("Loading timeline…")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } else {
+                Button("Show Timeline") { model.loadTimeline(for: pullRequest) }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .help("When it was opened, its commits, reviews and merge, from GitHub")
+                if let problem = model.timelineProblems[pullRequest.number] {
+                    Text(problem)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 2)

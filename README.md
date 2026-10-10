@@ -68,21 +68,50 @@ permission to access that folder.
   aren't on the branch it's based on), or the whole stack's when it's stacked; right-click a stack ›
   Highlight Stack does the same. The inspector shows the pull request that merged a commit, its
   review and checks, and the whole stack.
+- **Pull request timeline**: the selected pull request's story under it in the sidebar, and in the
+  inspector with Show Timeline: a line from opening to merge (or to now) with a mark per event,
+  then the events (opened, with how many commits; commits added later, grouped when they're close
+  together; review requests, approvals, changes requested and comments; force pushes, draft
+  changes, merged or closed, with who and when), and how long it took: "Merged after 21 hours,
+  approved after 20 hours". GitHub doesn't say when commits were pushed, so their commit times
+  stand in; bots' review comments are left out.
 - **Jira** (Settings › Jira): profiles, each a Jira Cloud site and the account to use there. Every
   repository picks its profile or none, in Settings › Jira or in its Repository Settings, and new
   repositories start with the default profile. Repositories with a profile get a Ticket column with
-  each commit's ticket status and fix version, and a Ticket section in the inspector with summary,
-  type, assignee and fix version.
+  each commit's ticket status and fix version (its tooltip names the epic), and a Ticket section in
+  the inspector with summary, type, assignee, fix version, the story or task a sub-task belongs
+  to, and the epic (click it to highlight the whole epic).
+- **Epics** (with Jira connected): the sidebar's Epics section lists the tickets in the latest
+  commits (500 by default, 200 to 2,000 in its menu) under their Jira epics, most recently worked on
+  first, with each epic's key, status, tickets and commits; tickets without an epic come last. A
+  sub-task's epic is the one above its story or task, as in projects where commits mention
+  sub-tasks. Select an epic to highlight its commits: right away those of the tickets listed, then,
+  once Jira answers, every commit in the history that mentions any ticket in the epic (one
+  `parentEpic` query, which takes in its stories, tasks and sub-tasks). The epic opens to list its
+  tickets; select one to highlight its commits and its sub-tasks'.
+- **Releases** (with Jira connected): the unreleased fix versions of the repository's Jira projects
+  (taken from its ticket keys), soonest release date first, with the date (orange when overdue) and
+  a bar of how many of their tickets are done, in progress or to do. Versions this repository's
+  tickets are in come first; the others (another platform's, say) are under Other Fix Versions.
+  Select one to highlight the commits of its tickets and their sub-tasks; it opens to list its
+  tickets with their status and commits here, dimming those no commit mentions.
 - **Highlight** (toolbar, with Jira connected): tint the commits of tickets that aren't Done, are in
   progress or to do (among the latest 500 commits), or of every ticket in a fix version (asked of
   Jira directly, so it covers tickets beyond what's on screen). The status bar steps through them.
+- **Compare branches** (Repository › Compare Branches…, ⇧⌘B, or right-click a branch or tag ›
+  Compare with…): two branches or tags side by side in their own window. It says how many commits
+  each has that the other doesn't and where they diverged, then lists, for each side, its commits,
+  its tickets (under their epics, with their status, marked when the other side has commits for
+  them too), the files changed since the branches diverged, and its authors. Click a commit to
+  select it in the graph; Highlight in Graph tints one side's commits there.
 - **Features**: the sidebar's Features section groups the latest commits (100 to 1,000) under the
   terms your team writes in commit messages: bracket tags like `[Search]` or `[Tech Debt]` and scope
   prefixes like `github-pr:`. A ticket takes its commits' most common term, so untagged commits of a
   tagged ticket follow it. Terms and assignments are remembered per repository; only work without a
   term goes to Apple's on-device model, which picks an existing term or suggests a new one (commit
   messages never leave the Mac). Each ticket is a feature named after its most descriptive commit.
-  Select one to highlight its commits in the graph.
+  Select one to highlight its commits in the graph. With Jira connected, the Epics section above it
+  groups the same work by the epics in Jira instead, which needs no guessing.
 - **Activity** (toolbar calendar button or ⇧⌘A): a contribution grid with one square per day, shaded
   by commits, for the last 12 months or any year, filtered by branches and author. Hover a day to
   see its tickets (with their terms) and commits; click to keep it; click a commit to select it in
@@ -114,16 +143,27 @@ requests:
   of the open ones), only for repositories a window shows (or when you press Fetch). One refresh
   runs at a time across all repositories, at most every five minutes per repository (30 seconds
   after Fetch), each call with a 30-second timeout; after a failure it waits 5 minutes, then longer.
+  A pull request's timeline is one `gh api graphql` call when you select it (after a short pause,
+  so arrowing through the list doesn't ask for every row), in the same one-at-a-time line; it's
+  kept for five minutes while the pull request is open and for good once it's merged or closed,
+  and after a failure that pull request waits a minute.
 - **Jira**: only tickets on screen, only once scrolling pauses, only ones not already cached; up to
   50 per request with bulk fetch (one request per screen), one request at a time across all
-  profiles, at most 20 a minute. Statuses are cached on disk per profile (`jira-cache.json`) and
-  asked for again only after an hour, when they're on screen. Unknown tickets aren't asked about
-  again for a day. A fix version's tickets take at most five requests and are reused for ten
-  minutes. A rejected token stops that profile's requests until its settings change; timeouts back
-  off, and Jira's requests to slow down are honored (up to ten minutes). Editing a profile drops
-  anything still queued or in flight with the old credentials. Sites without bulk fetch get JQL
-  search, with smaller batches after a query fails on an unknown key, paced like everything else.
-  Repository › Refresh Ticket Statuses asks again for what's on screen.
+  profiles and everything below, at most 20 a minute. Statuses are cached on disk per profile
+  (`jira-cache.json`) and asked for again only after an hour, when they're on screen. Unknown
+  tickets aren't asked about again for a day. Each ticket comes with its parent, so the Epics
+  section asks only about recent tickets Jira hasn't answered about yet (a few requests the first
+  time a repository opens, then only new tickets), plus the stories and tasks above sub-tasks;
+  tickets on screen go ahead of those. A repository's unreleased fix versions are one request per
+  project at most every half hour (a ticket prefix that isn't a project isn't asked about again
+  for a day). A fix version's or an epic's tickets take at most five requests, only when you
+  select or open one, and are reused for ten minutes. A rejected token stops that profile's
+  requests until its settings change; timeouts back off, and Jira's requests to slow down are
+  honored (up to ten minutes). Editing a profile drops anything still queued or in flight with the
+  old credentials. Sites without bulk fetch get JQL search, with smaller batches after a query
+  fails on an unknown key, paced like everything else; sites without `parentEpic` get an epic's
+  tickets level by level. Repository › Refresh Ticket Statuses asks again for what's on screen,
+  and the Epics section's Ask Jira Again for the recent tickets and fix versions.
 
 ### Shortcuts
 
@@ -136,6 +176,7 @@ requests:
 | All branches / local / current | ⌘1 / ⌘2 / ⌘3 |
 | Go to HEAD | ⇧⌘H |
 | Show activity calendar | ⇧⌘A |
+| Compare branches | ⇧⌘B |
 | Fetch / reload | ⇧⌘F / ⌘R |
 | Commit details for the selected row | Return or double-click |
 | Repository settings | ⌥⌘, |
@@ -144,7 +185,8 @@ requests:
 
 `~/Library/Application Support/GitTree/`: `library.json` (the repository list and per-repository
 settings), `jira-profiles.json` (Jira sites and accounts, without tokens), `jira-cache.json` (ticket
-statuses per site) and `Clones/<host>/<owner>/<name>.git` (remote repositories). Jira API tokens
+statuses, with their parents, and unreleased fix versions per profile) and
+`Clones/<host>/<owner>/<name>.git` (remote repositories). Jira API tokens
 are in the login keychain. Removing a remote repository from
 GitTree deletes its clone; removing a local one never touches the folder.
 
@@ -154,9 +196,10 @@ GitTree deletes its clone; removing a local one never touches the folder.
 GitTree/
   App/           app entry point and menu commands
   Git/           running git, parsing history, lane layout, diffs, clone, file watching, hosting links
-  Integrations/  GitHub (gh), Jira (REST + keychain), feature grouping (Foundation Models)
-  Model/         repository library, per-repository model, per-window state, sidebar tree, deep links
-  Views/         window, sidebar, switcher, toolbar and status bar, inspector, diff window, sheets
+  Integrations/  GitHub (gh, pull request timelines), Jira (REST + keychain), feature grouping (Foundation Models)
+  Model/         repository library, per-repository model, per-window state, sidebar tree, deep links,
+                 epics and releases, branch comparison
+  Views/         window, sidebar, switcher, toolbar and status bar, inspector, diff and compare windows, sheets
   Views/Graph    the commit table (NSTableView) and its Core Graphics cells
 Support/Info.plist   the gittree:// URL scheme (merged with Xcode's generated keys)
 scripts/gittree      the deep-link command
@@ -182,11 +225,21 @@ scripts/snapshot.sh /tmp/gittree.png 6 -GTOpenRepository ~/code/some-repo -GTSea
 
 Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>`, `-GTSearch <text>`,
 `-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light`, `-GTShowSwitcher YES`,
-`-GTGroupFeatures YES`, and `-GTJiraSite <url>` (with optional `-GTJiraEmail`/`-GTJiraToken`) to use
-a Jira site without touching the keychain.
+`-GTGroupFeatures YES`, `-GTSelect epic:<key>|release:<name>|pr:<number>|ref:<name>` (selects that
+sidebar row once it's there; `first` for the first epic or release, `open` for the newest open pull
+request), `-GTCompare <base>...<head>` (opens the comparison), and `-GTJiraSite <url>` (with
+optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain. Test runs
+keep the sidebar's folded sections in a preferences suite of their own, emptied at launch.
+
+Some checks don't need a screenshot (or GitTree in front): `-GTDescribeJira <file>` writes, after
+`-GTDescribeAfter` seconds (20 by default), what the Epics and Releases sections list, the
+highlight, the sidebar selection and a selected pull request's timeline; `-GTDescribeCompare <file>`
+writes what a comparison found.
 
 To try the Jira integration without real credentials, run the mock server and point a debug build
-at it; it logs every request, which makes it easy to check that scrolling doesn't flood Jira:
+at it; it logs every request, which makes it easy to check that scrolling doesn't flood Jira. Its
+tickets have epics, stories, tasks and sub-tasks, and PROJ has six unreleased fix versions
+(`--no-parent-epic` rejects `parentEpic` queries, `--projects=A,B` sets which projects have them):
 
 ```bash
 python3 scripts/mock-jira.py 8899

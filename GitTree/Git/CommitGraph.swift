@@ -161,6 +161,14 @@ final class CommitGraph: @unchecked Sendable {
         Date(timeIntervalSince1970: TimeInterval(times[Int(commit)]))
     }
 
+    /// The first ticket key in a subject: the ticket a commit is filed under.
+    func ticketKey(in subject: String) -> String? {
+        guard let ticketRegex,
+              let match = ticketRegex.firstMatch(in: subject, range: NSRange(subject.startIndex..., in: subject)),
+              let range = Range(match.range, in: subject) else { return nil }
+        return String(subject[range])
+    }
+
     func ticketKeys(in subject: String) -> [String] {
         guard let ticketRegex else { return [] }
         let range = NSRange(subject.startIndex..., in: subject)

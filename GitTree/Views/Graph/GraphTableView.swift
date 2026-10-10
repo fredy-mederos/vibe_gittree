@@ -270,11 +270,16 @@ final class GraphNSTableView: NSTableView {
         guard visible.length > 0 else { return }
         var keys: [String] = []
         for row in visible.location..<min(layout.rowCount, visible.location + visible.length) {
-            if let key = layout.graph.ticketKeys(in: layout.graph.subjects[Int(layout.rows[row])]).first, !keys.contains(key) {
+            if let key = layout.graph.ticketKey(in: layout.graph.subjects[Int(layout.rows[row])]), !keys.contains(key) {
                 keys.append(key)
             }
         }
-        if !keys.isEmpty { JiraStore.shared.request(keys, connection: jira) }
+        guard !keys.isEmpty else { return }
+        JiraStore.shared.request(keys, connection: jira)
+        // A sub-task's epic is its story's or task's parent; once statuses arrive (which brings
+        // this back), those stories and tasks are asked for too, then nothing more.
+        let parents = JiraStore.shared.parentsToRead(of: keys, connection: jira)
+        if !parents.isEmpty { JiraStore.shared.request(parents, connection: jira) }
     }
 
     func tableViewColumnDidResize(_ notification: Notification) {
@@ -379,8 +384,10 @@ final class GraphNSTableView: NSTableView {
         case ColumnID.ticket:
             let cell = tableView.makeView(withIdentifier: TicketStatusCellView.identifier, owner: nil) as? TicketStatusCellView
                 ?? TicketStatusCellView()
-            let key = jira == nil ? nil : commitGraph.ticketKeys(in: commitGraph.subjects[index]).first
-            cell.configure(key: key, issue: key.flatMap { key in jira.flatMap { JiraStore.shared.issue(key, connection: $0) } })
+            let key = jira == nil ? nil : commitGraph.ticketKey(in: commitGraph.subjects[index])
+            var epic: JiraLink?
+            if let key, let jira, case .epic(let link) = JiraStore.shared.epic(of: key, connection: jira) { epic = link }
+            cell.configure(key: key, issue: key.flatMap { key in jira.flatMap { JiraStore.shared.issue(key, connection: $0) } }, epic: epic)
             return cell
 
         case ColumnID.author:

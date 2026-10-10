@@ -49,7 +49,25 @@ enum CommitDetailsLoader {
             Date(timeIntervalSince1970: TimeInterval(field(i)) ?? 0)
         }
 
-        let tokens = try await changes.split(separator: 0, omittingEmptySubsequences: false).map {
+        let changed = try await changes
+        let (files, total) = parseNameStatus(changed, limit: fileLimit)
+
+        return CommitDetails(
+            message: field(0),
+            authorName: field(1),
+            authorEmail: field(2),
+            authorDate: date(3),
+            committerName: field(4),
+            committerEmail: field(5),
+            committerDate: date(6),
+            files: files,
+            totalFiles: total
+        )
+    }
+
+    /// `git diff-tree --name-status -z` output: the first `limit` files, and how many changed in all.
+    static func parseNameStatus(_ data: Data, limit: Int) -> (files: [ChangedFile], total: Int) {
+        let tokens = data.split(separator: 0, omittingEmptySubsequences: false).map {
             String(decoding: $0, as: UTF8.self)
         }
         var files: [ChangedFile] = []
@@ -71,23 +89,12 @@ enum CommitDetailsLoader {
                 path = tokens[i + 1]
                 i += 2
             }
-            if files.count < fileLimit {
+            if files.count < limit {
                 files.append(ChangedFile(id: total, status: code, path: path, oldPath: oldPath))
             }
             total += 1
         }
-
-        return CommitDetails(
-            message: field(0),
-            authorName: field(1),
-            authorEmail: field(2),
-            authorDate: date(3),
-            committerName: field(4),
-            committerEmail: field(5),
-            committerDate: date(6),
-            files: files,
-            totalFiles: total
-        )
+        return (files, total)
     }
 }
 

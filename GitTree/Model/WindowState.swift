@@ -9,6 +9,13 @@ enum SidebarItem: Hashable {
     case feature(UUID, String)
     /// A pull request by number: selecting it goes to its merge commit (merged) or its branch.
     case pullRequest(UUID, Int)
+    /// An epic from the Epics section, by key; empty for the tickets without an epic.
+    case epic(UUID, String)
+    /// An unreleased fix version from the Releases section, by its Jira id.
+    case release(UUID, String)
+    /// A ticket listed under an epic or a fix version: its key, and the row it's listed under
+    /// (`epic:<key>` or `release:<id>`), so the same ticket in two places is two rows.
+    case ticket(UUID, String, under: String)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -101,6 +108,8 @@ enum SidebarItem: Hashable {
             }
             model.loadIfNeeded()
             model.refreshPullRequests()
+            // Back to a repository shown before: its Epics and Releases may be due for a refresh.
+            graph?.loadJiraOverview()
             library.markOpened(id)
         }
         if sidebarSelection != .repository(id) {
@@ -119,11 +128,22 @@ enum SidebarItem: Hashable {
         case .feature(let id, let featureID):
             if id != repositoryID { open(id) }
             graph?.showFeature(id: featureID)
+        case .epic(let id, let key):
+            if id != repositoryID { open(id) }
+            graph?.showEpic(key)
+        case .release(let id, let versionID):
+            if id != repositoryID { open(id) }
+            graph?.showRelease(versionID)
+        case .ticket(let id, let key, _):
+            if id != repositoryID { open(id) }
+            graph?.showTicket(key)
         case .pullRequest(let id, let number):
             if id != repositoryID { open(id) }
             graph?.clearSidebarHighlight()
             guard let graph, let commitGraph = graph.commitGraph, let index = graph.model.pullRequests,
                   let pullRequest = index.byNumber[number] else { break }
+            // Its timeline shows under it in the sidebar.
+            graph.model.loadTimeline(for: pullRequest)
             if pullRequest.state == .merged, let merge = pullRequest.mergeCommit, let commit = commitGraph.indexByID[merge] {
                 graph.select(commit)
             } else if let ref = pullRequest.ref(in: commitGraph) {
