@@ -31,8 +31,13 @@ what's shipped), and `TODO.md` for what's still open or was dropped.
 - Screenshots only work while GitTree is frontmost; with Stage Manager, a window behind the user's
   current app captures as a thumbnail. If the user is working in another app, don't keep stealing
   focus: verify with logs (`mock-jira.py`) or debug output files instead.
-- Install for daily use with `scripts/install.sh` (Release build into ~/Applications, plus the
-  `gittree` command into ~/.local/bin).
+- Install for daily use with `scripts/install.sh` (Release build into ~/Applications, or the folder
+  passed to it, plus the `gittree` command into ~/.local/bin).
+- **"Prepare a release"** is the user's shorthand for: commit and push any pending work first (so
+  the build isn't marked with `+`), then run `scripts/install.sh /Applications`, which builds
+  Release, replaces /Applications/GitTree.app (quitting the running copy) and opens it. Report the
+  version, build number and commit it was built from (Settings › General shows them too). It's
+  only about GitTree; it doesn't mean tagging or publishing anything.
 - Network integrations must stay gentle (the user asked for this explicitly): one request at a
   time per service, caching, minimum intervals, timeouts and backoff, and never trigger a request
   from a redraw. GitHub goes through `gh` in `Integrations/GitHub.swift` (rate-limited in
