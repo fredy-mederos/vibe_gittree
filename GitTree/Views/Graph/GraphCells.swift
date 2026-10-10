@@ -380,7 +380,8 @@ final class DescriptionCellView: NSTableCellView {
     }
 }
 
-/// The Jira status of the first ticket in the commit's subject, as a colored capsule.
+/// The first ticket in the commit's subject: a bug glyph when it's a bug, its Jira status as a
+/// colored capsule, and its fix version.
 final class TicketStatusCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("TicketStatusCell")
     private static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
@@ -412,8 +413,9 @@ final class TicketStatusCellView: NSTableCellView {
         if let issue {
             let versions = issue.fixVersions.isEmpty ? "" : " · fix version \(issue.fixVersions.joined(separator: ", "))"
             let epicLine = epic.map { $0.key == issue.key ? "" : "\nEpic: \($0.key) \($0.summary)" } ?? ""
-            toolTip = "\(issue.key) · \(issue.status)\(versions)\n\(issue.summary)\(epicLine)"
-            setAccessibilityLabel("\(issue.key) \(issue.status)")
+            let type = issue.type.map { " · \($0)" } ?? ""
+            toolTip = "\(issue.key)\(type) · \(issue.status)\(versions)\n\(issue.summary)\(epicLine)"
+            setAccessibilityLabel("\(issue.key) \(issue.type ?? "") \(issue.status)")
         } else {
             toolTip = key
             setAccessibilityLabel(key)
@@ -431,9 +433,11 @@ final class TicketStatusCellView: NSTableCellView {
         let style = NSMutableParagraphStyle()
         style.lineBreakMode = .byTruncatingTail
         let text = NSAttributedString(string: issue.status, attributes: [.font: Self.font, .foregroundColor: textColor, .paragraphStyle: style])
+        if issue.isBug { drawBugSymbol(emphasized: emphasized) }
+        let leading = 2 + Self.symbolWidth + 4
         let height: CGFloat = 16
-        let width = min(ceil(text.size().width) + 14, bounds.width - 4)
-        let rect = NSRect(x: 2, y: floor((bounds.height - height) / 2), width: width, height: height)
+        let width = max(0, min(ceil(text.size().width) + 14, bounds.width - 2 - leading))
+        let rect = NSRect(x: leading, y: floor((bounds.height - height) / 2), width: width, height: height)
         let fill = emphasized ? NSColor.white.withAlphaComponent(0.2) : color.withAlphaComponent(isDark ? 0.26 : 0.15)
         fill.setFill()
         NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
@@ -452,6 +456,20 @@ final class TicketStatusCellView: NSTableCellView {
     }
 
     private static let versionFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+
+    /// Draws the sidebar's bug glyph in the slot before the status, white on a selected row. Other
+    /// types leave the slot empty, so the statuses line up.
+    private func drawBugSymbol(emphasized: Bool) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [emphasized ? .white : .systemRed]))
+        guard let image = NSImage(systemSymbolName: "ladybug.fill", accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return }
+        let size = image.size
+        let rect = NSRect(x: 2 + floor((Self.symbolWidth - size.width) / 2), y: floor((bounds.height - size.height) / 2),
+                          width: size.width, height: size.height)
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+
+    private static let symbolWidth: CGFloat = 14
 }
 
 /// A plain text column (author, date, hash).

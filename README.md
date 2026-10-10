@@ -104,9 +104,10 @@ permission to access that folder.
 - **Jira** (Settings › Jira): profiles, each a Jira Cloud site and the account to use there. Every
   repository picks its profile or none, in Settings › Jira or in its Repository Settings, and new
   repositories start with the default profile. Repositories with a profile get a Ticket column with
-  each commit's ticket status and fix version (its tooltip names the epic), and a Ticket section in
-  the inspector with summary, type, assignee, fix version, the story or task a sub-task belongs
-  to, and the epic (click it to highlight the whole epic).
+  each commit's ticket status and fix version, bugs marked with a ladybug (its tooltip names the
+  type and the epic), and a Ticket section in the inspector with summary, type, assignee, fix
+  version, the story or task a sub-task belongs to, and the epic (click it to highlight the whole
+  epic).
 - **Definition of Done** (Settings › Jira): per Jira project, the statuses that count as done on
   the development side, like "Dev Done" or "Ready for Release", typed or picked from the statuses
   seen in that project's tickets. They count as done like Jira's Done and Released: in the

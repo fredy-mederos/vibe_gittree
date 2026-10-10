@@ -34,6 +34,8 @@ struct JiraIssue: Sendable, Hashable, Codable {
 
     var isEpic: Bool { (level ?? 0) >= 1 }
 
+    var isBug: Bool { type?.localizedCaseInsensitiveContains("bug") ?? false }
+
     /// The ticket as a link, standing for its own epic when it is one.
     var link: JiraLink {
         JiraLink(key: key, summary: summary, status: status, category: category, type: type, level: level ?? 0)
