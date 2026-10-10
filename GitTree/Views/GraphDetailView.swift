@@ -6,6 +6,11 @@ struct GraphDetailView: View {
     @Bindable var state: WindowState
     @FocusState private var searchFocused: Bool
     @Environment(\.openWindow) private var openWindow
+    /// The details' width as last dragged, for every window and repository (SwiftUI doesn't keep it).
+    @AppStorage(AppSettings.inspectorWidthKey) private var inspectorWidth = AppSettings.defaultInspectorWidth
+    @State private var inspectorWidthKeeper = InspectorWidthKeeper()
+
+    private static let inspectorWidths = 260.0...560.0
 
     var body: some View {
         content
@@ -13,8 +18,16 @@ struct GraphDetailView: View {
                 GraphStatusBar(graph: graph, state: state)
             }
             .inspector(isPresented: $state.showInspector) {
+                // SwiftUI opens it at its narrowest whatever the ideal width (a wider one can make it
+                // fix the column's width), then the keeper gives it the width last dragged to.
                 CommitInspector(graph: graph)
-                    .inspectorColumnWidth(min: 260, ideal: 340, max: 560)
+                    .inspectorColumnWidth(min: Self.inspectorWidths.lowerBound, ideal: Self.inspectorWidths.lowerBound,
+                                          max: Self.inspectorWidths.upperBound)
+                    .onAppear(perform: keepInspectorWidth)
+            }
+            // Shown again, it keeps its content (no onAppear) but opens at its narrowest.
+            .onChange(of: state.showInspector) { _, shown in
+                if shown { keepInspectorWidth() }
             }
             .toolbar { toolbar }
             .searchable(text: $graph.searchText, placement: .toolbar, prompt: Text("Commits, authors, hashes, branches"))
@@ -24,6 +37,12 @@ struct GraphDetailView: View {
             .sheet(isPresented: $state.isFixVersionPromptPresented) {
                 FixVersionPrompt { fixVersion in graph.highlightFixVersion(fixVersion) }
             }
+    }
+
+    private func keepInspectorWidth() {
+        inspectorWidthKeeper.attach(to: state.window, width: inspectorWidth, range: Self.inspectorWidths) { width in
+            inspectorWidth = width
+        }
     }
 
     @ViewBuilder private var content: some View {

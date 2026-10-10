@@ -1,14 +1,14 @@
 import SwiftUI
 
 /// A ticket's type as an SF Symbol in Jira's colors: a purple bolt for epics, a green bookmark for
-/// stories, a blue check for tasks, a red bug for bugs.
+/// stories, a blue check for tasks, a red bug for bugs. White on a selected row.
 struct IssueTypeIcon: View {
     let type: String?
     let level: Int?
 
     var body: some View {
         Image(systemName: style.symbol)
-            .foregroundStyle(style.color)
+            .foregroundStyle(style.color, selected: .primary)
             .help(type ?? "Ticket")
     }
 
@@ -23,28 +23,33 @@ struct IssueTypeIcon: View {
     }
 }
 
-/// A ticket's status in its category's color, as text.
+/// A ticket's status in its category's color, as text (white on a selected row).
 struct IssueStatusText: View {
     let status: String
     let category: JiraIssue.Category
 
     var body: some View {
         Text(status)
-            .foregroundStyle(Color(nsColor: category.color))
+            .foregroundStyle(Color(nsColor: category.color.readable), selected: .primary)
     }
 }
 
-/// How far a fix version is: done in green, in progress in blue, the rest gray.
+/// How far a fix version is: done in green, in progress in blue, the rest gray. On a selected
+/// row, shades of white instead.
 struct ReleaseProgressBar: View {
     let progress: JiraVersion.Progress
+    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
+        let selected = prominence == .increased
         GeometryReader { proxy in
             let total = max(1, CGFloat(progress.total))
             HStack(spacing: 0) {
-                Rectangle().fill(Color.green).frame(width: proxy.size.width * CGFloat(progress.done) / total)
-                Rectangle().fill(Color.blue).frame(width: proxy.size.width * CGFloat(progress.inProgress) / total)
-                Rectangle().fill(Color.secondary.opacity(0.25))
+                Rectangle().fill(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.green))
+                    .frame(width: proxy.size.width * CGFloat(progress.done) / total)
+                Rectangle().fill(selected ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.blue))
+                    .frame(width: proxy.size.width * CGFloat(progress.inProgress) / total)
+                Rectangle().fill(selected ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Color.secondary.opacity(0.25)))
             }
             .clipShape(Capsule())
         }

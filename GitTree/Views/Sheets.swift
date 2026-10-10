@@ -257,7 +257,11 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     }
 
     static var current: AppAppearance {
-        AppAppearance(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system
+        #if DEBUG
+        // Test runs pick one with -GTAppearance dark|light, whatever the setting says.
+        if let forced = UserDefaults.standard.string(forKey: "GTAppearance").flatMap(AppAppearance.init(rawValue:)) { return forced }
+        #endif
+        return AppAppearance(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system
     }
 
     @MainActor func apply() {
@@ -273,6 +277,7 @@ private struct GeneralSettingsView: View {
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
     @AppStorage(AppSettings.gitPathKey) private var gitPath = ""
     @AppStorage(AppSettings.fetchOnOpenKey) private var fetchOnOpen = true
+    @AppStorage(AppSettings.groupsFeaturesKey) private var groupsFeatures = false
     @State private var version = ""
 
     var body: some View {
@@ -285,6 +290,11 @@ private struct GeneralSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: appearance) { _, new in new.apply() }
+            }
+            Section {
+                Toggle("Group recent commits into features", isOn: $groupsFeatures)
+            } footer: {
+                Text("A Features section in the sidebar sorts recent commits by the terms in their messages, with Apple's on-device model for the rest. Epics and Releases group the same work by Jira.")
             }
             Section("Git") {
                 TextField("Git executable", text: $gitPath, prompt: Text(Git.detectedExecutable.path))

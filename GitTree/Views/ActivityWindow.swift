@@ -69,8 +69,11 @@ private struct ActivityView: View {
             if authors.isEmpty || activity?.graph !== graph {
                 authors = ActivityData.authors(in: graph)
                 years = ActivityData.years(in: graph)
+                // Tickets' terms come from grouping features, when that's on in Settings.
                 let repositoryID = model.id
-                catalog = await Task.detached { FeatureCatalog.load(repositoryID: repositoryID) }.value
+                catalog = UserDefaults.standard.bool(forKey: AppSettings.groupsFeaturesKey)
+                    ? await Task.detached { FeatureCatalog.load(repositoryID: repositoryID) }.value
+                    : FeatureCatalog()
             }
             activity = built
         }

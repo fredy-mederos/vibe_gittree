@@ -52,6 +52,7 @@ permission to access that folder.
 - **Commit details** (the inspector on the right): full message, author and committer, links to the
   commit and its pull request on GitHub, GitLab or Bitbucket, ticket links, the first release tag
   that contains the commit, parents and children, the branches that contain it, and changed files.
+  It keeps the width you drag it to, in every window and repository and from one launch to the next.
 - **Branches, remotes and tags** in the sidebar, grouped by folder (`feature/`, `release/`…) and by
   version for tags, newest first with their age. Click one to jump to it; double-click (or Return)
   to show only its history.
@@ -87,13 +88,18 @@ permission to access that folder.
   sub-tasks. Select an epic to highlight its commits: right away those of the tickets listed, then,
   once Jira answers, every commit in the history that mentions any ticket in the epic (one
   `parentEpic` query, which takes in its stories, tasks and sub-tasks). The epic opens to list its
-  tickets; select one to highlight its commits and its sub-tasks'.
+  tickets; select one to highlight its commits and its sub-tasks'. The ↻ button in the section's
+  header asks Jira again about the recent tickets, after you've changed them there.
 - **Releases** (with Jira connected): the unreleased fix versions of the repository's Jira projects
   (taken from its ticket keys), soonest release date first, with the date (orange when overdue) and
   a bar of how many of their tickets are done, in progress or to do. Versions this repository's
   tickets are in come first; the others (another platform's, say) are under Other Fix Versions.
   Select one to highlight the commits of its tickets and their sub-tasks; it opens to list its
-  tickets with their status and commits here, dimming those no commit mentions.
+  tickets with their status and commits here, dimming those no commit mentions. After changing
+  tickets or releases in Jira, the ↻ button in the section's header asks Jira again for the fix
+  versions (dates and progress) and the tickets of the open ones; an open fix version has a ↻ of
+  its own (and Refresh in its context menu). Tickets that left a fix version are read again too,
+  so the fix version next to their commits is current.
 - **Highlight** (toolbar, with Jira connected): tint the commits of tickets that aren't Done, are in
   progress or to do (among the latest 500 commits), or of every ticket in a fix version (asked of
   Jira directly, so it covers tickets beyond what's on screen). The status bar steps through them.
@@ -103,7 +109,8 @@ permission to access that folder.
   its tickets (under their epics, with their status, marked when the other side has commits for
   them too), the files changed since the branches diverged, and its authors. Click a commit to
   select it in the graph; Highlight in Graph tints one side's commits there.
-- **Features**: the sidebar's Features section groups the latest commits (100 to 1,000) under the
+- **Features** (off unless Settings › General › Group recent commits into features turns it on):
+  the sidebar's Features section groups the latest commits (100 to 1,000) under the
   terms your team writes in commit messages: bracket tags like `[Search]` or `[Tech Debt]` and scope
   prefixes like `github-pr:`. A ticket takes its commits' most common term, so untagged commits of a
   tagged ticket follow it. Terms and assignments are remembered per repository; only work without a
@@ -113,7 +120,7 @@ permission to access that folder.
   groups the same work by the epics in Jira instead, which needs no guessing.
 - **Activity** (toolbar calendar button or ⇧⌘A): a contribution grid with one square per day, shaded
   by commits, for the last 12 months or any year, filtered by branches and author. Hover a day to
-  see its tickets (with their terms) and commits; click to keep it; click a commit to select it in
+  see its tickets (with their terms, when Features is on) and commits; click to keep it; click a commit to select it in
   the graph.
 - **Deep links**: `gittree://open?repo=<path|remote URL|name>&commit=<sha>&path=<file>&line=<n>`
   opens the repository (adding it if needed), selects the commit and opens the file's diff scrolled
@@ -166,9 +173,12 @@ requests:
   timeouts back off, and Jira's requests to slow down are honored (up to ten minutes). Editing a
   profile drops anything still queued or in flight with the old credentials. Sites without bulk
   fetch get JQL search, with smaller batches after a query fails on an unknown key, paced like
-  everything else; sites without `parentEpic` get an epic's tickets level by level. Repository ›
-  Refresh Ticket Statuses asks again for what's on screen, and the Epics section's Ask Jira Again
-  for the recent tickets and fix versions.
+  everything else; sites without `parentEpic` get an epic's tickets level by level. Asking again
+  is up to you, never automatic: Repository › Refresh Ticket Statuses asks again for what's on
+  screen; the Epics section's ↻ for the recent tickets and fix versions; the Releases section's ↻
+  for the fix versions (one request per project) and the tickets of the open ones (one request
+  each, plus one for any tickets that left them), and the other fix versions' tickets when they're
+  next opened; an open fix version's own ↻ for its project's fix versions and its tickets.
 
 ### Shortcuts
 
@@ -229,12 +239,23 @@ scripts/snapshot.sh /tmp/gittree.png 6 -GTOpenRepository ~/code/some-repo -GTSea
 ```
 
 Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>`, `-GTSearch <text>`,
-`-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light`, `-GTShowSwitcher YES`,
-`-GTGroupFeatures YES`, `-GTSelect epic:<key>|release:<name>|pr:<number>|ref:<name>` (selects that
-sidebar row once it's there; `first` for the first epic or release, `open` for the newest open pull
-request), `-GTCompare <base>...<head>` (opens the comparison), and `-GTJiraSite <url>` (with
-optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain. Test runs
-keep the sidebar's folded sections in a preferences suite of their own, emptied at launch.
+`-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light` (whatever the Appearance
+setting says), `-GTShowSwitcher YES`, `-GTGroupFeatures YES` (shows the Features section and groups),
+`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>` (selects that sidebar row
+once it's there; `first` for the first epic or release, `open` for the newest open pull request;
+several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
+(refreshes the Releases or Epics section, or the selected fix version, after `-GTRefreshAfter`
+seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), and `-GTJiraSite <url>`
+(with optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain. Test
+runs keep the sidebar's folded sections, the details' width and the Features setting in a
+preferences suite of their own, emptied at launch.
+
+`scripts/snapshot-rows.sh` captures the window once per row `-GTSelect` names, for checking how
+selected rows look (in light and dark mode, say):
+
+```bash
+scripts/snapshot-rows.sh /tmp/rows -GTOpenRepository ~/code/some-repo -GTAppearance dark -GTSelect "ref:main,pr:open"
+```
 
 Some checks don't need a screenshot (or GitTree in front): `-GTDescribeJira <file>` writes, after
 `-GTDescribeAfter` seconds (20 by default), what the Epics and Releases sections list, the

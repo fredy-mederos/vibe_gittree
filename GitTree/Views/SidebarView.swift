@@ -15,6 +15,8 @@ struct SidebarView: View {
     @AppStorage("sidebar.featuresExpanded") private var featuresExpanded = true
     @AppStorage("sidebar.epicsExpanded") private var epicsExpanded = true
     @AppStorage("sidebar.releasesExpanded") private var releasesExpanded = true
+    /// Settings › General: the Features section, off unless turned on there.
+    @AppStorage(AppSettings.groupsFeaturesKey) private var groupsFeatures = false
     @State private var expanded: [String: Bool] = [:]
 
     /// Repositories listed before "Show All" takes over.
@@ -161,7 +163,9 @@ struct SidebarView: View {
         if let graph = state.graph, !isFiltering {
             epicsSection(graph, repositoryID: repositoryID)
             releasesSection(graph, repositoryID: repositoryID)
-            featuresSection(graph, repositoryID: repositoryID)
+            if groupsFeatures {
+                featuresSection(graph, repositoryID: repositoryID)
+            }
         }
         if let pullRequests = state.graph?.model.pullRequests, !isFiltering {
             let groups = pullRequestGroups(pullRequests)
@@ -322,11 +326,11 @@ struct SidebarView: View {
                     if let position {
                         Text(verbatim: "\(position + 1).")
                             .monospacedDigit()
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.tertiary, selected: .secondary)
                     }
                     Text(verbatim: "#\(pullRequest.number)")
                         .monospacedDigit()
-                        .foregroundStyle(Self.stateColor(pullRequest))
+                        .foregroundStyle(Self.stateColor(pullRequest), selected: .primary)
                     Text(pullRequest.title)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -377,9 +381,9 @@ struct SidebarView: View {
     private static func stateColor(_ pullRequest: PullRequest) -> Color {
         if pullRequest.state == .open && pullRequest.isDraft { return .secondary }
         switch pullRequest.state {
-        case .open: return .green
-        case .merged: return .purple
-        case .closed: return .red
+        case .open: return Color(nsColor: .systemGreen.readable)
+        case .merged: return Color(nsColor: .systemPurple.readable)
+        case .closed: return Color(nsColor: .systemRed.readable)
         }
     }
 
@@ -414,11 +418,13 @@ struct SidebarView: View {
                     if epicsExpanded, let fold = fold(report.groups.map { ("epic:\($0.id)", false) }) {
                         FoldButton(fold: fold)
                     }
+                    RefreshButton(refresh: RefreshControl(isRefreshing: graph.epicProgress != nil,
+                                                          help: "Ask Jira again about the recent tickets and their epics",
+                                                          action: graph.refreshJiraOverview))
                     Menu {
                         Picker("Commits to Include", selection: Bindable(graph).epicCommitLimit) {
                             ForEach([200, 500, 1000, 2000], id: \.self) { Text("Latest \($0.formatted())").tag($0) }
                         }
-                        Button("Ask Jira Again") { graph.refreshJiraOverview() }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -471,9 +477,21 @@ struct SidebarView: View {
                 }
             } header: {
                 SectionHeader(title: "Releases", count: report.used.isEmpty ? report.other.count : report.used.count,
-                              fold: releasesExpanded ? fold(report.used.map { ("release:\($0.id)", false) }) : nil)
+                              fold: releasesExpanded ? fold(report.used.map { ("release:\($0.id)", false) }) : nil,
+                              refresh: RefreshControl(isRefreshing: graph.isRefreshingReleases,
+                                                      help: "Ask Jira again about the fix versions and the tickets of the open ones") {
+                                  graph.refreshReleases(open: shownReleases(report))
+                              })
             }
         }
+    }
+
+    /// The fix versions whose tickets the sidebar lists: open, in an open section and group.
+    private func shownReleases(_ report: ReleaseReport) -> Set<String> {
+        guard releasesExpanded else { return [] }
+        let showsOther = expanded[scopedKey("releases:other")] ?? report.used.isEmpty
+        let versions = report.used + (showsOther ? report.other : [])
+        return Set(versions.map(\.id).filter { expanded[scopedKey("release:\($0)")] == true })
     }
 
     private func releaseGroup(_ version: JiraVersion, graph: GraphViewModel, repositoryID: UUID) -> some View {
@@ -486,6 +504,11 @@ struct SidebarView: View {
                 if open { graph.loadRelease(version.id) }
             }
         )
+        // An open fix version can be asked about again on its own.
+        let refresh = isExpanded.wrappedValue
+            ? RefreshControl(isRefreshing: graph.loadingReleases.contains(version.id),
+                             help: "Ask Jira again about this fix version and its tickets") { graph.refreshRelease(version.id) }
+            : nil
         return DisclosureGroup(isExpanded: isExpanded) {
             if let tickets = graph.releaseTickets[version.id] {
                 ForEach(tickets) { ticket in
@@ -505,7 +528,8 @@ struct SidebarView: View {
                 ProgressNote(text: "Loading tickets…")
             }
         } label: {
-            ReleaseRow(version: version)
+            ReleaseRow(version: version, problem: graph.releaseTickets[version.id] == nil ? nil : graph.releaseProblems[version.id],
+                       refresh: refresh)
                 .tag(SidebarItem.release(repositoryID, version.id))
         }
     }
@@ -606,6 +630,8 @@ struct SidebarView: View {
             if let graph = state.graph, let jira = graph.jira, let version = graph.releases?.version(id: id) {
                 Button("Open in Jira") { NSWorkspace.shared.open(jira.versionURL(version)) }
                 Button("Copy Name") { copy(version.name) }
+                Button("Refresh") { graph.refreshRelease(id) }
+                    .disabled(graph.loadingReleases.contains(id))
                 Divider()
             }
             Button("Clear Highlight") { state.graph?.clearHighlight() }
@@ -781,7 +807,7 @@ private struct RepositoryRow: View {
                     } else if repository.pinnedAt != nil {
                         Image(systemName: "pin.fill")
                             .imageScale(.small)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.tertiary, selected: .secondary)
                             .help("Pinned")
                     }
                 }
@@ -817,16 +843,19 @@ private struct RefRow: View {
                 if let pullRequest {
                     Text(verbatim: "#\(pullRequest.number)")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(pullRequest.isDraft ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.green))
+                        .foregroundStyle(pullRequest.isDraft ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color(nsColor: .systemGreen.readable)),
+                                         selected: .primary)
                 }
                 Text(RelativeAge.short(date))
                     .font(.caption)
                     .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.tertiary, selected: .secondary)
             }
         } icon: {
+            // The checked-out branch's mark is in the accent color, like the selection: white there.
             Image(systemName: item.ref.isHead ? "checkmark.circle.fill" : systemImage)
-                .foregroundStyle(item.ref.isHead ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .foregroundStyle(item.ref.isHead ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary),
+                                 selected: item.ref.isHead ? .primary : .secondary)
         }
         .help(help)
     }
@@ -853,7 +882,7 @@ private struct FeatureRow: View {
                     Text(group.commits.count.formatted())
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.tertiary, selected: .secondary)
                 }
                 Text(verbatim: [group.ticket, RelativeAge.short(group.latest)].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption.monospaced())
@@ -882,7 +911,7 @@ private struct EpicRow: View {
                     Text(group.commits.formatted())
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.tertiary, selected: .secondary)
                 }
                 HStack(spacing: 4) {
                     if let epic = group.epic {
@@ -929,6 +958,7 @@ private struct SidebarTicketRow: View {
     let issue: JiraIssue?
     let commits: Int
     let latest: Date?
+    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         Label {
@@ -942,7 +972,7 @@ private struct SidebarTicketRow: View {
                         Text(commits.formatted())
                             .font(.caption)
                             .monospacedDigit()
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.tertiary, selected: .secondary)
                     }
                 }
                 HStack(spacing: 4) {
@@ -964,7 +994,8 @@ private struct SidebarTicketRow: View {
         } icon: {
             IssueTypeIcon(type: issue?.type, level: issue?.level)
         }
-        .opacity(commits == 0 ? 0.6 : 1)
+        // Selected, it's legible whole; its second line still says it has no commits here.
+        .opacity(commits == 0 && prominence != .increased ? 0.6 : 1)
         .help(Text(verbatim: help))
     }
 
@@ -979,9 +1010,13 @@ private struct SidebarTicketRow: View {
     }
 }
 
-/// An unreleased fix version: its name and release date, and how far its tickets are.
+/// An unreleased fix version: its name and release date, and how far its tickets are. Open, it
+/// has a Refresh of its own.
 private struct ReleaseRow: View {
     let version: JiraVersion
+    /// Why asking Jira again failed, when its tickets are listed anyway.
+    var problem: String?
+    var refresh: RefreshControl?
 
     var body: some View {
         Label {
@@ -995,17 +1030,32 @@ private struct ReleaseRow: View {
                         Text(date)
                             .font(.caption)
                             .monospacedDigit()
-                            .foregroundStyle(version.overdue ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+                            .foregroundStyle(version.overdue ? AnyShapeStyle(Color(nsColor: .systemOrange.readable)) : AnyShapeStyle(.tertiary),
+                                             selected: version.overdue ? .primary : .secondary)
                     }
                 }
-                if let progress = version.progress, progress.total > 0 {
+                let progress = version.progress.flatMap { $0.total > 0 ? $0 : nil }
+                if progress != nil || refresh != nil {
                     HStack(spacing: 6) {
-                        ReleaseProgressBar(progress: progress)
-                            .frame(maxWidth: 80)
-                        Text(verbatim: "\(progress.done)/\(progress.total) done")
-                            .font(.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                        if let progress {
+                            ReleaseProgressBar(progress: progress)
+                                .frame(maxWidth: 80)
+                            Text(verbatim: "\(progress.done)/\(progress.total) done")
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 4)
+                        if let problem {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .imageScale(.small)
+                                .foregroundStyle(.orange, selected: .primary)
+                                .help(problem)
+                        }
+                        if let refresh {
+                            RefreshButton(refresh: refresh)
+                                .font(.caption)
+                        }
                     }
                 }
             }
@@ -1116,6 +1166,38 @@ private struct FoldControl {
     let toggle: () -> Void
 }
 
+/// A section's or a fix version's Refresh: whether it's under way, and how to start it.
+private struct RefreshControl {
+    let isRefreshing: Bool
+    let help: String
+    let action: () -> Void
+}
+
+/// Asks Jira again; a spinner takes its place while it does.
+private struct RefreshButton: View {
+    let refresh: RefreshControl
+
+    var body: some View {
+        ZStack {
+            if refresh.isRefreshing {
+                ProgressView()
+                    .controlSize(.mini)
+                    .help("Asking Jira…")
+            } else {
+                Button(action: refresh.action) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help(refresh.help)
+                .accessibilityLabel("Refresh")
+            }
+        }
+        // The same width either way, so nothing next to it moves.
+        .frame(width: 16)
+    }
+}
+
 private struct FoldButton: View {
     let fold: FoldControl
 
@@ -1135,6 +1217,7 @@ private struct SectionHeader: View {
     let count: Int
     /// Collapse All / Expand All for the section's groups, when it has any.
     var fold: FoldControl?
+    var refresh: RefreshControl?
 
     var body: some View {
         HStack {
@@ -1142,6 +1225,9 @@ private struct SectionHeader: View {
             Spacer()
             if let fold {
                 FoldButton(fold: fold)
+            }
+            if let refresh {
+                RefreshButton(refresh: refresh)
             }
             Text(count.formatted())
                 .monospacedDigit()
@@ -1168,6 +1254,40 @@ private struct CountedLabel: View {
         } icon: {
             Image(systemName: systemImage)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+extension View {
+    /// `style`, except on a selected row's accent-colored background, where colors blend in and
+    /// faint text fades: there it's `selected`, the row's own white or a quieter shade of it.
+    func foregroundStyle<S: ShapeStyle>(_ style: S, selected: HierarchicalShapeStyle) -> some View {
+        modifier(SelectionAwareForeground(style: AnyShapeStyle(style), selected: selected))
+    }
+}
+
+private struct SelectionAwareForeground: ViewModifier {
+    let style: AnyShapeStyle
+    let selected: HierarchicalShapeStyle
+    @Environment(\.backgroundProminence) private var prominence
+
+    func body(content: Content) -> some View {
+        content.foregroundStyle(prominence == .increased ? AnyShapeStyle(selected) : style)
+    }
+}
+
+extension NSColor {
+    /// This color for text: darker in light mode and lighter in dark mode, enough for 4.5:1 on the
+    /// sidebar. System colors are made for symbols and fills; as text, green and orange fade on a
+    /// light background (under 2:1).
+    var readable: NSColor {
+        NSColor(name: nil) { appearance in
+            var color = self
+            appearance.performAsCurrentDrawingAppearance {
+                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                color = self.blended(withFraction: isDark ? 0.3 : 0.45, of: isDark ? .white : .black) ?? self
+            }
+            return color
         }
     }
 }

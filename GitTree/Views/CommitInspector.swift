@@ -574,24 +574,27 @@ private struct PullRequestRow: View {
     }
 }
 
+/// Open, Draft, Merged or Closed, like the graph's labels: the state's color as text that reads
+/// on a tint of it (white on a bright green was hard to read).
 struct PullRequestStateLabel: View {
     let pullRequest: PullRequest
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Text(pullRequest.stateTitle)
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
-            .foregroundStyle(.white)
-            .background(color, in: Capsule())
+            .foregroundStyle(Color(nsColor: color.readable))
+            .background(Color(nsColor: color).opacity(colorScheme == .dark ? 0.26 : 0.15), in: Capsule())
     }
 
-    private var color: Color {
-        if pullRequest.state == .open && pullRequest.isDraft { return .gray }
+    private var color: NSColor {
+        if pullRequest.state == .open && pullRequest.isDraft { return .systemGray }
         switch pullRequest.state {
-        case .open: return .green
-        case .merged: return .purple
-        case .closed: return .red
+        case .open: return .systemGreen
+        case .merged: return .systemPurple
+        case .closed: return .systemRed
         }
     }
 }
@@ -602,7 +605,7 @@ struct ReadinessMark: View {
 
     var body: some View {
         Image(systemName: readiness.symbol)
-            .foregroundStyle(Color(nsColor: readiness.color))
+            .foregroundStyle(Color(nsColor: readiness.color), selected: .primary)
             .imageScale(.small)
             .help(readiness.explanation)
     }

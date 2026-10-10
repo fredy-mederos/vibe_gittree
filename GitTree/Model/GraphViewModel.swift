@@ -58,7 +58,10 @@ import Observation
     private(set) var releases: ReleaseReport?
     /// The tickets of fix versions opened in the sidebar, by version id.
     private(set) var releaseTickets: [String: [TicketSummary]] = [:]
+    /// Fix versions whose tickets are being asked for, first or again.
     private(set) var loadingReleases: Set<String> = []
+    /// The Releases section's Refresh is under way.
+    private(set) var isRefreshingReleases = false
     /// Why a fix version's tickets couldn't be listed, by version id.
     private(set) var releaseProblems: [String: String] = [:]
     @ObservationIgnored private var ticketIndex: (graph: CommitGraph, index: TicketIndex)?
@@ -85,6 +88,8 @@ import Observation
     /// For a highlight that takes in the tickets below the ones picked (an epic's stories and
     /// tasks, their sub-tasks): the tickets picked, so it grows as Jira tells more.
     @ObservationIgnored private var highlightBase: Set<String>?
+    /// The fix version whose tickets are highlighted, by id, so refreshing it updates the highlight.
+    @ObservationIgnored private var highlightedRelease: String?
 
     @ObservationIgnored private var selectedID: ObjectID?
     @ObservationIgnored private var appliedGeneration = -1
@@ -514,6 +519,68 @@ import Observation
         }
     }
 
+    /// The Releases section's Refresh: asks Jira again for the projects' fix versions (dates and
+    /// progress), then for the tickets of the fix versions open in the sidebar (`open`) and the
+    /// highlighted one. Other fix versions' tickets are asked for again when they're next opened.
+    func refreshReleases(open: Set<String>) {
+        guard let jira, !isRefreshingReleases else { return }
+        let refreshing = open.union(highlightedRelease.map { [$0] } ?? [])
+        JiraStore.shared.markStale(fixVersionIDs: openedReleases.subtracting(refreshing), connection: jira)
+        isRefreshingReleases = true
+        let projects = jiraProjects(jira)
+        Task { [weak self] in
+            await JiraStore.shared.refreshVersions(projects: projects, connection: jira, force: true).value
+            for id in refreshing {
+                // One being loaded or refreshed on its own already gets Jira's latest answer.
+                guard let self, !self.loadingReleases.contains(id) else { continue }
+                await self.reloadRelease(id, connection: jira)
+            }
+            self?.isRefreshingReleases = false
+        }
+    }
+
+    /// One fix version's Refresh: its project's fix versions (its date and progress) and its tickets.
+    func refreshRelease(_ id: String) {
+        guard let jira, let version = releases?.version(id: id), !loadingReleases.contains(id) else { return }
+        loadingReleases.insert(id)
+        Task { [weak self] in
+            await JiraStore.shared.refreshVersions(projects: [version.project], connection: jira, force: true).value
+            await self?.reloadRelease(id, connection: jira)
+        }
+    }
+
+    /// Asks Jira again for a fix version's tickets, showing the last answer meanwhile, then about
+    /// the tickets that left it, so the fix versions shown next to their commits are current too.
+    private func reloadRelease(_ id: String, connection jira: JiraConnection) async {
+        let store = JiraStore.shared
+        let before = Set(store.cachedTickets(inFixVersionID: id, connection: jira) ?? [])
+        loadingReleases.insert(id)
+        releaseProblems[id] = nil
+        openedReleases.insert(id)
+        do {
+            let keys = try await store.tickets(inFixVersion: id, isID: true, force: true, connection: jira).map(\.key)
+            let left = before.subtracting(keys)
+            if !left.isEmpty { await store.refresh(Array(left), connection: jira, timeout: 30) }
+            releaseTicketsChanged(id, keys: keys)
+        } catch {
+            releaseProblems[id] = error.localizedDescription
+        }
+        loadingReleases.remove(id)
+        rebuildJiraReports()
+    }
+
+    /// A fix version's tickets came again: when they're the ones highlighted, the highlight follows
+    /// them without moving the selection.
+    private func releaseTicketsChanged(_ id: String, keys: [String]) {
+        guard highlightedRelease == id, case .tickets(let title, let old, let image, let follows) = highlight else { return }
+        highlightBase = Set(keys)
+        let refreshed = withChildren(Set(keys))
+        guard refreshed != old else { return }
+        highlight = .tickets(title: title, keys: refreshed, systemImage: image, followsSidebar: follows)
+        // Nothing matched before, so nothing was selected: go to the first match now.
+        applyHighlight(jump: matchRows.isEmpty)
+    }
+
     /// Highlights the commits of an epic: right away those of the tickets the Epics section lists
     /// under it, then those of every ticket Jira has in the epic (sub-tasks included), wherever
     /// they are in the history. An empty id stands for the tickets without an epic.
@@ -611,6 +678,7 @@ import Observation
             // What Jira said last time shows right away; a fresh list follows when it's due.
             setHighlight(.tickets(title: title, keys: withChildren(Set(keys)), systemImage: "shippingbox", followsSidebar: fromSidebar),
                          base: Set(keys))
+            highlightedRelease = id
             refineHighlight(base: [], what: "the fix version's tickets") {
                 try await JiraStore.shared.tickets(inFixVersion: id, isID: true, connection: jira).map(\.key)
             }
@@ -625,6 +693,7 @@ import Observation
                 let keys = Set(issues.map(\.key))
                 self.setHighlight(.tickets(title: title, keys: self.withChildren(keys), systemImage: "shippingbox", followsSidebar: fromSidebar),
                                   base: keys)
+                self.highlightedRelease = id
             } catch {
                 guard let self, !Task.isCancelled else { return }
                 self.cancelHighlightLoad()
@@ -644,6 +713,7 @@ import Observation
         guard highlight != nil else { return }
         highlight = nil
         highlightBase = nil
+        highlightedRelease = nil
         highlightGeneration += 1
         scheduleSearch(jump: false)
     }
@@ -681,6 +751,7 @@ import Observation
         cancelHighlightLoad()
         highlight = newHighlight
         highlightBase = base
+        highlightedRelease = nil
         highlightGeneration += 1
         if !searchText.isEmpty { searchText = "" }
         applyHighlight(jump: jump)

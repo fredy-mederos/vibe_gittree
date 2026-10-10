@@ -5,6 +5,13 @@ enum AppSettings {
     static let fetchOnOpenKey = "fetchRemotesOnOpen"
     static let showTagsKey = "showTags"
     static let epicCommitLimitKey = "epicCommitLimit"
+    /// The sidebar's Features section (commits grouped by term, with Apple's on-device model), off
+    /// by default: the Epics and Releases sections group the same work by Jira.
+    static let groupsFeaturesKey = "groupsFeatures"
+    /// The details' (inspector's) width, kept for every window and repository.
+    static let inspectorWidthKey = "inspectorWidth"
+    /// The sidebar's starting width, which the details start with too.
+    static let defaultInspectorWidth = 280.0
 
     /// A git binary the user picked in Settings, if any.
     static var gitExecutableOverride: String? {

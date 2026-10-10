@@ -151,25 +151,31 @@ struct RepositoryWindow: View {
 /// `-GTOpenRepository <path>` adds and opens a local repository, `-GTCloneURL <url>` clones one,
 /// `-GTAddFolder <path>` adds every repository in a folder, `-GTShowSwitcher YES` opens the ⌘K switcher,
 /// `-GTSearch <text>` searches once a repository is open, `-GTScope local|head|<full ref name>`
-/// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` groups
-/// features, `-GTHighlightFixVersion <version>` highlights one, `-GTShowActivity YES` opens the
-/// calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES` (with `-settingsTab jira`) open
-/// the settings, `-GTSelect epic:<key>|release:<name>|pr:<number>|ticket:<key>` selects that row in
-/// the sidebar once it's there (`first` for the first one, `open` for the newest open pull
-/// request), and `-GTCompare <base>...<head>` opens the branch comparison. Elsewhere:
+/// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` shows
+/// the Features section and groups features, `-GTHighlightFixVersion <version>` highlights one,
+/// `-GTShowActivity YES` opens the calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES`
+/// (with `-settingsTab jira`) open the settings, `-GTSelect epic:<key>|release:<name>|pr:<number>|ticket:<key>|ref:<name>`
+/// selects that row in the sidebar once it's there (`first` for the first one, `open` for the newest
+/// open pull request; several, comma-separated, one after another, with `-GTSelectMarkers <folder>`
+/// for a script to capture each), `-GTRefresh releases|release|epics` refreshes those sections or the
+/// selected fix version after `-GTRefreshAfter` seconds (10 by default), and
+/// `-GTCompare <base>...<head>` opens the branch comparison. Elsewhere:
 /// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds)
 /// and `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`).
 @MainActor enum DebugLaunch {
     private static var didRun = false
     private static var didOpenTab = false
 
-    /// Where the sidebar keeps what's folded: the user's preferences, or for test runs a suite of
-    /// their own that starts empty every launch.
+    /// Where the sidebar keeps what's folded and the details their width: the user's preferences,
+    /// or for test runs a suite of their own that starts empty every launch (with the Features
+    /// section when -GTGroupFeatures asks).
     static let appStorage: UserDefaults = {
         guard UserDefaults.standard.string(forKey: "GTDataDirectory") != nil else { return .standard }
         let suite = "GitTree.test"
         UserDefaults.standard.removePersistentDomain(forName: suite)
-        return UserDefaults(suiteName: suite) ?? .standard
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defaults.set(UserDefaults.standard.bool(forKey: "GTGroupFeatures"), forKey: AppSettings.groupsFeaturesKey)
+        return defaults
     }()
 
     /// `-GTDescribeJira <file>` (after `-GTDescribeAfter` seconds, 20 by default): what the Epics and
@@ -230,6 +236,10 @@ struct RepositoryWindow: View {
             let version = graph.releases?.all.first { value == "first" || $0.name == value }
             return version.map { .release(id, $0.id) }
         case "ticket":
+            // The row of an opened fix version that lists it, when there's one.
+            if let release = graph.releaseTickets.first(where: { $0.value.contains { $0.key == value } })?.key {
+                return .ticket(id, value, under: "release:\(release)")
+            }
             return .ticket(id, value, under: "")
         case "ref":
             return graph.commitGraph?.refs.first { $0.name == value }.map { .ref(id, $0.fullName) }
@@ -288,11 +298,7 @@ struct RepositoryWindow: View {
         guard !didRun else { return }
         didRun = true
         let defaults = UserDefaults.standard
-        switch defaults.string(forKey: "GTAppearance") {
-        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
-        case "light": NSApp.appearance = NSAppearance(named: .aqua)
-        default: break
-        }
+        // -GTAppearance is applied at launch, with the appearance setting it stands in for.
         if let path = defaults.string(forKey: "GTOpenRepository") {
             state.addLocal(urls: [URL(fileURLWithPath: path)])
         }
@@ -337,6 +343,20 @@ struct RepositoryWindow: View {
                 state.graph?.analyzeFeatures()
             }
         }
+        if let what = defaults.string(forKey: "GTRefresh") {
+            Task {
+                let after = defaults.integer(forKey: "GTRefreshAfter")
+                try? await Task.sleep(for: .seconds(after > 0 ? after : 10))
+                guard let graph = state.graph else { return }
+                let release: String? = if case .release(_, let id)? = state.sidebarSelection { id } else { nil }
+                switch what {
+                case "releases": graph.refreshReleases(open: Set([release].compactMap { $0 }))
+                case "release": if let release { graph.refreshRelease(release) }
+                case "epics": graph.refreshJiraOverview()
+                default: break
+                }
+            }
+        }
         if let output = defaults.string(forKey: "GTDescribeJira") {
             Task {
                 let after = defaults.integer(forKey: "GTDescribeAfter")
@@ -346,13 +366,29 @@ struct RepositoryWindow: View {
         }
         if let text = defaults.string(forKey: "GTSelect") {
             Task {
-                // Up to half a minute for Jira or GitHub to fill the sidebar.
-                for _ in 0..<60 {
-                    try? await Task.sleep(for: .milliseconds(500))
-                    if let item = selection(text, in: state) {
-                        state.sidebarSelection = item
-                        break
+                let items = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                let markers = defaults.string(forKey: "GTSelectMarkers").map { URL(fileURLWithPath: $0) }
+                for (number, text) in items.enumerated() {
+                    // Up to half a minute for Jira or GitHub to fill the sidebar.
+                    for _ in 0..<60 {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        if let item = selection(text, in: state) {
+                            state.sidebarSelection = item
+                            break
+                        }
                     }
+                    guard number < items.count - 1 else { break }
+                    try? await Task.sleep(for: .seconds(2))
+                    guard let markers else { continue }
+                    // `<n>.selected` once the row is drawn; the next row waits for `<n>.captured`.
+                    try? Data().write(to: markers.appending(path: "\(number + 1).selected"))
+                    for _ in 0..<40 where !FileManager.default.fileExists(atPath: markers.appending(path: "\(number + 1).captured").path) {
+                        try? await Task.sleep(for: .milliseconds(250))
+                    }
+                }
+                if let markers {
+                    try? await Task.sleep(for: .seconds(2))
+                    try? Data().write(to: markers.appending(path: "\(items.count).selected"))
                 }
             }
         }

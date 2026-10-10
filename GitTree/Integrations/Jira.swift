@@ -592,7 +592,7 @@ enum JiraClient {
     /// so asking again soon doesn't go back to Jira.
     @ObservationIgnored private var listResults: [String: (keys: [String], fetchedAt: Date)] = [:]
     @ObservationIgnored private var listRequests: [String: Task<[JiraIssue], Error>] = [:]
-    @ObservationIgnored private var versionRequests: Set<String> = []
+    @ObservationIgnored private var versionRequests: [String: Task<Void, Never>] = [:]
     /// Projects Jira didn't list versions for (not a project there, or not visible to the account).
     @ObservationIgnored private var versionFailures: [String: Date] = [:]
     @ObservationIgnored private var knownFixVersionsCache: [UUID: (version: Int, values: [String])] = [:]
@@ -716,7 +716,7 @@ enum JiraClient {
         noParentEpicSites = []
         listResults = [:]
         listRequests = [:]
-        versionRequests = []
+        versionRequests = [:]
         versionFailures = [:]
         version += 1
     }
@@ -826,7 +826,7 @@ enum JiraClient {
             ProfileCache(issues: cache.issues.mapValues { ($0.issue, Date.distantPast) }, unknown: [:],
                          versions: cache.versions.mapValues { ($0.versions, Date.distantPast) })
         }
-        listResults = [:]
+        listResults = listResults.mapValues { ($0.keys, Date.distantPast) }
         versionFailures = [:]
         version += 1
     }
@@ -880,14 +880,22 @@ enum JiraClient {
     // MARK: Ticket lists
 
     /// The tickets in a fix version, by its Jira id (or by name when that's all there is), cached
-    /// for ten minutes.
-    func tickets(inFixVersion version: String, isID: Bool, connection: JiraConnection) async throws -> [JiraIssue] {
-        try await list(isID ? JiraQuery.fixVersion(id: version) : JiraQuery.fixVersion(named: version), connection: connection)
+    /// for ten minutes; `force` asks again anyway (a fix version's Refresh).
+    func tickets(inFixVersion version: String, isID: Bool, force: Bool = false, connection: JiraConnection) async throws -> [JiraIssue] {
+        try await list(isID ? JiraQuery.fixVersion(id: version) : JiraQuery.fixVersion(named: version), force: force, connection: connection)
     }
 
     /// The keys of a fix version's tickets as last asked, however long ago; nil before the first answer.
     func cachedTickets(inFixVersionID id: String, connection: JiraConnection) -> [String]? {
         listResults[Self.id(connection, JiraQuery.fixVersion(id: id))]?.keys
+    }
+
+    /// These fix versions' tickets are asked for again the next time they're needed; until then
+    /// the last answer still shows.
+    func markStale(fixVersionIDs ids: some Sequence<String>, connection: JiraConnection) {
+        for id in ids {
+            listResults[Self.id(connection, JiraQuery.fixVersion(id: id))]?.fetchedAt = .distantPast
+        }
     }
 
     /// An epic's tickets and their sub-tasks. Sites that don't understand `parentEpic` get the
@@ -908,16 +916,17 @@ enum JiraClient {
     }
 
     /// Tickets matching a query, asked of Jira a page of 100 at a time (at most five pages) and
-    /// cached like the rest. Asking for the same again within ten minutes, or while it's loading,
-    /// doesn't send another request.
-    private func list(_ jql: String, connection: JiraConnection) async throws -> [JiraIssue] {
+    /// cached like the rest. Asking for the same again while it's loading, or within ten minutes
+    /// unless `force` says otherwise, doesn't send another request.
+    private func list(_ jql: String, force: Bool = false, connection: JiraConnection) async throws -> [JiraIssue] {
         guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { throw JiraError.unauthorized }
         let id = Self.id(connection, jql)
-        if let result = listResults[id], Date().timeIntervalSince(result.fetchedAt) < Self.listFreshFor {
+        // The answer under way is the freshest there is.
+        if let running = listRequests[id] { return try await running.value }
+        if !force, let result = listResults[id], Date().timeIntervalSince(result.fetchedAt) < Self.listFreshFor {
             let cached = result.keys.compactMap { issue($0, connection: connection) }
             if cached.count == result.keys.count { return cached }
         }
-        if let running = listRequests[id] { return try await running.value }
         let request = Task { [weak self] () throws -> [JiraIssue] in
             var collected: [JiraIssue] = []
             var pageToken: String?
@@ -967,20 +976,26 @@ enum JiraClient {
     }
 
     /// Asks Jira for the projects' unreleased fix versions, unless they were fetched in the last
-    /// hour (or Jira didn't know the project today): one request per project, paced like every other.
-    func refreshVersions(projects: [String], connection: JiraConnection, force: Bool = false) {
-        guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return }
+    /// hour (or Jira didn't know the project today), or `force` says to ask anyway: one request per
+    /// project, paced like every other. The task returned ends once they've all been answered.
+    @discardableResult
+    func refreshVersions(projects: [String], connection: JiraConnection, force: Bool = false) -> Task<Void, Never> {
+        guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return Task {} }
         let now = Date()
+        var requests: [Task<Void, Never>] = []
         for project in projects {
             let id = Self.id(connection, "versions \(project)")
+            if let running = versionRequests[id] {
+                requests.append(running)
+                continue
+            }
             if !force, let list = caches[connection.profileID]?.versions[project],
                now.timeIntervalSince(list.fetchedAt) < Self.versionsFreshFor { continue }
             if let failed = versionFailures[id], now.timeIntervalSince(failed) < Self.missingFor { continue }
-            guard versionRequests.insert(id).inserted else { continue }
             let sentIn = generation
-            Task { [weak self] in
+            let request = Task { [weak self] in
                 guard let self else { return }
-                defer { if sentIn == self.generation { self.versionRequests.remove(id) } }
+                defer { if sentIn == self.generation { self.versionRequests[id] = nil } }
                 do {
                     var versions: [JiraVersion] = []
                     var pages = 0
@@ -1005,6 +1020,11 @@ enum JiraClient {
                     if sentIn == self.generation, !(error is CancellationError) { self.recordFailure(error, connection: connection) }
                 }
             }
+            versionRequests[id] = request
+            requests.append(request)
+        }
+        return Task {
+            for request in requests { await request.value }
         }
     }
 

@@ -13,7 +13,13 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
 - Swift 5 language mode, macOS 15 deployment target. Models are `@MainActor @Observable`; heavy work
   (parsing, lane layout, search, containment walks) runs in `Task.detached`.
 - Use native components and system colors (`NSColor.system*`, `.secondary`, materials) so light,
-  dark and increased-contrast modes work without extra code.
+  dark and increased-contrast modes work without extra code. Colored text uses `NSColor.readable`
+  (system colors are made for symbols and fills; green or orange text on a light background is
+  under 2:1), and colors in sidebar rows go through `foregroundStyle(_:selected:)`, which turns
+  them white on a selected row's accent color. Check selected rows in both appearances.
+- SwiftUI ignores the inspector's ideal width and resets it to its narrowest when the window's
+  content changes; `InspectorWidthKeeper` (`Views/WindowSupport.swift`) keeps the width the user
+  drags to, through AppKit.
 - Read-only by design: never run git commands that change a user's repository. `fetch` is the only
   exception, and only on an explicit user action or for clones GitTree manages itself.
 - Build: `xcodebuild -project GitTree.xcodeproj -scheme GitTree -configuration Debug -derivedDataPath build/DerivedData build`.
@@ -22,7 +28,9 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   uses a throwaway library and captures only GitTree's window. Use test repositories outside
   ~/Documents (for example a `git clone --mirror` in a temp folder) so macOS doesn't show a folder
   permission prompt nobody can answer. Other windows: `swift scripts/window-id.swift GitTree <title>`.
-  The debug launch arguments are listed above `DebugLaunch` in `Views/RepositoryWindow.swift`.
+  `scripts/snapshot-rows.sh` captures the window once per sidebar row `-GTSelect` names (selected
+  rows in light and dark mode). The debug launch arguments are listed above `DebugLaunch` in
+  `Views/RepositoryWindow.swift`.
 - Test runs share the installed app's preferences (same bundle id), so keep test state in the
   `-GTDataDirectory` folder: the library, Jira profiles and (in Debug test runs) Jira tokens live
   there. Don't `defaults write` settings, and don't pass `-sidebar.*Expanded`-style arguments: they
@@ -48,7 +56,9 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   profile (a site and account, token in the keychain) or none. Test Jira with
   `scripts/mock-jira.py`, which logs every request; `-GTJiraSite http://127.0.0.1:<port>` points
   every repository at it.
-- Apple's on-device model (Foundation Models) is used only to sort commits into features. The user
+- Apple's on-device model (Foundation Models) is used only to sort commits into features, in the
+  Features section, which is off by default (Settings › General) since the Epics and Releases
+  sections group the same work by Jira; the user will say where else the model could help. The user
   decided against generated text (summaries, release notes); don't add it back. Keep it behind
   `#if canImport(FoundationModels)` and `@available(macOS 26.0, *)`, with a plain fallback; commit
   messages never leave the Mac.
