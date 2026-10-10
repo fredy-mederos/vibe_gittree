@@ -307,7 +307,7 @@ private struct FixVersionPrompt: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Highlight a Fix Version")
                 .font(.headline)
-            Text("GitTree asks Jira for the tickets in this fix version and highlights the commits that mention them.")
+            Text("Vibe GitTree asks Jira for the tickets in this fix version and highlights the commits that mention them.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

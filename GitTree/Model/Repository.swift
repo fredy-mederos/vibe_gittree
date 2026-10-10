@@ -55,7 +55,7 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
 
     /// The folder it sits in (`~/Documents/projects/acme`), or GitTree's clones for remote ones.
     var folderGroup: String {
-        kind == .local ? locationSummary : "Cloned by GitTree"
+        kind == .local ? locationSummary : "Cloned by Vibe GitTree"
     }
 
     /// Where it's hosted (`github.com/acme`), or "Not hosted" for a local repository without a remote.

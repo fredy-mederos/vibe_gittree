@@ -1,5 +1,5 @@
 #!/bin/bash
-# Has Apple notarize build/GitTree.dmg and staples the ticket to it, so it opens without a warning.
+# Has Apple notarize build/VibeGitTree.dmg and staples the ticket to it, so it opens without a warning.
 #
 # Credentials, either a keychain profile (stored once per Mac with
 # `xcrun notarytool store-credentials <profile> --apple-id <id> --team-id <team> --password <app-specific password>`):
@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-dmg="build/GitTree.dmg"
+dmg="build/VibeGitTree.dmg"
 
 if [ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]; then
     auth=(--keychain-profile "$NOTARY_KEYCHAIN_PROFILE")

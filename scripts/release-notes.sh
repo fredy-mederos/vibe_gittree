@@ -14,10 +14,10 @@ previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$ref^" 2>/dev/null 
 
 cat <<EOF
 <p align="center">
-  <img src="$icon" width="80" alt="GitTree icon" />
+  <img src="$icon" width="80" alt="Vibe GitTree icon" />
 </p>
 
-Download **GitTree.dmg** below, open it and drag GitTree into Applications. GitTree tells you when a new version is out; GitTree › Check for Updates… checks any time.
+Download **VibeGitTree.dmg** below, open it and drag Vibe GitTree into Applications. Vibe GitTree tells you when a new version is out; Vibe GitTree › Check for Updates… checks any time.
 
 EOF
 
@@ -28,5 +28,5 @@ if [ -n "$previous" ]; then
     echo
     echo "**Full changelog**: https://github.com/$repo/compare/$previous...$tag"
 else
-    echo "The first release: [the README](https://github.com/$repo#readme) describes what GitTree does."
+    echo "The first release: [the README](https://github.com/$repo#readme) describes what Vibe GitTree does."
 fi

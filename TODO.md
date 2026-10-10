@@ -1,4 +1,4 @@
-# GitTree to-do
+# Vibe GitTree to-do
 
 Ideas still open. Shipped work is described in the README.
 

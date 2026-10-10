@@ -11,7 +11,7 @@ struct CompareWindow: View {
                         target: Binding(get: { target ?? current }, set: { target = $0 }))
         } else {
             ContentUnavailableView("No Repository", systemImage: "arrow.left.arrow.right",
-                                   description: Text("This repository is no longer in GitTree."))
+                                   description: Text("This repository is no longer in Vibe GitTree."))
         }
     }
 }

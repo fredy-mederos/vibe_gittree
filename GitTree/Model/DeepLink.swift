@@ -75,6 +75,6 @@ extension RepositoryLibrary {
         if let match = byName.max(by: { $0.recency < $1.recency }) {
             return .found(match)
         }
-        return .notFound("No repository named “\(spec)” in GitTree.")
+        return .notFound("No repository named “\(spec)” in Vibe GitTree.")
     }
 }

@@ -1,30 +1,39 @@
-# vibe_gittree
+<img src="GitTree/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="80" alt="Vibe GitTree icon" align="left" style="margin-right:16px" />
 
-[![Latest release](https://img.shields.io/github/v/release/fredy-mederos/vibe_gittree)](https://github.com/fredy-mederos/vibe_gittree/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)<br>[![Latest release](https://img.shields.io/github/v/release/fredy-mederos/vibe_gittree)](https://github.com/fredy-mederos/vibe_gittree/releases/latest)
 
-**GitTree** is a fast, read-only explorer for git history: a native macOS app (SwiftUI + AppKit) for
+<br clear="left"/>
+
+# Vibe GitTree
+
+**Vibe GitTree** is a fast, read-only explorer for git history: a native macOS app (SwiftUI + AppKit) for
 browsing any number of repositories, local or remote.
 
 <p align="center">
-  <img src="screenshots/gittree.png" alt="GitTree showing a repository's branches, merges and tags, with a commit's details on the right" width="900" />
+  <img src="screenshots/gittree.png" alt="Vibe GitTree showing a repository's branches, merges and tags, with a commit's details on the right" width="900" />
 </p>
 
 Ideas queued for later are in [TODO.md](TODO.md). It's a personal project under the
 [MIT license](LICENSE): clone it and fork it freely, and open an issue for bugs or ideas; pull
 requests aren't accepted (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
-## GitTree for macOS
+## Vibe GitTree for macOS
 
 ### Download
 
-**[Download GitTree.dmg](https://github.com/fredy-mederos/vibe_gittree/releases/latest/download/GitTree.dmg)**
-(the latest release, for macOS 15 or later on Apple silicon and Intel), open it and drag GitTree into
+**[Download VibeGitTree.dmg](https://github.com/fredy-mederos/vibe_gittree/releases/latest/download/VibeGitTree.dmg)**
+(the latest release, for macOS 15 or later on Apple silicon and Intel), open it and drag Vibe GitTree into
 Applications. Every version is on the [releases page](https://github.com/fredy-mederos/vibe_gittree/releases).
 
-GitTree tells you when there's a new version: it asks GitHub when it opens and once a day, and shows
-an alert once per new version. GitTree › Check for Updates… and Settings › General check any time.
+Vibe GitTree tells you when there's a new version: it asks GitHub when it opens and once a day, and
+shows an alert once per new version. Vibe GitTree › Check for Updates… and Settings › General check
+any time.
 The disk image doesn't include the `gittree` command; copy [`scripts/gittree`](scripts/gittree) into
-a folder on your `PATH`, or build GitTree yourself as below.
+a folder on your `PATH`, or build Vibe GitTree yourself as below.
+
+Vibe GitTree was called GitTree until version 1.2.0. If you had GitTree, move it to the Trash after
+installing Vibe GitTree: your repositories and settings carry over, and the `gittree` command and
+`gittree://` links work as before.
 
 ### Build and install from source
 
@@ -39,7 +48,7 @@ find it, and installs the `gittree` command into `~/.local/bin`. Pass another fo
 app elsewhere, for example `scripts/install.sh /Applications`. To work on the app, open
 `GitTree.xcodeproj` and press Run.
 
-The first time GitTree reads a repository inside Documents, Desktop or Downloads, macOS asks for
+The first time Vibe GitTree reads a repository inside Documents, Desktop or Downloads, macOS asks for
 permission to access that folder.
 
 ### What it does
@@ -55,7 +64,7 @@ permission to access that folder.
 - **Switch quickly** with ⌘K: type part of a name or path, press Return. Without typing, it lists
   repositories most recently opened first. Right-click a repository for Open in New Tab or Open in
   New Window to see several at once.
-- **Remote repositories** are cloned into GitTree's own storage as bare, blobless clones: commits
+- **Remote repositories** are cloned into Vibe GitTree's own storage as bare, blobless clones: commits
   and folder structure only, no file contents. They fetch automatically when opened (if the last
   fetch was over 10 minutes ago) and on Fetch (⇧⌘F).
 - **Commit graph** of every branch, remote branch and tag, newest first, with colored lanes, branch
@@ -159,23 +168,23 @@ permission to access that folder.
 - **About**: Settings › General shows the version, the build number (the commit count when
   `scripts/install.sh` or `scripts/release.sh` built it), the commit, whether it's a Debug or
   Release build, and when it was built, with Copy Version Info.
-- **Updates**: GitTree asks GitHub for the newest release a few seconds after it opens and once a
+- **Updates**: Vibe GitTree asks GitHub for the newest release a few seconds after it opens and once a
   day while it's open. A new version gets an alert, once, with Download (the disk image) and Release
-  Notes; Settings › General keeps showing it until you update. GitTree › Check for Updates… and
+  Notes; Settings › General keeps showing it until you update. Vibe GitTree › Check for Updates… and
   Settings › General › Check Now ask any time.
 
-GitTree never changes your repositories. The only git command that writes anything is `fetch`,
-and only when you ask for it (or when a remote repository GitTree cloned itself is opened).
+Vibe GitTree never changes your repositories. The only git command that writes anything is `fetch`,
+and only when you ask for it (or when a remote repository Vibe GitTree cloned itself is opened).
 
-### How GitTree talks to GitHub and Jira
+### How Vibe GitTree talks to GitHub and Jira
 
 Both integrations are deliberately gentle, so scrolling or reloading can never turn into a storm of
 requests (and so is the update check):
 
 - **Updates**: one request to GitHub's API for the latest release of this repository, a few seconds
-  after GitTree opens (at most once an hour) and once a day while it's open, plus whenever you ask.
+  after Vibe GitTree opens (at most once an hour) and once a day while it's open, plus whenever you ask.
   It has a 20-second timeout and sends nothing about you or your repositories. GitHub allows 60 such
-  requests an hour per network; when they're used up, GitTree reads the website's "latest release"
+  requests an hour per network; when they're used up, Vibe GitTree reads the website's "latest release"
   link instead. Nothing is downloaded until you choose Download.
 - **GitHub**: two `gh pr list` calls per refresh (pull requests, then reviews and checks of the
   open ones), only for repositories a window shows (or when you press Fetch). One refresh runs at a
@@ -189,7 +198,7 @@ requests (and so is the update check):
   line; it's kept for five minutes while the pull request is open and for good once it's merged or
   closed, and after a failure that pull request waits a minute.
 - **Jira**: one request at a time across all profiles and everything below, at most 20 a minute.
-  Every ticket comes in one request with everything GitTree shows about it: status, type,
+  Every ticket comes in one request with everything Vibe GitTree shows about it: status, type,
   assignee, fix versions and its parent (the epic, or for a sub-task its story or task). Tickets
   are asked for in bulk, up to 50 per request: the ones on screen once scrolling pauses, along with
   those a screen above and below, so scrolling on doesn't send a request per screen. Answers are
@@ -234,12 +243,12 @@ requests (and so is the update check):
 
 ### Where things are stored
 
-`~/Library/Application Support/GitTree/`: `library.json` (the repository list and per-repository
+`~/Library/Application Support/GitTree/` (the app's former name, so nothing had to move): `library.json` (the repository list and per-repository
 settings), `jira-profiles.json` (Jira sites and accounts, without tokens), `jira-cache.json` (ticket
 statuses, with their parents, and unreleased fix versions per profile) and
 `Clones/<host>/<owner>/<name>.git` (remote repositories). Jira API tokens
 are in the login keychain. Removing a remote repository from
-GitTree deletes its clone; removing a local one never touches the folder.
+Vibe GitTree deletes its clone; removing a local one never touches the folder.
 
 ### How it's built
 
@@ -296,7 +305,7 @@ selected rows look (in light and dark mode, say):
 scripts/snapshot-rows.sh /tmp/rows -GTOpenRepository ~/code/some-repo -GTAppearance dark -GTSelect "ref:main,pr:open"
 ```
 
-Some checks don't need a screenshot (or GitTree in front): `-GTDescribeJira <file>` writes, after
+Some checks don't need a screenshot (or Vibe GitTree in front): `-GTDescribeJira <file>` writes, after
 `-GTDescribeAfter` seconds (20 by default), what the Epics and Releases sections list, the
 highlight, the sidebar selection and a selected pull request's timeline; `-GTDescribeCompare <file>`
 writes what a comparison found.
@@ -315,14 +324,14 @@ scripts/snapshot.sh /tmp/gittree.png 8 -GTOpenRepository ~/code/some-repo -GTJir
 ### Releasing
 
 `scripts/release.sh` builds a Release for Apple silicon and Intel, signs it with a Developer ID (with
-the hardened runtime), packs it into `build/GitTree.dmg`, has Apple notarize it and staples the ticket:
+the hardened runtime), packs it into `build/VibeGitTree.dmg`, has Apple notarize it and staples the ticket:
 
 ```bash
 APP_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
   NOTARY_KEYCHAIN_PROFILE=<profile> scripts/release.sh
 ```
 
-The `release-gittree` skill (`skills/`, linked for Claude Code and Codex) runs a whole release: it
+The `release-vibe-gittree` skill (`skills/`, linked for Claude Code and Codex) runs a whole release: it
 picks and confirms the version (`scripts/version.sh`), builds the disk image, tags `vX.Y.Z` and
 publishes the GitHub release with notes from `scripts/release-notes.sh`. Installed copies find it
 within a day.

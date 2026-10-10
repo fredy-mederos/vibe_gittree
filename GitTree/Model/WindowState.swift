@@ -69,7 +69,7 @@ enum SidebarItem: Hashable {
 
     var currentRepository: Repository? { library.repository(id: repositoryID) }
 
-    var title: String { currentRepository?.name ?? "GitTree" }
+    var title: String { currentRepository?.name ?? "Vibe GitTree" }
 
     var subtitle: String {
         guard let repository = currentRepository else { return "" }
@@ -208,7 +208,7 @@ enum SidebarItem: Hashable {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Add Repositories"
-        panel.message = "Choose a folder. GitTree adds every git repository inside it, up to four levels deep."
+        panel.message = "Choose a folder. Vibe GitTree adds every git repository inside it, up to four levels deep."
         let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard response == .OK, let folder = panel.url else { return }
             Task { @MainActor [weak self] in
@@ -253,7 +253,7 @@ enum SidebarItem: Hashable {
 
     func handle(_ url: URL) {
         guard let link = DeepLink(url: url) else {
-            showError("Can't Open Link", "GitTree doesn't understand \(url.absoluteString). Links look like gittree://open?repo=<path>&commit=<sha>.")
+            showError("Can't Open Link", "Vibe GitTree doesn't understand \(url.absoluteString). Links look like gittree://open?repo=<path>&commit=<sha>.")
             return
         }
         Task { await handle(link) }

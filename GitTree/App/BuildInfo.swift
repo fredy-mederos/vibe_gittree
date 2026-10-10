@@ -1,11 +1,11 @@
 import Foundation
 
-/// What Settings › General shows about this copy of GitTree. `scripts/install.sh` and `scripts/release.sh` stamp
+/// What Settings › General shows about this copy of Vibe GitTree. `scripts/install.sh` and `scripts/release.sh` stamp
 /// the build number, the commit and the build time into Info.plist.
 enum BuildInfo {
     private static var info: [String: Any] { Bundle.main.infoDictionary ?? [:] }
 
-    static let name = "GitTree"
+    static let name = "Vibe GitTree"
 
     /// `0.1.0`.
     static var version: String { info["CFBundleShortVersionString"] as? String ?? "–" }
@@ -51,7 +51,7 @@ enum BuildInfo {
         return text
     }
 
-    /// For pasting into a bug report: `GitTree 0.1.0 (12, a481f3a), Release, built 2026-10-10 08:01`.
+    /// For pasting into a bug report: `Vibe GitTree 1.2.0 (27, a481f3a), Release, built 2026-10-11 08:01`.
     static var summary: String {
         let details = [build, commit.map { hasLocalChanges ? $0 + "+" : $0 }].compactMap { $0 }.joined(separator: ", ")
         let built = date.map { ", built " + $0.formatted(.iso8601.year().month().day().dateSeparator(.dash)) + " "

@@ -705,7 +705,7 @@ struct SidebarView: View {
         Button("Fetch") { state.fetch(repository) }
         Button("Repository Settings…") { state.editingRepository = repository }
         Divider()
-        Button("Remove from GitTree…", role: .destructive) { state.repositoryPendingRemoval = repository }
+        Button("Remove from Vibe GitTree…", role: .destructive) { state.repositoryPendingRemoval = repository }
     }
 
     @ViewBuilder

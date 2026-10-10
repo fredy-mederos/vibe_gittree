@@ -10,7 +10,7 @@ struct ActivityWindow: View {
             ActivityView(model: RepositoryModelStore.shared.model(for: repository))
         } else {
             ContentUnavailableView("No Repository", systemImage: "calendar",
-                                   description: Text("This repository is no longer in GitTree."))
+                                   description: Text("This repository is no longer in Vibe GitTree."))
         }
     }
 }

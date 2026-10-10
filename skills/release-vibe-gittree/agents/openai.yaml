@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Vibe GitTree"
+  short_description: "Run the Vibe GitTree release pipeline"
+  default_prompt: "Execute the Vibe GitTree release workflow end-to-end: resolve the version, confirm it, build a signed and notarized DMG, tag it, and publish the GitHub release."

@@ -46,7 +46,7 @@ struct RepositoryWindow: View {
             Button("Remove", role: .destructive) { state.remove(repository) }
         } message: { repository in
             Text(repository.kind == .remote
-                 ? "GitTree's downloaded copy is deleted. The remote repository isn't affected."
+                 ? "Vibe GitTree's downloaded copy is deleted. The remote repository isn't affected."
                  : "The folder on your Mac isn't changed.")
         }
         .alert(
@@ -142,7 +142,7 @@ struct RepositoryWindow: View {
     }
 
     private var removalTitle: String {
-        "Remove “\(state.repositoryPendingRemoval?.name ?? "")” from GitTree?"
+        "Remove “\(state.repositoryPendingRemoval?.name ?? "")” from Vibe GitTree?"
     }
 }
 

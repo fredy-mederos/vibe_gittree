@@ -1,6 +1,6 @@
 import Foundation
 
-// The same file in GitTree, Vibe Notepad and KeepMyMacClean: when it changes in one, copy it to the others.
+// The same file in Vibe GitTree, Vibe Notepad and Vibe Clean: when it changes in one, copy it to the others.
 
 /// The newest release of an app on GitHub, as far as checking for updates needs it.
 nonisolated struct Release: Codable, Equatable, Sendable {
@@ -19,7 +19,7 @@ nonisolated struct Release: Codable, Equatable, Sendable {
 nonisolated struct ReleaseFeed: Sendable {
     /// "owner/name".
     var repository: String
-    /// The disk image releases attach, like "GitTree.dmg".
+    /// The disk image releases attach, like "VibeGitTree.dmg".
     var diskImageName: String
     var session: URLSession = .shared
 

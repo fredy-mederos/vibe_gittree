@@ -1,11 +1,11 @@
 #!/bin/bash
-# gittree: open GitTree at a repository, a commit, or the commit that last changed a line.
+# gittree: open Vibe GitTree at a repository, a commit, or the commit that last changed a line.
 #
 #   gittree                  the repository you're in
 #   gittree <file>           the last commit that changed the file, with its diff
 #   gittree <file>:<line>    the commit that last changed that line, diff scrolled to it
 #   gittree <commit>         a commit (hash, branch or tag)
-#   gittree --print …        print the gittree:// link without opening GitTree
+#   gittree --print …        print the gittree:// link without opening Vibe GitTree
 #
 # The link is printed either way, so it can be pasted into notes, tickets or chats.
 set -euo pipefail

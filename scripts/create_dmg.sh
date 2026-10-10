@@ -1,6 +1,6 @@
 #!/bin/bash
-# Builds GitTree (Release, for Apple silicon and Intel), signs it with a Developer ID and packs it into
-# build/GitTree.dmg, signed too. scripts/release.sh runs this, then scripts/notarize_dmg.sh.
+# Builds Vibe GitTree (Release, for Apple silicon and Intel), signs it with a Developer ID and packs it into
+# build/VibeGitTree.dmg, signed too. scripts/release.sh runs this, then scripts/notarize_dmg.sh.
 #
 # Usage: APP_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" scripts/create_dmg.sh
 set -euo pipefail
@@ -8,11 +8,11 @@ cd "$(dirname "$0")/.."
 
 : "${APP_SIGN_IDENTITY:?Set APP_SIGN_IDENTITY, e.g. \"Developer ID Application: Your Name (TEAMID)\"}"
 
-name="GitTree"
+name="Vibe GitTree"
 derived="build/release/DerivedData"
 app="$derived/Build/Products/Release/$name.app"
 staging="build/release/dmg"
-dmg="build/$name.dmg"
+dmg="build/VibeGitTree.dmg"
 
 # A release is built from a commit: Settings › General shows its hash, with "+" for uncommitted changes.
 if [ -n "$(git status --porcelain)" ] && [ -z "${ALLOW_DIRTY:-}" ]; then

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds an optimized GitTree, installs it into ~/Applications (or the folder you pass) so it shows
+# Builds an optimized Vibe GitTree, installs it into ~/Applications (or the folder you pass) so it shows
 # up in Launchpad and Spotlight, and installs the `gittree` command into ~/.local/bin.
 #
 # Usage: scripts/install.sh [destination folder]
@@ -18,15 +18,17 @@ xcodebuild -project GitTree.xcodeproj -scheme GitTree -configuration Release \
     GT_BUILD_DATE="$build_date" build -quiet
 
 mkdir -p "$destination"
+# Copies installed before the app was renamed (GitTree.app) are replaced too.
+pkill -x "Vibe GitTree" 2>/dev/null || true
 pkill -x GitTree 2>/dev/null || true
-rm -rf "$destination/GitTree.app"
-ditto build/DerivedData/Build/Products/Release/GitTree.app "$destination/GitTree.app"
+rm -rf "$destination/Vibe GitTree.app" "$destination/GitTree.app"
+ditto "build/DerivedData/Build/Products/Release/Vibe GitTree.app" "$destination/Vibe GitTree.app"
 # Make sure gittree:// links open this copy.
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$destination/GitTree.app"
-echo "Installed $destination/GitTree.app (build $build_number${commit:+, $commit})"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$destination/Vibe GitTree.app"
+echo "Installed $destination/Vibe GitTree.app (build $build_number${commit:+, $commit})"
 
 mkdir -p "$HOME/.local/bin"
 install -m 755 scripts/gittree "$HOME/.local/bin/gittree"
 echo "Installed the gittree command in ~/.local/bin"
 
-open "$destination/GitTree.app"
+open "$destination/Vibe GitTree.app"

@@ -25,7 +25,7 @@ struct CloneSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Clone Remote Repository")
                         .font(.headline)
-                    Text("GitTree downloads the commit history and folder structure, without file contents, into its own storage. Your other folders aren't touched.")
+                    Text("Vibe GitTree downloads the commit history and folder structure, without file contents, into its own storage. Your other folders aren't touched.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -364,7 +364,7 @@ private struct JiraSettingsView: View {
             } header: {
                 Text("Profiles")
             } footer: {
-                Text("A profile is a Jira Cloud site and the account GitTree uses there. Ticket keys in commit messages (like ABC-123) show their status in a Ticket column and in the details. GitTree only asks Jira about tickets on screen, in small batches, and caches the answers.")
+                Text("A profile is a Jira Cloud site and the account Vibe GitTree uses there. Ticket keys in commit messages (like ABC-123) show their status in a Ticket column and in the details. Vibe GitTree only asks Jira about tickets on screen, in small batches, and caches the answers.")
             }
             ForEach(store.profiles) { profile in
                 DefinitionOfDoneSection(profile: profile, showsName: store.profiles.count > 1)
@@ -426,7 +426,7 @@ private struct DefinitionOfDoneSection: View {
         let projects = (store.knownProjects(profileID: profile.id) + added.filter { !store.knownProjects(profileID: profile.id).contains($0) })
         Section {
             if projects.isEmpty {
-                Text("Projects show up here once GitTree has listed their releases.")
+                Text("Projects show up here once Vibe GitTree has listed their releases.")
                     .foregroundStyle(.secondary)
             }
             ForEach(projects, id: \.self) { project in
@@ -597,7 +597,7 @@ private struct GitHubSettingsView: View {
             } header: {
                 Text("Pull Requests")
             } footer: {
-                Text("GitTree reads pull requests with `gh` for repositories hosted on GitHub: one request when a repository loads, at most every five minutes, plus one when you fetch. Install it with `brew install gh` and sign in with `gh auth login`.")
+                Text("Vibe GitTree reads pull requests with `gh` for repositories hosted on GitHub: one request when a repository loads, at most every five minutes, plus one when you fetch. Install it with `brew install gh` and sign in with `gh auth login`.")
             }
         }
         .formStyle(.grouped)

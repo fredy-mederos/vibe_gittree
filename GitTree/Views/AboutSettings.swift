@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// Settings › General's About and Updates sections. Vibe Notepad and KeepMyMacClean show the same rows.
+// Settings › General's About and Updates sections. Vibe Notepad and Vibe Clean show the same rows.
 
 /// Version, build (commit count · commit), configuration and build time, with Copy Version Info for bug reports.
 struct AboutSection: View {
@@ -64,15 +64,15 @@ struct UpdatesSection: View {
         } header: {
             Text("Updates")
         } footer: {
-            Text("GitTree asks GitHub for the newest release when it opens and once a day while it's open. GitTree › Check for Updates… asks any time.")
+            Text("\(BuildInfo.name) asks GitHub for the newest release when it opens and once a day while it's open. \(BuildInfo.name) › Check for Updates… asks any time.")
         }
     }
 
     private var title: String {
         if updater.isChecking { return "Checking for updates…" }
-        if let release = updater.available { return "GitTree \(release.version) is available" }
+        if let release = updater.available { return "\(BuildInfo.name) \(release.version) is available" }
         if updater.failure != nil { return "Couldn't check for updates" }
-        if updater.lastChecked != nil { return "GitTree is up to date" }
+        if updater.lastChecked != nil { return "\(BuildInfo.name) is up to date" }
         return "Not checked yet"
     }
 
@@ -86,6 +86,6 @@ struct UpdatesSection: View {
             let when = "Checked \(checked.formatted(.relative(presentation: .named)))"
             return updater.latest == nil ? "\(when) · no releases yet" : when
         }
-        return BuildInfo.isDebug ? "Debug builds check only when you ask." : "GitTree checks when it opens."
+        return BuildInfo.isDebug ? "Debug builds check only when you ask." : "\(BuildInfo.name) checks when it opens."
     }
 }

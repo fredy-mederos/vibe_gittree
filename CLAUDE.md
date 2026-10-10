@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-Personal side project: GitTree, a read-only git history explorer, as a native macOS app. Read
+Personal side project: Vibe GitTree, a read-only git history explorer, as a native macOS app. It was
+called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gittree` command and
+`gittree://` links keep that name; what people see (app name, menus, text, DMG) says Vibe GitTree. Read
 `README.md` first (it describes what's shipped), and `TODO.md` for what's still open or was dropped.
 
 ## Native app (`GitTree/`, `GitTree.xcodeproj`)
@@ -21,13 +23,13 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   content changes; `InspectorWidthKeeper` (`Views/WindowSupport.swift`) keeps the width the user
   drags to, through AppKit.
 - Read-only by design: never run git commands that change a user's repository. `fetch` is the only
-  exception, and only on an explicit user action or for clones GitTree manages itself.
+  exception, and only on an explicit user action or for clones Vibe GitTree manages itself.
 - Build: `xcodebuild -project GitTree.xcodeproj -scheme GitTree -configuration Debug -derivedDataPath build/DerivedData build`.
   Keep the build free of warnings.
 - Check UI changes visually with `scripts/snapshot.sh <out.png> <seconds> [debug launch args]`; it
-  uses a throwaway library and captures only GitTree's window. Use test repositories outside
+  uses a throwaway library and captures only Vibe GitTree's window. Use test repositories outside
   ~/Documents (for example a `git clone --mirror` in a temp folder) so macOS doesn't show a folder
-  permission prompt nobody can answer. Other windows: `swift scripts/window-id.swift GitTree <title>`.
+  permission prompt nobody can answer. Other windows: `swift scripts/window-id.swift "Vibe GitTree" <title>`.
   `scripts/snapshot-rows.sh` captures the window once per sidebar row `-GTSelect` names (selected
   rows in light and dark mode). The debug launch arguments are listed above `DebugLaunch` in
   `Views/RepositoryWindow.swift`.
@@ -35,7 +37,7 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   `-GTDataDirectory` folder: the library, Jira profiles and (in Debug test runs) Jira tokens live
   there. Don't `defaults write` settings, and don't pass `-sidebar.*Expanded`-style arguments: they
   override what the user clicks for that run and make the UI look broken.
-- Screenshots only work while GitTree is frontmost; with Stage Manager, a window behind the user's
+- Screenshots only work while Vibe GitTree is frontmost; with Stage Manager, a window behind the user's
   current app captures as a thumbnail. If the user is working in another app, don't keep stealing
   focus: verify with logs (`mock-jira.py`) or debug output files instead (`-GTDescribeJira`,
   `-GTDescribeCompare`, with the app launched by `open -g -n` so it stays in the background).
@@ -43,17 +45,17 @@ Personal side project: GitTree, a read-only git history explorer, as a native ma
   passed to it, plus the `gittree` command into ~/.local/bin).
 - **"Prepare a release"** is the user's shorthand for: commit and push any pending work first (so
   the build isn't marked with `+`), then run `scripts/install.sh /Applications`, which builds
-  Release, replaces /Applications/GitTree.app (quitting the running copy) and opens it. Report the
+  Release, replaces /Applications/Vibe GitTree.app (and a GitTree.app from before the rename, quitting the running copy) and opens it. Report the
   version, build number and commit it was built from (Settings › General shows them too). It's
-  only about GitTree; it doesn't mean tagging or publishing anything.
-- **Publishing a release** (a signed, notarized `GitTree.dmg` on GitHub) is the `release-gittree`
+  only about Vibe GitTree; it doesn't mean tagging or publishing anything.
+- **Publishing a release** (a signed, notarized `VibeGitTree.dmg` on GitHub) is the `release-vibe-gittree`
   skill in `skills/` (linked from `.claude/skills`): version (`scripts/version.sh`), Developer ID
   build and notarization (`scripts/release.sh`), tag and `gh release create` with
   `scripts/release-notes.sh`. Only when asked to release or publish; "prepare a release" never does.
 - Installed copies check GitHub for the newest release (`App/AppUpdater.swift`): at launch (at most
-  hourly), daily, and from GitTree › Check for Updates… and Settings › General, which shows the same
+  hourly), daily, and from Vibe GitTree › Check for Updates… and Settings › General, which shows the same
   About and Updates rows as the user's other apps. `App/UpdateCheck.swift` is the same file in Vibe
-  Notepad and KeepMyMacClean: keep them identical. Debug builds check only when asked
+  Notepad and Vibe Clean: keep them identical. Debug builds check only when asked
   (`-GTCheckForUpdates YES`, or `-GTUpdateRepository owner/name` to try another repository's releases).
 - Network integrations must stay gentle (the user asked for this explicitly): one request at a
   time per service, caching, minimum intervals, timeouts and backoff, and never trigger a request

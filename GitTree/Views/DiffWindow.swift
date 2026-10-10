@@ -9,7 +9,7 @@ struct DiffWindow: View {
             FileDiffView(target: target, repository: repository)
         } else {
             ContentUnavailableView("Nothing to Show", systemImage: "doc.text.magnifyingglass",
-                                   description: Text("The repository for these changes is no longer in GitTree."))
+                                   description: Text("The repository for these changes is no longer in Vibe GitTree."))
         }
     }
 }
@@ -81,7 +81,7 @@ private struct FileDiffView: View {
     @ViewBuilder private var content: some View {
         if let diff {
             if diff.isBinary {
-                ContentUnavailableView("Binary File", systemImage: "doc.zipper", description: Text("GitTree can't show changes to binary files."))
+                ContentUnavailableView("Binary File", systemImage: "doc.zipper", description: Text("Vibe GitTree can't show changes to binary files."))
             } else if diff.lines.isEmpty {
                 ContentUnavailableView("No Changes", systemImage: "equal.circle",
                                        description: Text("This file didn't change in this commit compared to its first parent."))

@@ -324,7 +324,7 @@ enum JiraError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unauthorized: "Jira didn't accept the email and API token. Check them in Settings."
-        case .rateLimited: "Jira asked GitTree to slow down."
+        case .rateLimited: "Jira asked Vibe GitTree to slow down."
         case .badQuery: "Jira couldn't find some of the tickets."
         case .server(let status): "Jira answered with an error (\(status))."
         }

@@ -1,8 +1,8 @@
 // Prints the window number of an app's largest on-screen window, for `screencapture -l`.
-// Usage: swift scripts/window-id.swift GitTree [part of the window title]
+// Usage: swift scripts/window-id.swift "Vibe GitTree" [part of the window title]
 import CoreGraphics
 
-let owner = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "GitTree"
+let owner = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "Vibe GitTree"
 let title = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : nil
 let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? [])
     .filter { ($0[kCGWindowOwnerName as String] as? String) == owner && ($0[kCGWindowLayer as String] as? Int) == 0 }

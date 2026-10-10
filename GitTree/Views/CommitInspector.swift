@@ -78,7 +78,7 @@ private struct CommitDetailView: View {
                     }
                 }
                 LabeledContent("Kind", value: kind)
-                Button("Copy GitTree Link") {
+                Button("Copy Vibe GitTree Link") {
                     let repository = graph.model.repository
                     let spec = repository.kind == .local ? repository.path : (repository.remoteURL ?? repository.name)
                     guard let url = DeepLink.url(repository: spec, commit: id.hex) else { return }

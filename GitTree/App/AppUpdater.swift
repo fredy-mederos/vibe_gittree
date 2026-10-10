@@ -1,15 +1,15 @@
 import AppKit
 import Observation
 
-/// Checks GitHub for a newer GitTree: a few seconds after launch (at most once an hour), once a day while GitTree
-/// stays open, and whenever you ask (GitTree › Check for Updates…, Settings › General). Each check is one request
+/// Checks GitHub for a newer Vibe GitTree: a few seconds after launch (at most once an hour), once a day while it
+/// stays open, and whenever you ask (Vibe GitTree › Check for Updates…, Settings › General). Each check is one request
 /// (`ReleaseFeed`); nothing is downloaded until you choose Download. A new version the automatic checks find is
 /// announced once, in an alert; Settings keeps showing it until you update.
 @MainActor @Observable
 final class AppUpdater {
     static let shared = AppUpdater()
 
-    /// GitTree's repository: its source, and the releases it checks.
+    /// Vibe GitTree's repository: its source, and the releases it checks.
     static let repository = "fredy-mederos/vibe_gittree"
     static var repositoryURL: URL { URL(string: "https://github.com/\(repository)")! }
 
@@ -21,14 +21,14 @@ final class AppUpdater {
     /// Why the last check failed, until one succeeds.
     private(set) var failure: String?
 
-    /// The newest release, when it's newer than this copy of GitTree.
+    /// The newest release, when it's newer than this copy.
     var available: Release? {
         guard let latest, VersionNumber.isValid(BuildInfo.version),
               VersionNumber.isVersion(BuildInfo.version, olderThan: latest.version) else { return nil }
         return latest
     }
 
-    @ObservationIgnored private var feed = ReleaseFeed(repository: repository, diskImageName: "GitTree.dmg")
+    @ObservationIgnored private var feed = ReleaseFeed(repository: repository, diskImageName: "VibeGitTree.dmg")
     @ObservationIgnored private let defaults: UserDefaults = {
         #if DEBUG
         // Test runs keep what they find in their own preferences, never the user's.
@@ -115,7 +115,7 @@ final class AppUpdater {
         }
     }
 
-    /// GitTree › Check for Updates…: checks now, then says what GitHub answered.
+    /// Vibe GitTree › Check for Updates…: checks now, then says what GitHub answered.
     func checkFromMenu() {
         Task {
             await check()
@@ -124,17 +124,17 @@ final class AppUpdater {
             } else if let failure {
                 showAlert("Couldn't check for updates", failure)
             } else if let latest, latest.version != BuildInfo.version {
-                showAlert("GitTree is up to date", "You have version \(BuildInfo.version); the newest release is \(latest.version).")
+                showAlert("\(BuildInfo.name) is up to date", "You have version \(BuildInfo.version); the newest release is \(latest.version).")
             } else if latest != nil {
-                showAlert("GitTree is up to date", "Version \(BuildInfo.version) is the newest version.")
+                showAlert("\(BuildInfo.name) is up to date", "Version \(BuildInfo.version) is the newest version.")
             } else {
-                showAlert("GitTree is up to date", "No version of GitTree has been released on GitHub yet.")
+                showAlert("\(BuildInfo.name) is up to date", "No version of \(BuildInfo.name) has been released on GitHub yet.")
             }
         }
     }
 
-    /// Announces a new version the automatic checks found: once per version, and only while GitTree is in front
-    /// (it's called again when GitTree comes to the front).
+    /// Announces a new version the automatic checks found: once per version, and only while the app is in front
+    /// (it's called again when it comes to the front).
     func announceIfNew() {
         guard checksAutomatically, let release = available, release.version != announcedVersion, NSApp.isActive else { return }
         announce(release, askedFor: false)
@@ -151,8 +151,8 @@ final class AppUpdater {
         announcedVersion = release.version
         save(release.version, Key.announced)
         let alert = NSAlert()
-        alert.messageText = "GitTree \(release.version) is available"
-        alert.informativeText = "You have version \(BuildInfo.version). Download the new one, open it and drag GitTree into Applications to replace this copy."
+        alert.messageText = "\(BuildInfo.name) \(release.version) is available"
+        alert.informativeText = "You have version \(BuildInfo.version). Download the new one, open it and drag \(BuildInfo.name) into Applications to replace this copy."
         let downloadButton = alert.addButton(withTitle: "Download")
         alert.addButton(withTitle: "Later").keyEquivalent = "\u{1b}"
         alert.addButton(withTitle: "Release Notes")
