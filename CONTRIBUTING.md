@@ -7,4 +7,4 @@ it isn't open to contributions.
   expected and what happened, with your macOS version and how you built or installed GitTree.
 - **Pull requests aren't accepted.** Please don't open one; if you'd like a change, open an issue
   describing it, or make it in your own fork.
-- **Forks are welcome**: change anything you like in yours.
+- **Forks are welcome**: change anything you like in yours, under the [MIT license](LICENSE).

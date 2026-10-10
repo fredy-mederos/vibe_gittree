@@ -3,9 +3,9 @@
 **GitTree** is a fast, read-only explorer for git history: a native macOS app (SwiftUI + AppKit) for
 browsing any number of repositories, local or remote.
 
-Ideas queued for later are in [TODO.md](TODO.md). It's a personal project: clone it and fork it
-freely, and open an issue for bugs or ideas; pull requests aren't accepted (see
-[CONTRIBUTING.md](CONTRIBUTING.md)).
+Ideas queued for later are in [TODO.md](TODO.md). It's a personal project under the
+[MIT license](LICENSE): clone it and fork it freely, and open an issue for bugs or ideas; pull
+requests aren't accepted (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## GitTree for macOS
 
@@ -251,3 +251,7 @@ names the projects instead):
 python3 scripts/mock-jira.py 8899
 scripts/snapshot.sh /tmp/gittree.png 8 -GTOpenRepository ~/code/some-repo -GTJiraSite http://127.0.0.1:8899
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).
