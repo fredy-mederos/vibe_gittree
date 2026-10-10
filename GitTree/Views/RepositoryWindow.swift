@@ -3,7 +3,7 @@ import SwiftUI
 /// A window: the repository library and refs in the sidebar, the graph in the detail area, and the
 /// selected commit in the inspector.
 struct RepositoryWindow: View {
-    @Binding var repositoryID: UUID?
+    @Binding var target: WindowTarget?
     @State private var state = WindowState()
     @Environment(\.openWindow) private var openWindow
     private let library = RepositoryLibrary.shared
@@ -24,7 +24,10 @@ struct RepositoryWindow: View {
         .sheet(isPresented: $state.isSwitcherPresented) {
             RepositorySwitcher(state: state)
         }
-        .background(WindowAccessor { WindowTabbing.windowAppeared($0) })
+        .background(WindowAccessor { window in
+            state.window = window
+            WindowTabbing.windowAppeared(window)
+        })
         .sheet(item: $state.editingRepository) { repository in
             RepositorySettingsSheet(repository: repository)
         }
@@ -67,19 +70,31 @@ struct RepositoryWindow: View {
             state.showInspector = true
         }
         .task {
-            state.restore(requested: repositoryID)
+            state.restore(requested: target?.repositoryID)
             #if DEBUG
             DebugLaunch.runOnce(state: state)
             if UserDefaults.standard.bool(forKey: "GTShowActivity") {
                 try? await Task.sleep(for: .seconds(2))
                 if let id = state.repositoryID { openWindow(id: "activity", value: id) }
             }
+            if let output = UserDefaults.standard.string(forKey: "GTOpenInNewTab"), DebugLaunch.claimNewTab() {
+                try? await Task.sleep(for: .seconds(3))
+                if let id = state.repositoryID {
+                    WindowTabbing.openNextWindowAsTab(in: state.window)
+                    openWindow(id: "repository", value: WindowTarget.opening(id))
+                }
+                try? await Task.sleep(for: .seconds(3))
+                DebugLaunch.describeWindows(to: output)
+            }
             #endif
         }
+        // The window remembers what it shows (for state restoration), keeping its own identity.
         .onChange(of: state.repositoryID) { _, id in
-            if repositoryID != id { repositoryID = id }
+            if target?.repositoryID != id {
+                target = WindowTarget(repositoryID: id, window: target?.window ?? UUID())
+            }
         }
-        .onChange(of: repositoryID) { _, id in
+        .onChange(of: target?.repositoryID) { _, id in
             if let id, id != state.repositoryID { state.open(id) }
         }
     }
@@ -119,6 +134,21 @@ struct RepositoryWindow: View {
 /// tokens) and `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`).
 @MainActor enum DebugLaunch {
     private static var didRun = false
+    private static var didOpenTab = false
+
+    /// `-GTOpenInNewTab <file>`: the first window opens its repository in a new tab, like the
+    /// sidebar's Open in New Tab, then writes the windows and their tabs to the file.
+    static func claimNewTab() -> Bool {
+        defer { didOpenTab = true }
+        return !didOpenTab
+    }
+
+    static func describeWindows(to path: String) {
+        let lines = NSApp.windows.filter { $0.isVisible || $0.tabbedWindows != nil }.map { window in
+            "\(window.title) | tabs: \(window.tabbedWindows?.map(\.title) ?? [])"
+        }
+        try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
 
     static func runOnce(state: WindowState) {
         guard !didRun else { return }

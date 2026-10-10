@@ -30,13 +30,27 @@ private final class WindowReportingView: NSView {
     }
 }
 
+/// What a repository window shows. SwiftUI focuses an existing window instead of opening a new one
+/// when one already presents the same value, so each window also carries its own identity: opening
+/// a repository that's already on screen in a new tab or window still opens one.
+struct WindowTarget: Codable, Hashable {
+    var repositoryID: UUID?
+    var window = UUID()
+
+    /// A new window for a repository.
+    static func opening(_ repositoryID: UUID) -> WindowTarget {
+        WindowTarget(repositoryID: repositoryID)
+    }
+}
+
 /// "Open in New Tab": SwiftUI opens a separate window, which is then moved into the current
 /// window's tab group as soon as it appears.
 @MainActor enum WindowTabbing {
     private static weak var pendingParent: NSWindow?
 
-    static func openNextWindowAsTab() {
-        pendingParent = NSApp.keyWindow
+    /// `window` is the window to add the tab to; the key window when it's not known.
+    static func openNextWindowAsTab(in window: NSWindow?) {
+        pendingParent = window ?? NSApp.keyWindow
         Task {
             // If the repository was already open, SwiftUI just focuses that window; don't tab a later one.
             try? await Task.sleep(for: .seconds(1))

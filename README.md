@@ -99,7 +99,8 @@ permission to access that folder.
   `^android-v[\d.]+$`).
 - **Appearance**: Settings › General › Appearance picks Light, Dark or System.
 - **About**: Settings › General shows the version, the build number (the commit count when
-  `scripts/install.sh` built it), the commit, and when it was built, with Copy Version Info.
+  `scripts/install.sh` built it), the commit, whether it's a Debug or Release build, and when it
+  was built, with Copy Version Info.
 
 GitTree never changes your repositories. The only git command that writes anything is `fetch`,
 and only when you ask for it (or when a remote repository GitTree cloned itself is opened).

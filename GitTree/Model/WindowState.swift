@@ -42,6 +42,8 @@ enum SidebarItem: Hashable {
     private(set) var searchFocusRequest = 0
 
     @ObservationIgnored private let library = RepositoryLibrary.shared
+    /// The window this state belongs to, for adding tabs to it.
+    @ObservationIgnored weak var window: NSWindow?
 
     /// Every window's state, to tell which repositories are on screen.
     private static var windows: [WeakWindowState] = []

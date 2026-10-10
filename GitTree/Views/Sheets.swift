@@ -308,10 +308,16 @@ private struct GeneralSettingsView: View {
             Section("About GitTree") {
                 LabeledContent("Version", value: BuildInfo.version)
                 LabeledContent("Build") {
-                    Text(verbatim: [BuildInfo.build, BuildInfo.commit, BuildInfo.configuration == "Debug" ? "Debug" : nil]
-                        .compactMap { $0 }.joined(separator: " · "))
+                    Text(verbatim: [BuildInfo.build, BuildInfo.commit].compactMap { $0 }.joined(separator: " · "))
                         .monospacedDigit()
                         .textSelection(.enabled)
+                }
+                LabeledContent("Configuration") {
+                    Text(BuildInfo.configuration)
+                        .foregroundStyle(BuildInfo.isDebug ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        .help(BuildInfo.isDebug
+                              ? "A development build from Xcode or the build folder. \"Prepare a release\" installs a Release build."
+                              : "An optimized build, as installed by scripts/install.sh.")
                 }
                 LabeledContent("Built") {
                     if let date = BuildInfo.date {

@@ -24,13 +24,16 @@ enum BuildInfo {
         return attributes[.modificationDate] as? Date
     }
 
-    static var configuration: String {
+    static var isDebug: Bool {
         #if DEBUG
-        "Debug"
+        true
         #else
-        "Release"
+        false
         #endif
     }
+
+    /// "Debug" or "Release".
+    static var configuration: String { isDebug ? "Debug" : "Release" }
 
     /// For pasting into a bug report: `GitTree 0.1.0 (12, a481f3a), Release, built 2026-10-10 08:01`.
     static var summary: String {

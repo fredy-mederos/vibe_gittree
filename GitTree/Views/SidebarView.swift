@@ -462,10 +462,10 @@ struct SidebarView: View {
         }
         Divider()
         Button("Open in New Tab") {
-            WindowTabbing.openNextWindowAsTab()
-            openWindow(id: "repository", value: repository.id)
+            WindowTabbing.openNextWindowAsTab(in: state.window)
+            openWindow(id: "repository", value: WindowTarget.opening(repository.id))
         }
-        Button("Open in New Window") { openWindow(id: "repository", value: repository.id) }
+        Button("Open in New Window") { openWindow(id: "repository", value: WindowTarget.opening(repository.id)) }
         Divider()
         Button("Show in Finder") { state.showInFinder(repository) }
         if repository.kind == .local {

@@ -6,8 +6,8 @@ struct GitTreeApp: App {
 
     var body: some Scene {
         // One window per repository; windows can be merged into tabs.
-        WindowGroup("GitTree", id: "repository", for: UUID.self) { $repositoryID in
-            RepositoryWindow(repositoryID: $repositoryID)
+        WindowGroup("GitTree", id: "repository", for: WindowTarget.self) { $target in
+            RepositoryWindow(target: $target)
         }
         .defaultSize(width: 1400, height: 880)
         .handlesExternalEvents(matching: ["*"])
