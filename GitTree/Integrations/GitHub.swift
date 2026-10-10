@@ -189,16 +189,21 @@ enum GitHubCLI {
             .map(URL.init(fileURLWithPath:))
     }
 
-    /// Two `gh` calls: the most recent pull requests in any state, then reviews and checks for the
-    /// open ones. `repository` is `owner/name`.
-    static func pullRequests(repository: String) async throws -> PullRequestIndex {
+    /// Two `gh` calls: pull requests in any state, then reviews and checks for the open ones.
+    /// Without `previous` it's a full list, the latest 400 (four pages, so four API requests);
+    /// with it, only the 100 updated most recently (two requests), merged into `previous`.
+    /// `repository` is `owner/name`.
+    static func pullRequests(repository: String, mergingInto previous: [PullRequest]? = nil) async throws -> PullRequestIndex {
         guard let gh = executableURL else {
             throw CommandError(command: "gh", status: 127, output: "Install the GitHub CLI (brew install gh) and run `gh auth login` to see pull requests.")
         }
+        let range = previous == nil
+            ? ["--state", "all", "--limit", "400"]
+            : ["--state", "all", "--limit", "100", "--search", "sort:updated-desc"]
         let listed = try await ProcessRunner.run(
             gh,
-            ["pr", "list", "--repo", repository, "--state", "all", "--limit", "400",
-             "--json", "number,title,state,isDraft,headRefName,baseRefName,url,mergeCommit,author"],
+            ["pr", "list", "--repo", repository] + range
+                + ["--json", "number,title,state,isDraft,headRefName,baseRefName,url,mergeCommit,author"],
             environment: Git.environment, timeout: 30
         )
         let open = try await ProcessRunner.run(
@@ -208,7 +213,7 @@ enum GitHubCLI {
             environment: Git.environment, timeout: 30
         )
         return try await Task.detached(priority: .utility) {
-            try decode(listed: listed, open: open)
+            try decode(listed: listed, open: open, previous: previous)
         }.value
     }
 
@@ -237,21 +242,35 @@ enum GitHubCLI {
         let statusCheckRollup: [Check]?
     }
 
-    private static func decode(listed: Data, open: Data) throws -> PullRequestIndex {
+    private static func decode(listed: Data, open: Data, previous: [PullRequest]?) throws -> PullRequestIndex {
         let decoder = JSONDecoder()
-        let details = Dictionary(
-            try decoder.decode([OpenPullRequest].self, from: open).map { ($0.number, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        let pullRequests = try decoder.decode([ListedPullRequest].self, from: listed).map { item -> PullRequest in
-            let detail = details[item.number]
-            return PullRequest(
+        let openDetails = try decoder.decode([OpenPullRequest].self, from: open)
+        let details = Dictionary(openDetails.map { ($0.number, $0) }, uniquingKeysWith: { first, _ in first })
+        var pullRequests = try decoder.decode([ListedPullRequest].self, from: listed).map { item -> PullRequest in
+            PullRequest(
                 number: item.number, title: item.title, state: PullRequest.State(rawValue: item.state) ?? .closed,
                 isDraft: item.isDraft, head: item.headRefName, base: item.baseRefName, url: item.url,
-                mergeCommit: item.mergeCommit.flatMap { ObjectID(hex: $0.oid) }, author: item.author?.login,
-                reviewDecision: detail?.reviewDecision.flatMap { $0.isEmpty ? nil : $0 },
-                checks: detail?.statusCheckRollup.flatMap(summarize)
+                mergeCommit: item.mergeCommit.flatMap { ObjectID(hex: $0.oid) }, author: item.author?.login
             )
+        }
+        if let previous {
+            // Anything that changed since the last refresh is among the ones updated most recently;
+            // the rest is as it was. One listed as open that isn't open anymore (merged or closed
+            // while more than 100 others changed) is left out until the next full list says how it ended.
+            let updated = Set(pullRequests.map(\.number))
+            let openComplete = openDetails.count < 200
+            pullRequests += previous.filter { pullRequest in
+                !updated.contains(pullRequest.number)
+                    && !(openComplete && pullRequest.state == .open && details[pullRequest.number] == nil)
+            }
+            // About as many as a full list: the newest 400, and every open one.
+            pullRequests.sort { $0.number > $1.number }
+            pullRequests = pullRequests.enumerated().filter { $0.offset < 400 || $0.element.state == .open }.map(\.element)
+        }
+        for index in pullRequests.indices {
+            let detail = pullRequests[index].state == .open ? details[pullRequests[index].number] : nil
+            pullRequests[index].reviewDecision = detail?.reviewDecision.flatMap { $0.isEmpty ? nil : $0 }
+            pullRequests[index].checks = detail?.statusCheckRollup.flatMap(summarize)
         }
         return PullRequestIndex(pullRequests)
     }
@@ -510,6 +529,8 @@ extension GitHubCLI {
 struct PullRequestCache: Codable, Sendable {
     let loadedAt: Date
     let pullRequests: [PullRequest]
+    /// When the last full list (rather than only recently updated ones) was fetched.
+    var fullAt: Date?
 
     private static func url(for repositoryID: UUID) -> URL {
         AppPaths.dataDirectory.appendingPathComponent("PullRequests", isDirectory: true)

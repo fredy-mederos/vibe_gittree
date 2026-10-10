@@ -195,6 +195,11 @@ struct RepositoryWindow: View {
         if let highlight = graph.highlight {
             lines.append("Highlight: \(highlight.title) [\(highlight.systemImage)] \(graph.matchRows.count) rows, current \(graph.currentMatch.map(String.init) ?? "-")")
         }
+        if let pullRequests = graph.model.pullRequests {
+            let numbers = pullRequests.all.map(\.number).sorted(by: >)
+            lines.append("Pull requests: \(numbers.count), open \(pullRequests.all.filter { $0.state == .open }.count), "
+                + "newest \(numbers.prefix(3).map(String.init).joined(separator: ", "))")
+        }
         if let progress = graph.highlightProgress { lines.append("Highlight progress: \(progress)") }
         if let note = graph.highlightNote { lines.append("Highlight note: \(note)") }
         if case .pullRequest(_, let number)? = state.sidebarSelection {

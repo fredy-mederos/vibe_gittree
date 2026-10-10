@@ -597,12 +597,19 @@ enum JiraClient {
     @ObservationIgnored private var versionFailures: [String: Date] = [:]
     @ObservationIgnored private var knownFixVersionsCache: [UUID: (version: Int, values: [String])] = [:]
 
-    /// A cached status is shown right away and asked for again only after an hour, when on screen.
+    /// A cached status is shown right away and asked for again only after an hour, when on screen;
+    /// a done ticket's only after a day, since done work rarely changes.
     private static let freshFor: TimeInterval = 60 * 60
+    private static let doneFreshFor: TimeInterval = 24 * 60 * 60
     /// Keys Jira doesn't know are not asked about again for a day.
     private static let missingFor: TimeInterval = 24 * 60 * 60
     private static let listFreshFor: TimeInterval = 10 * 60
-    private static let versionsFreshFor: TimeInterval = 30 * 60
+    private static let versionsFreshFor: TimeInterval = 60 * 60
+
+    /// Whether a cached ticket is due to be asked for again when it's needed.
+    private static func isStale(_ issue: JiraIssue, fetchedAt: Date) -> Bool {
+        !issue.knowsParent || Date().timeIntervalSince(fetchedAt) >= (issue.category == .done ? doneFreshFor : freshFor)
+    }
     private static let batchSize = 50
     private static let requestsPerMinute = 20
     /// The longest GitTree waits when Jira says to slow down; editing a profile ends the wait.
@@ -793,9 +800,7 @@ enum JiraClient {
     /// Makes sure these tickets' statuses are known, through the usual queue (batched, paced,
     /// cached), and waits up to 30 seconds for them.
     func ensure(_ keys: [String], connection: JiraConnection) async {
-        let ids = enqueue(keys, connection: connection) { fetchedAt, issue in
-            Date().timeIntervalSince(fetchedAt) >= Self.freshFor || !issue.knowsParent
-        }
+        let ids = enqueue(keys, connection: connection) { fetchedAt, issue in Self.isStale(issue, fetchedAt: fetchedAt) }
         await wait(for: ids, connection: connection, timeout: 30)
     }
 
@@ -826,18 +831,19 @@ enum JiraClient {
         version += 1
     }
 
-    /// Asks for these keys' statuses (the ones on screen, ahead of everything else waiting);
-    /// cached, queued and known-missing keys are skipped.
-    func request(_ keys: [String], connection: JiraConnection) {
-        enqueue(keys, connection: connection, first: true) { fetchedAt, issue in
-            Date().timeIntervalSince(fetchedAt) >= Self.freshFor || !issue.knowsParent
+    /// Asks for these keys' statuses (the ones on screen, ahead of everything else waiting), at
+    /// most `limit` new ones in the order given; cached, queued and known-missing keys are skipped.
+    func request(_ keys: [String], connection: JiraConnection, limit: Int = .max) {
+        enqueue(keys, connection: connection, first: true, limit: limit) { fetchedAt, issue in
+            Self.isStale(issue, fetchedAt: fetchedAt)
         }
     }
 
-    /// Queues the keys that aren't cached, or whose cached status `isStale` says to ask for again.
-    /// Queued, in-flight and recently unknown keys are skipped. Returns the ids to wait for.
+    /// Queues the keys that aren't cached, or whose cached status `isStale` says to ask for again,
+    /// at most `limit` of them. Queued, in-flight and recently unknown keys are skipped. Returns
+    /// the ids to wait for.
     @discardableResult
-    private func enqueue(_ keys: [String], connection: JiraConnection, first: Bool = false,
+    private func enqueue(_ keys: [String], connection: JiraConnection, first: Bool = false, limit: Int = .max,
                          isStale: (_ fetchedAt: Date, _ issue: JiraIssue) -> Bool) -> [String] {
         guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return [] }
         let now = Date()
@@ -850,6 +856,7 @@ enum JiraClient {
                 waiting.append(id)
                 continue
             }
+            guard added.count < limit else { continue }
             if let cached = cache?.issues[key], !isStale(cached.fetchedAt, cached.issue) { continue }
             if let missing = cache?.unknown[key], now.timeIntervalSince(missing) < Self.missingFor { continue }
             added.append(Pending(key: key, connection: connection))
@@ -960,8 +967,7 @@ enum JiraClient {
     }
 
     /// Asks Jira for the projects' unreleased fix versions, unless they were fetched in the last
-    /// half hour (or Jira didn't know the project today): one request per project, paced like
-    /// every other.
+    /// hour (or Jira didn't know the project today): one request per project, paced like every other.
     func refreshVersions(projects: [String], connection: JiraConnection, force: Bool = false) {
         guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return }
         let now = Date()

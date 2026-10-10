@@ -35,6 +35,8 @@ import Observation
     @ObservationIgnored private var ticketIndexCache: (graph: CommitGraph, index: TicketIndex)?
     @ObservationIgnored private var pullRequestTask: Task<Void, Never>?
     @ObservationIgnored private var pullRequestsLoadedAt: Date?
+    /// When the last full list of pull requests came; refreshes in between ask only for recent changes.
+    @ObservationIgnored private var pullRequestsFullAt: Date?
     @ObservationIgnored private var pullRequestRetryAt: Date?
     @ObservationIgnored private var pullRequestBackoff: TimeInterval = 5 * 60
 
@@ -57,6 +59,7 @@ import Observation
            Date().timeIntervalSince(cached.loadedAt) < 7 * 24 * 60 * 60 {
             pullRequests = PullRequestIndex(cached.pullRequests)
             pullRequestsLoadedAt = cached.loadedAt
+            pullRequestsFullAt = cached.fullAt
         }
     }
 
@@ -203,13 +206,16 @@ import Observation
     /// Loads pull requests with `gh`, carefully: only for a repository a window shows (or when the
     /// user asks with Fetch), one refresh at a time across the app, at most every five minutes
     /// (every 30 seconds after Fetch), with a 30-second timeout and growing waits after failures,
-    /// so reloads, repeated clicks and quick switching never pile up requests.
+    /// so reloads, repeated clicks and quick switching never pile up requests. Between full lists
+    /// (every six hours, or on Fetch) a refresh asks only for the pull requests updated most recently.
     func refreshPullRequests(force: Bool = false) {
         guard let hosting, hosting.provider == .github, pullRequestTask == nil else { return }
         guard force || WindowState.isShowing(id) else { return }
         let now = Date()
         if let loaded = pullRequestsLoadedAt, now.timeIntervalSince(loaded) < (force ? 30 : 5 * 60) { return }
         if !force, let retry = pullRequestRetryAt, now < retry { return }
+        let full = force || pullRequests == nil || pullRequestsFullAt.map { now.timeIntervalSince($0) > 6 * 60 * 60 } ?? true
+        let previous = full ? nil : pullRequests?.all
         let repositoryPath = hosting.path
         let id = id
         pullRequestTask = Task { [weak self] in
@@ -222,7 +228,7 @@ import Observation
             }
             let result: Result<PullRequestIndex, Error>
             do {
-                result = .success(try await GitHubCLI.pullRequests(repository: repositoryPath))
+                result = .success(try await GitHubCLI.pullRequests(repository: repositoryPath, mergingInto: previous))
             } catch {
                 result = .failure(error)
             }
@@ -232,7 +238,8 @@ import Observation
             switch result {
             case .success(let index):
                 self.pullRequests = index
-                let cache = PullRequestCache(loadedAt: Date(), pullRequests: index.all)
+                if full { self.pullRequestsFullAt = Date() }
+                let cache = PullRequestCache(loadedAt: Date(), pullRequests: index.all, fullAt: self.pullRequestsFullAt)
                 let repositoryID = self.id
                 Task.detached(priority: .utility) { cache.save(repositoryID: repositoryID) }
                 self.pullRequestProblem = nil

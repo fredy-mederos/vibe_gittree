@@ -7,14 +7,14 @@ versions without real credentials. Every request is logged to stderr with what i
 
 Every ticket gets a made-up status, type and fix version. Most belong to one of four mock epics
 (PROJ-90001…90004); a quarter are sub-tasks of mock tasks (PROJ-80000…80004), whose parents are
-the epics, like in a real project. Projects list six unreleased fix versions, Android and iOS ones,
-each with two extra tickets that no commit mentions.
+the epics, like in a real project. Every project it has answered tickets for lists six unreleased
+fix versions, Android and iOS ones, each with two extra tickets that no commit mentions; other
+projects get 404 (--projects=A,B names the projects instead).
 
-Keys starting with PRO- (not PROJ-) are treated as unknown: bulk fetch leaves them out (reporting
-them in issueErrors), and JQL search fails with 400 like real Jira. Only PROJ has fix versions
-(--projects=PROJ,ABC for more); other projects get 404. Pass --search-only to answer bulk fetch
-with 404, to exercise GitTree's fallback to search, and --no-parent-epic to reject `parentEpic`
-queries, to exercise its fallback to `parent`.
+Keys starting with PRO- (a near miss of PROJ-; --unknown=PREFIX picks another) are treated as
+unknown: bulk fetch leaves them out (reporting them in issueErrors), and JQL search fails with 400
+like real Jira. Pass --search-only to answer bulk fetch with 404, to exercise GitTree's fallback to
+search, and --no-parent-epic to reject `parentEpic` queries, to exercise its fallback to `parent`.
 """
 import json
 import re
@@ -28,7 +28,7 @@ STATUSES = [
     ("In Progress", "indeterminate"),
     ("In Review", "indeterminate"),
     ("Done", "done"),
-    ("Live", "done"),
+    ("Released", "done"),
 ]
 EPICS = {
     "PROJ-90001": ("[Search] Faster search", ("In Progress", "indeterminate")),
@@ -96,7 +96,7 @@ def summary_of(key):
     if key in EPICS:
         return EPICS[key][0]
     if key in TASKS:
-        return f"[Android] Impl: mock task {key}"
+        return f"[Android] Mock task {key}"
     return f"Mock summary for {key}"
 
 
@@ -145,6 +145,13 @@ def tickets_in(name):
     return sorted(key for key in known_keys() if key not in EPICS and version_of(key) == name)
 
 
+def is_project(key):
+    """Projects named on the command line, or else every project it has answered tickets for."""
+    if PROJECTS:
+        return key in PROJECTS
+    return any(ticket.rsplit("-", 1)[0] == key for ticket in seen)
+
+
 class Handler(BaseHTTPRequestHandler):
     # Idle connections (URLSession opens some ahead of time) must not block other requests.
     timeout = 10
@@ -165,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
         project = re.match(r"/rest/api/3/project/([A-Z][A-Z0-9]*)/version", self.path)
         if project:
             requests += 1
-            if project.group(1) not in PROJECTS:
+            if not is_project(project.group(1)):
                 log(f"request {requests}: versions of {project.group(1)}, not a project (404)")
                 self.reply(404, {"errorMessages": [f"No project could be found with key '{project.group(1)}'."]})
                 return
@@ -202,11 +209,11 @@ class Handler(BaseHTTPRequestHandler):
             return
         if keys == "search":
             keys = query.get("issueIdsOrKeys", []) if bulk else re.findall(r"[A-Z][A-Z0-9]+-\d+", jql)
-            seen.update(key for key in keys if not key.startswith("PRO-"))
+            seen.update(key for key in keys if not key.startswith(UNKNOWN))
             log(f"request {requests}: {'bulk fetch' if bulk else 'search'}, {len(keys)} keys")
-        missing = [key for key in keys if key.startswith("PRO-")]
+        missing = [key for key in keys if key.startswith(UNKNOWN)]
         if missing and not bulk:
-            self.reply(400, {"errorMessages": ["An issue with key 'PRO-…' does not exist for field 'key'."]})
+            self.reply(400, {"errorMessages": [f"An issue with key '{missing[0]}' does not exist for field 'key'."]})
             return
         issues = [issue_json(key) for key in keys if key not in missing]
         errors = [{"issueIdOrKey": key, "errorMessages": ["Issue does not exist"]} for key in missing]
@@ -221,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
             keys = tickets_in(name) + (extra_tickets(version_id) if version_id else [])
             log(f"request {requests}: fixVersion {name}, {len(keys)} tickets")
             return keys
-        epic = re.search(r"parentEpic = ([A-Z]+-\d+)", jql)
+        epic = re.search(r"parentEpic = ([A-Z][A-Z0-9]*-\d+)", jql)
         if epic:
             if NO_PARENT_EPIC:
                 log(f"request {requests}: parentEpic {epic.group(1)} refused (400)")
@@ -242,10 +249,15 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def option(name, default):
+    """The value of --name=value, or the default."""
+    return next((arg.split("=", 1)[1] for arg in sys.argv if arg.startswith(f"--{name}=")), default)
+
+
 SEARCH_ONLY = "--search-only" in sys.argv
 NO_PARENT_EPIC = "--no-parent-epic" in sys.argv
-# Projects that have fix versions; other ticket prefixes get 404, like keys that only look like projects.
-PROJECTS = next((arg.split("=", 1)[1].split(",") for arg in sys.argv if arg.startswith("--projects=")), ["PROJ"])
+PROJECTS = [key for key in option("projects", "").split(",") if key]
+UNKNOWN = option("unknown", "PRO") + "-"
 
 
 def log(message):

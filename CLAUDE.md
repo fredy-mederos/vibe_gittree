@@ -64,10 +64,16 @@ what's shipped), and `TODO.md` for what's still open or was dropped.
   page through the data object `D`.
 - After changing the page, check its script parses with `node --check` and rebuild a real repo.
 - `dist/` holds built pages with real commit history and is git-ignored. Don't commit it.
-- The snapshot is published as a private claude.ai artifact. Republish to
-  that URL rather than creating a new artifact.
+- The user's work snapshot is published as a claude.ai artifact; its URL and build command are in
+  Claude's local memory for this project, not here. Republish to that URL rather than creating a
+  new artifact.
 
 ## Git
 
-- This repository's remote is `github.com/fredy-mederos/vibe_gittree` (private). Commits use the
-  repo-local identity `Fredy Mederos <fmfredd@gmail.com>`; don't change it to the work address.
+- This repository's remote is `github.com/fredy-mederos/vibe_gittree`, public (or about to be).
+  Commits use the repo-local identity `Fredy Mederos <fmfredd@gmail.com>`; don't change it to the
+  work address.
+- Nothing about the user's employer goes into the repository: not its name, GitHub org, Jira site,
+  ticket keys, feature codenames or real ticket and fix version names, in files, samples, mock data
+  or commit messages. Use neutral samples (Acme, `PROJ-123`, `[Search]`, `example.atlassian.net`).
+- Issues are welcome; pull requests aren't accepted (see `CONTRIBUTING.md`).

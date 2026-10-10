@@ -344,7 +344,7 @@ import Observation
 
     /// Fills the Epics and Releases sections from what Jira has said so far, then asks it, gently,
     /// about what's missing: recent tickets it hasn't answered about (and the stories and tasks
-    /// above sub-tasks), and the projects' fix versions every half hour. Runs when the history is
+    /// above sub-tasks), and the projects' fix versions every hour. Runs when the history is
     /// laid out and when the repository is shown again; when nothing changed it asks nothing.
     func loadJiraOverview() {
         guard let layout, let jira, layout.graph.ticketRegex != nil else {
@@ -386,17 +386,19 @@ import Observation
                 self.jiraLoadedFor = nil
                 return
             }
-            self.refreshVersions(jira)
             await self.readEpics(of: tickets.map(\.key), connection: jira)
+            // After the tickets: the projects to ask about are the ones Jira answered tickets for.
+            guard !Task.isCancelled else { return }
+            self.refreshVersions(jira)
         }
     }
 
     /// The Epics section's Refresh: asks Jira again about every recent ticket and the fix versions.
     func refreshJiraOverview() {
-        guard let jira, let graph = commitGraph else { return }
+        guard let jira else { return }
         let keys = recentTickets.map(\.key)
         jiraTask?.cancel()
-        JiraStore.shared.refreshVersions(projects: Self.projects(of: graph), connection: jira, force: true)
+        JiraStore.shared.refreshVersions(projects: jiraProjects(jira), connection: jira, force: true)
         jiraTask = Task { [weak self] in
             guard let self else { return }
             self.epicProgress = "Reading \(counted(keys.count, "ticket", "tickets")) from Jira…"
@@ -406,14 +408,21 @@ import Observation
         }
     }
 
-    /// Ticket keys like PROJ-123 name the Jira projects whose fix versions are listed (at most three).
-    static func projects(of graph: CommitGraph) -> [String] {
-        Array(graph.ticketPrefixes.prefix(3))
+    /// The Jira projects whose fix versions are listed, named by the repository's ticket keys
+    /// (PROJ-123 → PROJ), at most three: only prefixes Jira has answered tickets for, so ones that
+    /// merely look like project keys are never asked about.
+    private func jiraProjects(_ jira: JiraConnection) -> [String] {
+        guard let graph = commitGraph else { return [] }
+        var known: Set<String> = []
+        for ticket in recentTickets where JiraStore.shared.issue(ticket.key, connection: jira) != nil {
+            if let dash = ticket.key.lastIndex(of: "-") { known.insert(String(ticket.key[..<dash])) }
+        }
+        return Array(graph.ticketPrefixes.filter(known.contains).prefix(3))
     }
 
     private func refreshVersions(_ jira: JiraConnection) {
-        guard let graph = commitGraph else { return }
-        JiraStore.shared.refreshVersions(projects: Self.projects(of: graph), connection: jira)
+        let projects = jiraProjects(jira)
+        if !projects.isEmpty { JiraStore.shared.refreshVersions(projects: projects, connection: jira) }
     }
 
     /// Asks Jira about recent tickets it hasn't answered about, then about the stories and tasks
@@ -462,7 +471,7 @@ import Observation
         guard let jira, let ticketIndex else { return }
         let (graph, index) = ticketIndex
         epics = EpicReport.build(recentTickets, commitLimit: jiraLoadedFor?.limit ?? epicCommitLimit, connection: jira)
-        releases = ReleaseReport.build(projects: Self.projects(of: graph), index: index, connection: jira)
+        releases = ReleaseReport.build(projects: jiraProjects(jira), index: index, connection: jira)
         if !openedReleases.isEmpty {
             let children = index.children(connection: jira)
             var lists: [String: [TicketSummary]] = [:]

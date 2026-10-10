@@ -264,22 +264,26 @@ final class GraphNSTableView: NSTableView {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
+    /// The tickets on screen first, then those a screen below and a screen above, at most one
+    /// batch's worth of new ones: scrolling on finds the next screen mostly known, so it doesn't
+    /// send a request per screen.
     private func requestVisibleTickets() {
         guard let tableView, let layout, let jira else { return }
         let visible = tableView.rows(in: tableView.visibleRect)
         guard visible.length > 0 else { return }
+        let end = min(layout.rowCount, visible.location + visible.length)
+        let rows = Array(visible.location..<end)
+            + Array(end..<min(layout.rowCount, end + visible.length))
+            + Array(max(0, visible.location - visible.length)..<visible.location).reversed()
         var keys: [String] = []
-        for row in visible.location..<min(layout.rowCount, visible.location + visible.length) {
-            if let key = layout.graph.ticketKey(in: layout.graph.subjects[Int(layout.rows[row])]), !keys.contains(key) {
+        var seen: Set<String> = []
+        for row in rows {
+            if let key = layout.graph.ticketKey(in: layout.graph.subjects[Int(layout.rows[row])]), seen.insert(key).inserted {
                 keys.append(key)
             }
         }
         guard !keys.isEmpty else { return }
-        JiraStore.shared.request(keys, connection: jira)
-        // A sub-task's epic is its story's or task's parent; once statuses arrive (which brings
-        // this back), those stories and tasks are asked for too, then nothing more.
-        let parents = JiraStore.shared.parentsToRead(of: keys, connection: jira)
-        if !parents.isEmpty { JiraStore.shared.request(parents, connection: jira) }
+        JiraStore.shared.request(keys, connection: jira, limit: 50)
     }
 
     func tableViewColumnDidResize(_ notification: Notification) {

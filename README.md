@@ -6,7 +6,9 @@ A fast, read-only explorer for git history. Two parts:
   or remote. This is the main project.
 - **Web snapshot**, a script that turns one repository's history into a single shareable HTML page.
 
-Ideas queued for later are in [TODO.md](TODO.md).
+Ideas queued for later are in [TODO.md](TODO.md). It's a personal project: clone it and fork it
+freely, and open an issue for bugs or ideas; pull requests aren't accepted (see
+[CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## GitTree for macOS
 
@@ -125,7 +127,7 @@ permission to access that folder.
   the ticket keys to look for (`PROJ`, or several separated by commas; empty detects them from commit
   messages), an issue link such as `https://example.atlassian.net/browse/{key}` for ticket keys when
   tickets live somewhere else, and the regular expression that marks release tags (for example
-  `^android-v[\d.]+$`).
+  `^android-v[\d.]+$` when releases are tagged `android-v2.12`).
 - **Appearance**: Settings › General › Appearance picks Light, Dark or System.
 - **About**: Settings › General shows the version, the build number (the commit count when
   `scripts/install.sh` built it), the commit, whether it's a Debug or Release build, and when it
@@ -139,31 +141,37 @@ and only when you ask for it (or when a remote repository GitTree cloned itself 
 Both integrations are deliberately gentle, so scrolling or reloading can never turn into a storm of
 requests:
 
-- **GitHub**: two `gh pr list` calls per repository (recent pull requests, then reviews and checks
-  of the open ones), only for repositories a window shows (or when you press Fetch). One refresh
-  runs at a time across all repositories, at most every five minutes per repository (30 seconds
-  after Fetch), each call with a 30-second timeout; after a failure it waits 5 minutes, then longer.
-  A pull request's timeline is one `gh api graphql` call when you select it (after a short pause,
-  so arrowing through the list doesn't ask for every row), in the same one-at-a-time line; it's
-  kept for five minutes while the pull request is open and for good once it's merged or closed,
-  and after a failure that pull request waits a minute.
-- **Jira**: only tickets on screen, only once scrolling pauses, only ones not already cached; up to
-  50 per request with bulk fetch (one request per screen), one request at a time across all
-  profiles and everything below, at most 20 a minute. Statuses are cached on disk per profile
-  (`jira-cache.json`) and asked for again only after an hour, when they're on screen. Unknown
-  tickets aren't asked about again for a day. Each ticket comes with its parent, so the Epics
-  section asks only about recent tickets Jira hasn't answered about yet (a few requests the first
-  time a repository opens, then only new tickets), plus the stories and tasks above sub-tasks;
+- **GitHub**: two `gh pr list` calls per refresh (pull requests, then reviews and checks of the
+  open ones), only for repositories a window shows (or when you press Fetch). One refresh runs at a
+  time across all repositories, at most every five minutes per repository (30 seconds after
+  Fetch), and only when something prompts it: opening the repository, its history changing, Fetch.
+  A refresh asks for the 100 pull requests updated most recently and merges them into what's
+  known (three API requests in all); the full list of the latest 400 (five) comes at most every
+  six hours, or on Fetch. Each call has a 30-second timeout; after a failure it waits 5 minutes,
+  then longer. A pull request's timeline is one `gh api graphql` call when you select it (after a
+  short pause, so arrowing through the list doesn't ask for every row), in the same one-at-a-time
+  line; it's kept for five minutes while the pull request is open and for good once it's merged or
+  closed, and after a failure that pull request waits a minute.
+- **Jira**: one request at a time across all profiles and everything below, at most 20 a minute.
+  Every ticket comes in one request with everything GitTree shows about it: status, type,
+  assignee, fix versions and its parent (the epic, or for a sub-task its story or task). Tickets
+  are asked for in bulk, up to 50 per request: the ones on screen once scrolling pauses, along with
+  those a screen above and below, so scrolling on doesn't send a request per screen. Answers are
+  cached on disk per profile (`jira-cache.json`) and asked for again only when they're on screen
+  and older than an hour (a day for done tickets). Unknown tickets aren't asked about again for a
+  day. The Epics section asks only about recent tickets Jira hasn't answered about yet (three
+  requests the first time a 500-commit stretch of a busy repository opens, then only new tickets),
+  plus once the stories and tasks above sub-tasks, since a sub-task's parent doesn't name the epic;
   tickets on screen go ahead of those. A repository's unreleased fix versions are one request per
-  project at most every half hour (a ticket prefix that isn't a project isn't asked about again
-  for a day). A fix version's or an epic's tickets take at most five requests, only when you
-  select or open one, and are reused for ten minutes. A rejected token stops that profile's
-  requests until its settings change; timeouts back off, and Jira's requests to slow down are
-  honored (up to ten minutes). Editing a profile drops anything still queued or in flight with the
-  old credentials. Sites without bulk fetch get JQL search, with smaller batches after a query
-  fails on an unknown key, paced like everything else; sites without `parentEpic` get an epic's
-  tickets level by level. Repository › Refresh Ticket Statuses asks again for what's on screen,
-  and the Epics section's Ask Jira Again for the recent tickets and fix versions.
+  project at most every hour, and only for projects Jira has returned tickets for. A fix version's
+  or an epic's tickets take at most five requests, only when you select or open one, and are reused
+  for ten minutes. A rejected token stops that profile's requests until its settings change;
+  timeouts back off, and Jira's requests to slow down are honored (up to ten minutes). Editing a
+  profile drops anything still queued or in flight with the old credentials. Sites without bulk
+  fetch get JQL search, with smaller batches after a query fails on an unknown key, paced like
+  everything else; sites without `parentEpic` get an epic's tickets level by level. Repository ›
+  Refresh Ticket Statuses asks again for what's on screen, and the Epics section's Ask Jira Again
+  for the recent tickets and fix versions.
 
 ### Shortcuts
 
@@ -238,8 +246,9 @@ writes what a comparison found.
 
 To try the Jira integration without real credentials, run the mock server and point a debug build
 at it; it logs every request, which makes it easy to check that scrolling doesn't flood Jira. Its
-tickets have epics, stories, tasks and sub-tasks, and PROJ has six unreleased fix versions
-(`--no-parent-epic` rejects `parentEpic` queries, `--projects=A,B` sets which projects have them):
+tickets have epics, stories, tasks and sub-tasks, and every project it has answered tickets for
+has six unreleased fix versions (`--no-parent-epic` rejects `parentEpic` queries, `--projects=A,B`
+names the projects instead):
 
 ```bash
 python3 scripts/mock-jira.py 8899
@@ -271,5 +280,4 @@ For example:
 python3 scripts/build.py ~/code/acme-android -o dist/acme-android.html --title "Acme Android Commit Graph" --jira https://example.atlassian.net/browse/ --jira-prefixes PROJ --release-tag '^android-v[\d.]+$'
 ```
 
-It's also published as a private claude.ai artifact.
 The page's source is `src/template.html`, with `/*__TITLE__*/` and `/*__DATA__*/` placeholders.
