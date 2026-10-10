@@ -63,8 +63,11 @@ permission to access that folder.
 - **Pull requests** (GitHub, through the `gh` command): an open pull request's number next to its
   branch in the graph and sidebar, with its checks (✓ passed, ✗ failed, clock running). Stacked pull
   requests (based on another open PR's branch) show their position, like `#8161 · 5/5`. The sidebar
-  lists every stack in order, plus open, draft, recently merged and recently closed pull requests; the inspector shows the pull request
-  that merged a commit, its review and checks, and the whole stack.
+  lists every stack in order, plus open, draft, recently merged and recently closed pull requests.
+  Select an open pull request to highlight its commits in the graph (those on its branch that
+  aren't on the branch it's based on), or the whole stack's when it's stacked; right-click a stack ›
+  Highlight Stack does the same. The inspector shows the pull request that merged a commit, its
+  review and checks, and the whole stack.
 - **Jira** (Settings › Jira): profiles, each a Jira Cloud site and the account to use there. Every
   repository picks its profile or none, in Settings › Jira or in its Repository Settings, and new
   repositories start with the default profile. Repositories with a profile get a Ticket column with

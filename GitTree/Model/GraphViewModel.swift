@@ -359,10 +359,24 @@ import Observation
         scheduleSearch(jump: false)
     }
 
-    /// Selecting something else in the sidebar ends a feature's highlight (ticket and fix version
-    /// highlights come from the toolbar and stay).
-    func clearFeatureHighlight() {
-        if highlight?.featureID != nil { clearHighlight() }
+    /// Selecting something else in the sidebar ends a feature's or a pull request's highlight
+    /// (ticket and fix version highlights come from the toolbar and stay).
+    func clearSidebarHighlight() {
+        if highlight?.followsSidebar == true { clearHighlight() }
+    }
+
+    /// Highlights the commits of open pull requests (one, or a stack), leaving the selection where
+    /// it is: the commits on each branch that aren't on the branch it's based on.
+    func highlightPullRequests(_ pullRequests: [PullRequest], title: String, systemImage: String) {
+        guard let graph = commitGraph else { return }
+        cancelHighlightLoad()
+        highlightLoadTask = Task { [weak self] in
+            let ids = await Task.detached(priority: .userInitiated) {
+                PullRequestCommits.commits(of: pullRequests, in: graph)
+            }.value
+            guard let self, !Task.isCancelled, self.commitGraph === graph else { return }
+            self.setHighlight(.commits(title: title, systemImage: systemImage, ids: ids), jump: false)
+        }
     }
 
     private func cancelHighlightLoad() {
@@ -372,11 +386,11 @@ import Observation
         highlightNote = nil
     }
 
-    private func setHighlight(_ newHighlight: CommitHighlight) {
+    private func setHighlight(_ newHighlight: CommitHighlight, jump: Bool = true) {
         cancelHighlightLoad()
         highlight = newHighlight
         if !searchText.isEmpty { searchText = "" }
-        applyHighlight(jump: true)
+        applyHighlight(jump: jump)
     }
 
     private func applyHighlight(jump: Bool) {
@@ -446,11 +460,14 @@ enum SearchEngine {
 enum CommitHighlight: Sendable {
     case feature(FeatureGroup)
     case tickets(title: String, keys: Set<String>)
+    /// A pull request's commits, or a whole stack's.
+    case commits(title: String, systemImage: String, ids: Set<ObjectID>)
 
     var title: String {
         switch self {
         case .feature(let group): group.name
         case .tickets(let title, _): title
+        case .commits(let title, _, _): title
         }
     }
 
@@ -458,6 +475,16 @@ enum CommitHighlight: Sendable {
         switch self {
         case .feature: "sparkles"
         case .tickets: "ticket"
+        case .commits(_, let systemImage, _): systemImage
+        }
+    }
+
+    /// Set by selecting something in the sidebar (a feature or a pull request), so selecting
+    /// something else there ends it. Ticket highlights come from the toolbar and stay.
+    var followsSidebar: Bool {
+        switch self {
+        case .feature, .commits: true
+        case .tickets: false
         }
     }
 
@@ -477,6 +504,12 @@ enum CommitHighlight: Sendable {
         case .feature(let group):
             return group.commits
                 .compactMap { layout.graph.indexByID[$0.id] }
+                .map { layout.rowOfCommit[Int($0)] }
+                .filter { $0 >= 0 }
+                .sorted()
+        case .commits(_, _, let ids):
+            return ids
+                .compactMap { layout.graph.indexByID[$0] }
                 .map { layout.rowOfCommit[Int($0)] }
                 .filter { $0 >= 0 }
                 .sorted()

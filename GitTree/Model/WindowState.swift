@@ -112,20 +112,31 @@ enum SidebarItem: Hashable {
             open(id)
         case .ref(let id, let fullName):
             if id != repositoryID { open(id) }
-            graph?.clearFeatureHighlight()
+            graph?.clearSidebarHighlight()
             graph?.reveal(refNamed: fullName)
         case .feature(let id, let featureID):
             if id != repositoryID { open(id) }
             graph?.showFeature(id: featureID)
         case .pullRequest(let id, let number):
             if id != repositoryID { open(id) }
-            graph?.clearFeatureHighlight()
-            guard let graph, let commitGraph = graph.commitGraph,
-                  let pullRequest = graph.model.pullRequests?.byNumber[number] else { break }
-            if pullRequest.state == .merged, let merge = pullRequest.mergeCommit, let index = commitGraph.indexByID[merge] {
-                graph.select(index)
+            graph?.clearSidebarHighlight()
+            guard let graph, let commitGraph = graph.commitGraph, let index = graph.model.pullRequests,
+                  let pullRequest = index.byNumber[number] else { break }
+            if pullRequest.state == .merged, let merge = pullRequest.mergeCommit, let commit = commitGraph.indexByID[merge] {
+                graph.select(commit)
             } else if let ref = pullRequest.ref(in: commitGraph) {
                 graph.reveal(refNamed: ref.fullName)
+                // An open pull request lights up its commits, and a stacked one the whole stack's.
+                guard pullRequest.state == .open else { break }
+                let stack = index.stack(containing: pullRequest)
+                if stack.isEmpty {
+                    graph.highlightPullRequests([pullRequest], title: "#\(pullRequest.number) \(pullRequest.title)",
+                                                systemImage: "arrow.triangle.pull")
+                } else {
+                    let numbers = stack.map { "#\($0.number)" }.joined(separator: " → ")
+                    graph.highlightPullRequests(stack, title: "Stack on \(stack[0].base): \(numbers)",
+                                                systemImage: "square.stack.3d.up")
+                }
             }
         case nil:
             break

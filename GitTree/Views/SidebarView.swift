@@ -181,6 +181,12 @@ struct SidebarView: View {
                     } label: {
                         CountedLabel(title: "on \(stack.first?.base ?? "")", systemImage: "square.stack.3d.up", count: stack.count)
                             .togglesDisclosure(isExpanded)
+                            .contextMenu {
+                                if let top = stack.last {
+                                    // Selecting the top pull request highlights the whole stack.
+                                    Button("Highlight Stack") { state.sidebarSelection = .pullRequest(repositoryID, top.number) }
+                                }
+                            }
                     }
                 }
             } header: {

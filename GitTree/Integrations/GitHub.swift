@@ -324,3 +324,41 @@ struct PullRequestCache: Codable, Sendable {
 extension GitHubCLI {
     @MainActor static let gate = SerialGate()
 }
+
+/// The commits pull requests bring: those on each one's branch that aren't on the branch it's
+/// based on. When the base branch isn't in the graph, long-lived branches (develop, main…) stand in
+/// for it. At most `limit` commits per pull request.
+enum PullRequestCommits {
+    static func commits(of pullRequests: [PullRequest], in graph: CommitGraph, limit: Int = 2_000) -> Set<ObjectID> {
+        var result: Set<ObjectID> = []
+        for pullRequest in pullRequests {
+            guard let head = pullRequest.ref(in: graph) else { continue }
+            var bases = graph.refs.filter { ref in
+                ref.kind != .tag && (ref.kind == .local ? ref.name : ref.remoteParts?.branch) == pullRequest.base
+            }
+            if bases.isEmpty {
+                bases = graph.refs.filter { ref in
+                    guard ref.kind != .tag, let branch = ref.kind == .local ? ref.name : ref.remoteParts?.branch else { return false }
+                    return PullRequestIndex.isLongLived(branch)
+                }
+            }
+            var onBase = [Bool](repeating: false, count: graph.count)
+            var stack = bases.map(\.commit)
+            while let commit = stack.popLast() {
+                guard commit >= 0, !onBase[Int(commit)] else { continue }
+                onBase[Int(commit)] = true
+                stack.append(contentsOf: graph.parents(commit))
+            }
+            var seen = Set<Int32>()
+            var queue = [head.commit]
+            var found = 0
+            while let commit = queue.popLast(), found < limit {
+                guard commit >= 0, !onBase[Int(commit)], seen.insert(commit).inserted else { continue }
+                result.insert(graph.ids[Int(commit)])
+                found += 1
+                queue.append(contentsOf: graph.parents(commit))
+            }
+        }
+        return result
+    }
+}
