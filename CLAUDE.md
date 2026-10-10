@@ -1,8 +1,7 @@
 # CLAUDE.md
 
-Personal side project: GitTree, a read-only git history explorer. The main part is a native macOS
-app; a smaller web-snapshot generator lives alongside it. Read `README.md` first (it describes
-what's shipped), and `TODO.md` for what's still open or was dropped.
+Personal side project: GitTree, a read-only git history explorer, as a native macOS app. Read
+`README.md` first (it describes what's shipped), and `TODO.md` for what's still open or was dropped.
 
 ## Native app (`GitTree/`, `GitTree.xcodeproj`)
 
@@ -56,18 +55,6 @@ what's shipped), and `TODO.md` for what's still open or was dropped.
 - The user's global `~/.claude/CLAUDE.md` tells every Claude session to use `gittree <file>:<line>`;
   keep the command's arguments and link format backward compatible.
 
-## Web snapshot (`src/template.html`, `scripts/build.py`)
-
-- Keep it dependency-free: Python 3 standard library for the script, plain JS/CSS in the page.
-- `src/template.html` must keep the `/*__TITLE__*/` and `/*__DATA__*/` markers exactly once each.
-- Nothing repo-specific goes in the template; per-repo settings are build options that reach the
-  page through the data object `D`.
-- After changing the page, check its script parses with `node --check` and rebuild a real repo.
-- `dist/` holds built pages with real commit history and is git-ignored. Don't commit it.
-- The user's work snapshot is published as a claude.ai artifact; its URL and build command are in
-  Claude's local memory for this project, not here. Republish to that URL rather than creating a
-  new artifact.
-
 ## Git
 
 - This repository's remote is `github.com/fredy-mederos/vibe_gittree`, public (or about to be).
@@ -77,3 +64,6 @@ what's shipped), and `TODO.md` for what's still open or was dropped.
   ticket keys, feature codenames or real ticket and fix version names, in files, samples, mock data
   or commit messages. Use neutral samples (Acme, `PROJ-123`, `[Search]`, `example.atlassian.net`).
 - Issues are welcome; pull requests aren't accepted (see `CONTRIBUTING.md`).
+- The web snapshot generator (`scripts/build.py`, `src/template.html`) was removed; it's still in
+  the history. `dist/` may hold pages it built, with real commit history: it stays git-ignored,
+  never commit it.

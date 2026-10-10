@@ -1,10 +1,7 @@
 # vibe_gittree
 
-A fast, read-only explorer for git history. Two parts:
-
-- **GitTree**, a native macOS app (SwiftUI + AppKit) for browsing any number of repositories, local
-  or remote. This is the main project.
-- **Web snapshot**, a script that turns one repository's history into a single shareable HTML page.
+**GitTree** is a fast, read-only explorer for git history: a native macOS app (SwiftUI + AppKit) for
+browsing any number of repositories, local or remote.
 
 Ideas queued for later are in [TODO.md](TODO.md). It's a personal project: clone it and fork it
 freely, and open an issue for bugs or ideas; pull requests aren't accepted (see
@@ -216,7 +213,7 @@ scripts/gittree      the deep-link command
 - History comes from one `git log --branches --remotes --tags --date-order` plus `git for-each-ref`,
   parsed byte by byte into parallel arrays. On a 15,858-commit Android repository, loading,
   parsing and laying out the graph takes about half a second in a debug build.
-- The lane layout is one top-to-bottom pass (the same algorithm as the web snapshot): a commit takes
+- The lane layout is one top-to-bottom pass: a commit takes
   the longest-lived lane waiting for it, so mainlines like `develop` keep their column and color.
 - The table is an `NSTableView`, which only creates views for visible rows, so very large histories
   scroll as smoothly as small ones. Graph cells draw their segments with Core Graphics.
@@ -254,30 +251,3 @@ names the projects instead):
 python3 scripts/mock-jira.py 8899
 scripts/snapshot.sh /tmp/gittree.png 8 -GTOpenRepository ~/code/some-repo -GTJiraSite http://127.0.0.1:8899
 ```
-
-## Web snapshot
-
-Builds a self-contained HTML commit graph (the original prototype), useful for sharing a snapshot.
-
-```bash
-python3 scripts/build.py ~/path/to/repo
-```
-
-This writes `dist/<repo-name>.html` (git-ignored, since it contains the repository's history).
-
-| Option | What it does |
-| --- | --- |
-| `-o FILE` | Output path (default `dist/<repo-name>.html`) |
-| `--title TEXT` | Page title (default `<repo-name> Commit Graph`) |
-| `--jira URL` | Jira browse URL, e.g. `https://example.atlassian.net/browse/` |
-| `--jira-prefixes A,B` | Ticket prefixes that get Jira links |
-| `--tickets A,B` | Ticket prefixes to highlight (default: auto-detected from commit subjects) |
-| `--release-tag REGEX` | Which tags count as production releases for "Shipped in" (default: plain version tags like `v2.4.1`) |
-
-For example:
-
-```bash
-python3 scripts/build.py ~/code/acme-android -o dist/acme-android.html --title "Acme Android Commit Graph" --jira https://example.atlassian.net/browse/ --jira-prefixes PROJ --release-tag '^android-v[\d.]+$'
-```
-
-The page's source is `src/template.html`, with `/*__TITLE__*/` and `/*__DATA__*/` placeholders.
