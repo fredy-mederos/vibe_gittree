@@ -401,8 +401,13 @@ struct SidebarView: View {
                 ForEach(report.groups) { group in
                     epicGroup(group, graph: graph, repositoryID: repositoryID)
                 }
-                if report.groups.isEmpty, graph.epicProgress == nil {
+                if report.groups.isEmpty, report.liveEpics == 0, graph.epicProgress == nil {
                     Text(report.ticketCount == 0 ? "No tickets in the latest \(report.commitLimit.formatted()) commits." : "Waiting for Jira…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if report.liveEpics > 0 {
+                    Text("\(counted(report.liveEpics, "live epic", "live epics")) not shown.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

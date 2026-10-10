@@ -66,7 +66,9 @@ struct RecentTicket: Identifiable, Sendable {
 }
 
 /// Recent work grouped by Jira epic: the tickets in the latest commits, each under its epic (a
-/// sub-task's epic is the one above its story or task).
+/// sub-task's epic is the one above its story or task). Epics that are live (in Jira's done
+/// category, like Done or Released; a Definition of Done doesn't count) are left out with their
+/// tickets, even ones that aren't live yet.
 struct EpicReport: Sendable {
     struct Group: Identifiable, Sendable {
         /// The epic's key; empty for tickets without an epic.
@@ -87,6 +89,8 @@ struct EpicReport: Sendable {
     let pending: Int
     /// Tickets Jira doesn't know, or this account can't see.
     let notInJira: Int
+    /// Epics left out because they're live.
+    let liveEpics: Int
     let ticketCount: Int
     let commitLimit: Int
 
@@ -117,14 +121,16 @@ struct EpicReport: Sendable {
             if members[group] == nil { order.append(group) }
             members[group, default: []].append(ticket)
         }
-        var groups = order.filter { !$0.isEmpty }.map { key in
+        let live = Set(epics.values.filter { $0.category == .done }.map(\.key))
+        var groups = order.filter { !$0.isEmpty && !live.contains($0) }.map { key in
             Group(id: key, epic: epics[key], tickets: members[key] ?? [], commits: (members[key] ?? []).reduce(0) { $0 + $1.commits },
                   progress: store.cachedChildren(ofEpic: key, connection: connection).map { store.progress(of: $0, connection: connection) })
         }
         if let loose = members[""] {
             groups.append(Group(id: "", epic: nil, tickets: loose, commits: loose.reduce(0) { $0 + $1.commits }))
         }
-        return EpicReport(groups: groups, pending: pending, notInJira: notInJira, ticketCount: tickets.count, commitLimit: commitLimit)
+        return EpicReport(groups: groups, pending: pending, notInJira: notInJira, liveEpics: live.count, ticketCount: tickets.count,
+                          commitLimit: commitLimit)
     }
 }
 

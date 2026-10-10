@@ -114,14 +114,16 @@ permission to access that folder.
   progress of releases and epics (green), in the status colors and in Highlight.
 - **Epics** (with Jira connected): the sidebar's Epics section lists the tickets in the latest
   commits (500 by default, 200 to 2,000 in its menu) under their Jira epics, most recently worked on
-  first, with each epic's key, status, tickets and commits, and a bar of how many of all its
-  stories and tasks are done, in progress or to do; tickets without an epic come last. A
-  sub-task's epic is the one above its story or task, as in projects where commits mention
-  sub-tasks. Select an epic to highlight its commits: right away those of the tickets listed, then,
-  once Jira answers, every commit in the history that mentions any ticket in the epic (one
-  `parentEpic` query, which takes in its stories, tasks and sub-tasks). The epic opens to list its
-  tickets; select one to highlight its commits and its sub-tasks'. The ↻ button in the section's
-  header asks Jira again about the recent tickets, after you've changed them there.
+  first, with each epic's key, status, tickets and commits, and a bar of how many of all its stories
+  and tasks are done, in progress or to do; tickets without an epic come last. Epics that are
+  already live (Done, Released or another status in Jira's done category; a Definition of Done
+  doesn't count) are left out with their tickets, and a note says how many. A sub-task's epic is the
+  one above its story or task, as in projects where commits mention sub-tasks. Select an epic to
+  highlight its commits: right away those of the tickets listed, then, once Jira answers, every
+  commit in the history that mentions any ticket in the epic (one `parentEpic` query, which takes in
+  its stories, tasks and sub-tasks). The epic opens to list its tickets; select one to highlight its
+  commits and its sub-tasks'. The ↻ button in the section's header asks Jira again about the recent
+  tickets, after you've changed them there.
 - **Releases** (with Jira connected): the unreleased fix versions of the repository's Jira projects
   (taken from its ticket keys), soonest release date first, with the date (orange when overdue) and
   a bar of how many of their tickets are done, in progress or to do (with a Definition of Done,

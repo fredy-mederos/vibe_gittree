@@ -185,7 +185,7 @@ struct RepositoryWindow: View {
         guard let graph = state.graph else { return }
         var lines = ["Selection: \(state.sidebarSelection.map { String(describing: $0) } ?? "none")"]
         if let epics = graph.epics {
-            lines.append("Epics: \(epics.groups.count) groups, \(epics.ticketCount) tickets, \(epics.pending) pending, \(epics.notInJira) not in Jira")
+            lines.append("Epics: \(epics.groups.count) groups, \(epics.ticketCount) tickets, \(epics.pending) pending, \(epics.notInJira) not in Jira, \(epics.liveEpics) live epics left out")
             for group in epics.groups {
                 let tickets = group.tickets.prefix(8).map { "\($0.key)×\($0.commits)" }.joined(separator: ", ")
                 let progress = group.progress.map { " (\($0.done) of \($0.total) done, \($0.inProgress) in progress)" } ?? ""
