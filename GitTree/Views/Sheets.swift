@@ -305,6 +305,29 @@ private struct GeneralSettingsView: View {
                     }
                 }
             }
+            Section("About GitTree") {
+                LabeledContent("Version", value: BuildInfo.version)
+                LabeledContent("Build") {
+                    Text(verbatim: [BuildInfo.build, BuildInfo.commit, BuildInfo.configuration == "Debug" ? "Debug" : nil]
+                        .compactMap { $0 }.joined(separator: " · "))
+                        .monospacedDigit()
+                        .textSelection(.enabled)
+                }
+                LabeledContent("Built") {
+                    if let date = BuildInfo.date {
+                        Text(date, format: .dateTime.year().month(.abbreviated).day().hour().minute())
+                    } else {
+                        Text("Unknown")
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Copy Version Info") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(BuildInfo.summary, forType: .string)
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
         .task(id: gitPath) {
