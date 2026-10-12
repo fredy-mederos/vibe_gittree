@@ -30,6 +30,62 @@ private final class WindowReportingView: NSView {
     }
 }
 
+extension NSColor {
+    /// Windows' background in dark mode, a bit darker than the system's (#1E1E1E).
+    static let darkerWindowBackground = NSColor(srgbRed: 0.09, green: 0.09, blue: 0.09, alpha: 1)
+}
+
+/// Dark mode a bit darker than the system's: gives its window `darkerWindowBackground`, which the
+/// sidebar's and the details' glass pick up too, and the system's background back in light mode
+/// (with its wallpaper tinting, which a color of our own would turn off).
+struct DarkerWindowBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        DarkerWindowBackgroundView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class DarkerWindowBackgroundView: NSView {
+    private var systemBackground: NSColor?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        update()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        update()
+    }
+
+    private func update() {
+        guard let window else { return }
+        if systemBackground == nil { systemBackground = window.backgroundColor }
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        window.backgroundColor = isDark ? .darkerWindowBackground : systemBackground
+    }
+}
+
+extension View {
+    /// The sidebar and the details as dark as the commit list in dark mode: their glass dimmed
+    /// behind their content (it still shows a little of what's behind it). Light mode is the system's.
+    func darkerPanelInDarkMode() -> some View {
+        modifier(DarkerPanel())
+    }
+}
+
+private struct DarkerPanel: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            // Lists and forms would cover the dimming with a background of their own.
+            .scrollContentBackground(colorScheme == .dark ? .hidden : .automatic)
+            .background(colorScheme == .dark ? Color.black.opacity(0.3) : .clear)
+    }
+}
+
 /// Keeps the details' (the inspector's) width across launches, windows and repositories. SwiftUI
 /// opens an inspector at its narrowest, sets it back there when the window's content changes (the
 /// history loading, say) and doesn't remember a width it's dragged to; asked for a wider ideal or

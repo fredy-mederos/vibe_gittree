@@ -8,6 +8,7 @@ struct GitTreeApp: App {
         // One window per repository; windows can be merged into tabs.
         WindowGroup("Vibe GitTree", id: "repository", for: WindowTarget.self) { $target in
             RepositoryWindow(target: $target)
+                .background(DarkerWindowBackground())
         }
         .defaultSize(width: 1400, height: 880)
         .handlesExternalEvents(matching: ["*"])
@@ -18,6 +19,7 @@ struct GitTreeApp: App {
         // The activity calendar, one window per repository.
         WindowGroup("Activity", id: "activity", for: UUID.self) { $repositoryID in
             ActivityWindow(repositoryID: repositoryID)
+                .background(DarkerWindowBackground())
         }
         .defaultSize(width: 1000, height: 640)
         .handlesExternalEvents(matching: [])
@@ -25,6 +27,7 @@ struct GitTreeApp: App {
         // Two branches side by side, opened from the Repository menu or a branch's context menu.
         WindowGroup("Compare Branches", id: "compare", for: CompareTarget.self) { $target in
             CompareWindow(target: $target)
+                .background(DarkerWindowBackground())
         }
         .defaultSize(width: 1200, height: 760)
         .handlesExternalEvents(matching: [])
@@ -32,12 +35,14 @@ struct GitTreeApp: App {
         // One window per file diff, opened from the inspector or a deep link.
         WindowGroup("Changes", id: "diff", for: DiffTarget.self) { $target in
             DiffWindow(target: target)
+                .background(DarkerWindowBackground())
         }
         .defaultSize(width: 980, height: 720)
         .handlesExternalEvents(matching: [])
 
         Settings {
             AppSettingsView()
+                .background(DarkerWindowBackground())
         }
     }
 }

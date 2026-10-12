@@ -11,6 +11,7 @@ struct RepositoryWindow: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(state: state)
+                .darkerPanelInDarkMode()
                 .navigationSplitViewColumnWidth(min: 220, ideal: 280, max: 440)
         } detail: {
             detail

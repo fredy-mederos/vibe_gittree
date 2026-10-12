@@ -37,7 +37,10 @@ final class GraphRowView: NSTableRowView {
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
-        super.drawBackground(in: dirtyRect)
+        // In dark mode the table draws the stripes, on a darker background (`GraphNSTableView`).
+        if effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua {
+            super.drawBackground(in: dirtyRect)
+        }
         guard isMatch, !isSelected else { return }
         NSColor.findHighlightColor.withAlphaComponent(0.16).setFill()
         bounds.fill(using: .sourceOver)

@@ -21,6 +21,7 @@ struct GraphDetailView: View {
                 // SwiftUI opens it at its narrowest whatever the ideal width (a wider one can make it
                 // fix the column's width), then the keeper gives it the width last dragged to.
                 CommitInspector(graph: graph)
+                    .darkerPanelInDarkMode()
                     .inspectorColumnWidth(min: Self.inspectorWidths.lowerBound, ideal: Self.inspectorWidths.lowerBound,
                                           max: Self.inspectorWidths.upperBound)
                     .onAppear(perform: keepInspectorWidth)

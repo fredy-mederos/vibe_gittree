@@ -167,7 +167,8 @@ permission to access that folder.
   messages), an issue link such as `https://example.atlassian.net/browse/{key}` for ticket keys when
   tickets live somewhere else, and the regular expression that marks release tags (for example
   `^android-v[\d.]+$` when releases are tagged `android-v2.12`).
-- **Appearance**: Settings › General › Appearance picks Light, Dark or System.
+- **Appearance**: Settings › General › Appearance picks Light, Dark or System. Dark mode is a bit
+  darker than macOS's: the window, the commit list, the sidebar and the details.
 - **About**: Settings › General shows the version, the build number (the commit count when
   `scripts/install.sh` or `scripts/release.sh` built it), the commit, whether it's a Debug or
   Release build, and when it was built, with Copy Version Info.

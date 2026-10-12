@@ -126,6 +126,21 @@ struct GraphTableView: NSViewRepresentable {
 final class GraphNSTableView: NSTableView {
     var onActivate: () -> Void = {}
 
+    /// In dark mode, the system's stripes on the window's darker background (`DarkerWindowBackground`);
+    /// the rows leave their background to this.
+    override func drawBackground(inClipRect clipRect: NSRect) {
+        guard effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua else {
+            return super.drawBackground(inClipRect: clipRect)
+        }
+        NSColor.darkerWindowBackground.setFill()
+        clipRect.fill()
+        NSColor.alternatingContentBackgroundColors[1].setFill()
+        let height = rowHeight + intercellSpacing.height
+        for row in max(0, Int(clipRect.minY / height))...max(0, Int(clipRect.maxY / height)) where row % 2 == 1 {
+            NSRect(x: clipRect.minX, y: CGFloat(row) * height, width: clipRect.width, height: height).fill(using: .sourceOver)
+        }
+    }
+
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 36 || event.keyCode == 76 {  // Return, Enter
             onActivate()
