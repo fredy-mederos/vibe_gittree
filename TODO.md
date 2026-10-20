@@ -27,3 +27,7 @@ features.
 - **Releases**: recently released fix versions too (what went out last week), and a per-repository
   filter for projects whose fix versions don't follow their tickets closely enough for the "this
   repository's tickets are in it" split.
+- **Diff window, move between a commit's files**: list the commit's other files in the diff window
+  (or step through them with next/previous) instead of closing it and opening the next file from
+  the inspector, and group or highlight the files with the most changes so reviewing a commit goes
+  faster.
