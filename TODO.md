@@ -26,4 +26,6 @@ features.
 
 ## Still open
 
-Nothing right now.
+- **A worktree's uncommitted changes**: selecting a worktree in the sidebar shows its changes in the
+  details, as Local Changes does for the repository's own folder (`git status` only on selection,
+  one at a time). For now, Open as Repository adds the worktree to the list on its own.

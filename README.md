@@ -69,20 +69,22 @@ permission to access that folder.
 - **Remote repositories** are cloned into Vibe GitTree's own storage as bare, blobless clones: commits
   and folder structure only, no file contents. They fetch automatically when opened (if the last
   fetch was over 10 minutes ago) and on Fetch (⇧⌘F).
-- **Commit graph** of every branch, remote branch and tag, newest first, with colored lanes, branch
-  and tag labels (a cloud marks a local branch in sync with its remote), and the checked-out commit
-  ringed. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
+- **Commit graph** of every branch, remote branch and tag, and of what each worktree has checked out,
+  newest first, with colored lanes, branch and tag labels (a cloud marks a local branch in sync with
+  its remote, a folder one checked out in another worktree), and the checked-out commit ringed. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
   line on the left from its newest commit down to the first one, and no other lane is blue; work
   merged into it keeps a lane and color of its own, even once its branch is deleted. Narrow it to
   local branches (⌘2), the current branch (⌘3) or a single branch (right-click › Show Only).
 - **Live updates**: local repositories reload by themselves when you commit, check out or fetch in
-  the terminal, keeping your scroll position and selection, and their uncommitted changes follow
-  your edits as you save (changes in folders git ignores, like build output, don't count).
+  the terminal (in any of their worktrees), keeping your scroll position and selection, and their
+  uncommitted changes follow your edits as you save (changes in folders git ignores, like build
+  output, don't count).
 - **Search** (⌘F) across subjects, authors, hashes and branch names; Return or ⌘G for the next match,
   ⇧⌘G for the previous one.
 - **Commit details** (the inspector on the right): full message, author and committer, links to the
   commit and its pull request on GitHub, GitLab or Bitbucket, ticket links, the first release tag
-  that contains the commit, parents and children, the branches that contain it, and changed files.
+  that contains the commit, parents and children, the branches (and worktrees with a detached HEAD)
+  that contain it, and changed files.
   It keeps the width you drag it to, in every window and repository and from one launch to the next.
 - **Branches, remotes and tags** in the sidebar, grouped by folder (`feature/`, `release/`…) and by
   version for tags, newest first with their age. Click one to jump to it; double-click (or Return)
@@ -106,6 +108,16 @@ permission to access that folder.
 - **Stashes**, under Local Changes in the sidebar, newest first: select one for its message, its
   branch, the commit it was made on and the files it changed (new files too), each opening its
   diff, or all of them one after another.
+- **Worktrees**: the sidebar's Worktrees section lists the repository's other worktrees (added with
+  `git worktree add`, by you or by coding agents like Claude Code), newest commit first: each one's
+  folder, the branch checked out there (or the commit, when its HEAD is detached) and how old that
+  commit is. When they're kept in several places, those in the same folder (`.claude/worktrees`)
+  are grouped; a locked one shows a lock, and one whose folder is gone is dimmed. Click one to go to its commit, double-click
+  one on a branch to show only that branch; right-click for Show in Finder, Open in Terminal, Copy
+  Path, or Open as Repository, which adds it to the list on its own, with its uncommitted changes.
+  In the graph, a worktree with a detached HEAD has a label of its own (one for several on the same
+  commit), and commits only such a worktree has are in the history too, as are those of HEAD in the
+  middle of a rebase.
 - **Commits and stashes** (Settings › General › Allow commits and stashes, off until you turn it
   on): in the uncommitted changes, checkboxes stage and unstage files, a summary and description
   commit what's staged (⌘Return), and Stash… puts every change aside, or only the staged files'
@@ -195,7 +207,8 @@ permission to access that folder.
   the graph.
 - **Deep links**: `gittree://open?repo=<path|remote URL|name>&commit=<sha>&path=<file>&line=<n>`
   opens the repository (adding it if needed), selects the commit and opens the file's diff scrolled
-  to the line. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit
+  to the line. A path in a worktree opens the repository the worktree belongs to (unless you added
+  the worktree on its own), so links made in worktrees don't add them to the list one by one. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit
   that last changed that line with `git blame`; `gittree <file>`, `gittree <commit>` and plain
   `gittree` work too; `--print` prints the link without opening the app.
 - **Per-repository settings** (right-click › Repository Settings): display name, the main branch
@@ -308,7 +321,7 @@ Vibe GitTree deletes its clone; removing a local one never touches the folder.
 GitTree/
   App/           app entry point, menu commands, version info and update checks
   Git/           running git, parsing history, lane layout, diffs, clone, file watching, hosting links,
-                 the working tree and stashes, and the commands that stage, commit and stash
+                 the working tree, stashes and worktrees, and the commands that stage, commit and stash
   Integrations/  GitHub (gh, pull request timelines), Jira (REST + keychain), feature grouping (Foundation Models)
   Model/         repository library, per-repository model, per-window state, sidebar tree, deep links,
                  epics and releases, branch comparison
@@ -320,7 +333,8 @@ scripts/gittree      the deep-link command
 ```
 
 - History comes from one `git log --branches --remotes --tags --date-order` plus `git for-each-ref`,
-  parsed byte by byte into parallel arrays. On a 15,858-commit Android repository, loading,
+  parsed byte by byte into parallel arrays. `git worktree list` comes first, so the log takes in
+  the commits the worktrees have checked out too. On a 15,858-commit Android repository, loading,
   parsing and laying out the graph takes about half a second in a debug build.
 - The lane layout is one top-to-bottom pass. The main branch's first parents keep the first lane
   all the way down (it stays empty above the branch's newest commit); any other commit takes the
@@ -338,10 +352,11 @@ library and captures only its window:
 scripts/snapshot.sh /tmp/gittree.png 6 -GTOpenRepository ~/code/some-repo -GTSearch "fix"
 ```
 
-Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>`, `-GTSearch <text>`,
+Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>`,
+`-GTOpenLink <gittree://…>` (opens a deep link without it reaching the installed Vibe GitTree), `-GTSearch <text>`,
 `-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light` (whatever the Appearance
 setting says), `-GTShowSwitcher YES`, `-GTGroupFeatures YES` (shows the Features section and groups),
-`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>|changes|stash:<n>` (selects
+`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>|changes|stash:<n>|worktree:<name>` (selects
 that sidebar row once it's there; `first` for the first epic or release, `open` for the newest open
 pull request; several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
 (refreshes the Releases or Epics section, or the selected fix version, after `-GTRefreshAfter`
@@ -370,8 +385,8 @@ scripts/snapshot-rows.sh /tmp/rows -GTOpenRepository ~/code/some-repo -GTAppeara
 Some checks don't need a screenshot (or Vibe GitTree in front): `-GTDescribeJira <file>` writes, after
 `-GTDescribeAfter` seconds (20 by default), what the Epics and Releases sections list, the
 highlight, the sidebar selection and a selected pull request's timeline; `-GTDescribeCompare <file>`
-writes what a comparison found; `-GTDescribeChanges <file>` the working tree's status, the stashes
-and what the details show.
+writes what a comparison found; `-GTDescribeChanges <file>` the working tree's status, the stashes,
+the worktrees and what the details show.
 
 Where `screencapture` isn't allowed (a shell without the screen recording permission),
 `-GTSnapshot <folder>` has the app capture its own windows into PNGs there after `-GTSnapshotAfter`

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Reads a repository's full history and refs with two git commands and turns them into a `CommitGraph`.
+/// Reads a repository's full history, refs and worktrees with a few git commands and turns them into a `CommitGraph`.
 enum GraphLoader {
     /// One commit per line: hash, parents, author, email, author time, subject — separated by 0x1F.
     private static let logFormat = "%H%x1f%P%x1f%aN%x1f%aE%x1f%at%x1f%s"
@@ -12,9 +12,16 @@ enum GraphLoader {
             in: directory
         )
         async let headData = Git.run(["rev-parse", "--verify", "--quiet", "HEAD"], in: directory, allowFailure: true)
-        // An empty repository makes `git log` fail; that's an empty graph, not an error.
+        // The worktrees come first: the commits checked out in them join the history, so work on a
+        // detached HEAD (in a worktree, or here in the middle of a rebase) shows too.
+        let worktreeData = (try? await Git.run(["worktree", "list", "--porcelain", "-z"], in: directory, allowFailure: true)) ?? Data()
+        let worktrees = Worktree.listings(worktreeData)
+        var seen: Set<String> = []
+        let heads = worktrees.compactMap { $0.head?.hex }.filter { seen.insert($0).inserted }
+        // An empty repository makes `git log` fail; that's an empty graph, not an error. A commit
+        // that's gone (`--ignore-missing`) is left out.
         async let logData = Git.run(
-            ["log", "--branches", "--remotes", "--tags", "--date-order", "--format=\(logFormat)"],
+            ["log", "--branches", "--remotes", "--tags", "--ignore-missing", "--date-order", "--format=\(logFormat)"] + heads,
             in: directory,
             allowFailure: true
         )
@@ -22,11 +29,13 @@ enum GraphLoader {
         let head = try await headData
         let log = try await logData
         return await Task.detached(priority: .userInitiated) {
-            build(log: log, refs: refs, head: head, ticketPrefixes: ticketPrefixes)
+            build(log: log, refs: refs, head: head, worktrees: worktrees, openedFrom: directory.path, ticketPrefixes: ticketPrefixes)
         }.value
     }
 
-    static func build(log: Data, refs refData: Data, head headData: Data, ticketPrefixes: [String] = []) -> CommitGraph {
+    /// `worktrees` as `git worktree list` described them, and `directory` the folder the repository was opened from.
+    static func build(log: Data, refs refData: Data, head headData: Data, worktrees: [Worktree.Listing] = [],
+                      openedFrom directory: String = "", ticketPrefixes: [String] = []) -> CommitGraph {
         var ids: [ObjectID] = []
         var parentIDs: [ObjectID] = []
         var parentStart: [Int32] = [0]
@@ -161,6 +170,7 @@ enum GraphLoader {
             indexByID: indexByID,
             headCommit: headCommit,
             remoteHeads: remoteHeads,
+            worktrees: Worktree.resolve(worktrees, indexByID: indexByID, openedFrom: directory),
             ticketPrefixes: ticketPrefixes.isEmpty ? TicketDetector.prefixes(in: subjects) : ticketPrefixes
         )
     }

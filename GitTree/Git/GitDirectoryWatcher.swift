@@ -2,8 +2,8 @@ import CoreServices
 import Foundation
 
 /// Watches a repository's git directory and reports what changed: refs (a commit, checkout,
-/// fetch, rebase or gc), the index (staging) or the stash. Object writes, other reflogs and lock
-/// files are ignored.
+/// fetch, rebase or gc, here or in any worktree, or a worktree added, removed, moved or locked),
+/// the index (staging) or the stash. Object writes, other reflogs and lock files are ignored.
 final class GitDirectoryWatcher {
     struct Change: OptionSet {
         let rawValue: Int
@@ -31,8 +31,10 @@ final class GitDirectoryWatcher {
                 change.insert(.stash)
             } else if path.contains("/logs/") {
                 continue
-            } else if path.contains("/refs/") || path.hasSuffix("/HEAD") || path.hasSuffix("/packed-refs") {
-                // Before the index: a branch can be called `feature/index`.
+            } else if path.contains("/refs/") || path.hasSuffix("/HEAD") || path.hasSuffix("/packed-refs")
+                        || (path.contains("/worktrees/") && (path.hasSuffix("/locked") || path.hasSuffix("/gitdir"))) {
+                // Before the index: a branch can be called `feature/index`. A worktree's HEAD is in
+                // `worktrees/<name>/`, next to its lock and the path to its folder.
                 change.insert(.refs)
             } else if path.hasSuffix("/index") {
                 change.insert(.index)

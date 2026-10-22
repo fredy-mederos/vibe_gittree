@@ -520,11 +520,13 @@ final class GraphNSTableView: NSTableView {
         }
     }
 
-    /// Local branches first (merged with their remote counterpart when both point here), each
-    /// followed by its open pull request, then remote-only branches, then tags; at most four plus a "+n".
+    /// Local branches first (merged with their remote counterpart when both point here, marked when
+    /// checked out in another worktree), each followed by its open pull request, then the other
+    /// worktrees detached here, remote-only branches, then tags; at most four plus a "+n".
     private func badges(for commit: Int32, row: Int, layout: GraphLayout) -> [DescriptionCellView.Badge] {
         let refs = layout.graph.refs(at: commit)
-        guard !refs.isEmpty else { return [] }
+        let worktrees = layout.graph.detachedWorktrees(at: commit)
+        guard !refs.isEmpty || !worktrees.isEmpty else { return [] }
         let laneColor = LanePalette.color(layout.color[row])
         let pullRequests = graph.model.pullRequests
         let remoteBranches = Set(refs.compactMap { $0.remoteParts?.branch })
@@ -537,8 +539,14 @@ final class GraphNSTableView: NSTableView {
         }
         for ref in refs where ref.kind == .local {
             badges.append(.init(style: ref.isHead ? .head : .branch, text: ref.name, color: laneColor,
-                                synced: remoteBranches.contains(ref.name)))
+                                synced: remoteBranches.contains(ref.name),
+                                worktree: layout.graph.otherWorktree(checkingOut: ref.fullName)?.name))
             addPullRequest(forBranch: ref.name)
+        }
+        // One label for all of them: worktrees often start out on the same commit.
+        if let first = worktrees.first {
+            badges.append(.init(style: .worktree, text: worktrees.count == 1 ? first.name : "\(worktrees.count) worktrees",
+                                worktree: worktrees.map(\.name).joined(separator: ", ")))
         }
         let localNames = Set(refs.filter { $0.kind == .local }.map(\.name))
         for ref in refs where ref.kind == .remote {

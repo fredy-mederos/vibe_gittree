@@ -298,7 +298,8 @@ enum LaneLayoutEngine {
         case .all:
             return Array(0..<Int32(count))
         case .local:
-            heads = graph.refs.filter { $0.kind == .local }.map(\.commit)
+            // Local branches, and what each worktree has checked out (a detached HEAD too).
+            heads = graph.refs.filter { $0.kind == .local }.map(\.commit) + graph.worktrees.map(\.commit).filter { $0 >= 0 }
         case .head:
             heads = graph.headCommit >= 0 ? [graph.headCommit] : []
         case .ref(let fullName):

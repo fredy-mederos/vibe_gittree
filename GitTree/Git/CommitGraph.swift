@@ -52,6 +52,13 @@ final class CommitGraph: @unchecked Sendable {
     /// The branch each remote's HEAD names (`origin` → `develop`): the remote's default branch, as
     /// git noted it when cloning.
     let remoteHeads: [String: String]
+    /// The repository's worktrees, the main one first (usually the only one; none for a bare
+    /// repository without any).
+    let worktrees: [Worktree]
+    /// The worktrees other than the one the repository was opened from: by the branch checked out
+    /// in each (full name), and the detached ones by commit.
+    private let otherWorktreeByBranch: [String: Int]
+    private let detachedWorktreesByCommit: [Int32: [Int]]
     /// Issue-tracker prefixes that show up often in subjects, like `PROJ` in `PROJ-1234`.
     let ticketPrefixes: [String]
     let ticketRegex: NSRegularExpression?
@@ -70,6 +77,7 @@ final class CommitGraph: @unchecked Sendable {
         indexByID: [ObjectID: Int32],
         headCommit: Int32,
         remoteHeads: [String: String] = [:],
+        worktrees: [Worktree] = [],
         ticketPrefixes: [String]
     ) {
         self.ids = ids
@@ -85,6 +93,18 @@ final class CommitGraph: @unchecked Sendable {
         self.headCommit = headCommit
         self.headBranch = refs.first { $0.isHead && $0.kind == .local }?.name
         self.remoteHeads = remoteHeads
+        self.worktrees = worktrees
+        var byBranch: [String: Int] = [:]
+        var detached: [Int32: [Int]] = [:]
+        for (index, worktree) in worktrees.enumerated() where !worktree.isCurrent {
+            if let branch = worktree.branch {
+                byBranch[branch] = index
+            } else if worktree.commit >= 0 {
+                detached[worktree.commit, default: []].append(index)
+            }
+        }
+        self.otherWorktreeByBranch = byBranch
+        self.detachedWorktreesByCommit = detached
         self.ticketPrefixes = ticketPrefixes
 
         let count = ids.count
@@ -152,6 +172,20 @@ final class CommitGraph: @unchecked Sendable {
             if a.kind != b.kind { return a.kind.rawValue < b.kind.rawValue }
             return a.name.localizedStandardCompare(b.name) == .orderedAscending
         }
+    }
+
+    /// The other worktree a branch is checked out in, when it isn't the one the repository was opened from.
+    func otherWorktree(checkingOut fullName: String) -> Worktree? {
+        otherWorktreeByBranch[fullName].map { worktrees[$0] }
+    }
+
+    /// The other worktrees whose HEAD is detached at a commit.
+    func detachedWorktrees(at commit: Int32) -> [Worktree] {
+        detachedWorktreesByCommit[commit]?.map { worktrees[$0] } ?? []
+    }
+
+    func worktree(at path: String) -> Worktree? {
+        worktrees.first { $0.path == path }
     }
 
     /// A commit by full hash or by an unambiguous-enough prefix (at least 4 characters).

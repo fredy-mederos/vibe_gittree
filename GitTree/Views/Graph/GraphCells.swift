@@ -218,7 +218,8 @@ final class DescriptionCellView: NSTableCellView {
 
     struct Badge {
         enum Style {
-            case head, branch, remote, tag, overflow, pullRequest
+            /// `worktree`: worktrees whose HEAD is detached at the commit.
+            case head, branch, remote, tag, overflow, pullRequest, worktree
         }
 
         let style: Style
@@ -227,9 +228,17 @@ final class DescriptionCellView: NSTableCellView {
         var color: NSColor = .secondaryLabelColor
         /// A local branch at the same commit as its remote counterpart.
         var synced = false
+        /// The other worktree a branch is checked out in, or the worktrees a worktree label stands for.
+        var worktree: String?
         /// For pull requests: a checks indicator after the number.
         var trailingSymbol: String?
         var trailingColor: NSColor?
+
+        /// What the tooltip and VoiceOver say about it.
+        var description: String {
+            if style == .worktree { return "Checked out in \(worktree ?? text)" }
+            return prefix + text + (worktree.map { " (checked out in \($0))" } ?? "")
+        }
     }
 
     private var badges: [Badge] = []
@@ -248,6 +257,8 @@ final class DescriptionCellView: NSTableCellView {
     private static let tagFont = NSFont.systemFont(ofSize: 11, weight: .medium)
     private static let lineHeight = ceil(NSLayoutManager().defaultLineHeight(for: subjectFont))
     private static let badgeLineHeight = ceil(NSLayoutManager().defaultLineHeight(for: badgeFont))
+    /// Before a worktree's label, and a branch checked out in another worktree.
+    private static let worktreeSymbol = "folder.fill"
     private static let pullRequestRegex = try! NSRegularExpression(pattern: #"\(#\d+\)"#)
 
     private static let tailTruncating: NSParagraphStyle = {
@@ -290,7 +301,7 @@ final class DescriptionCellView: NSTableCellView {
         self.ticketRegex = ticketRegex
         self.highlight = highlight
         detail = nil
-        let labels = badges.map { $0.prefix + $0.text }
+        let labels = badges.map(\.description)
         setAccessibilityLabel((labels + [subject]).joined(separator: ", "))
         toolTip = labels.isEmpty ? nil : labels.joined(separator: "  ·  ")
         needsDisplay = true
@@ -390,7 +401,13 @@ final class DescriptionCellView: NSTableCellView {
             fill = badge.color.withAlphaComponent(isDark ? 0.26 : 0.15)
             textColor = Self.readable(badge.color, isDark: isDark)
             symbol = "arrow.triangle.pull"
+        case .worktree:
+            stroke = .secondaryLabelColor.withAlphaComponent(0.55)
+            textColor = .secondaryLabelColor
+            symbol = Self.worktreeSymbol
         }
+        // A branch checked out in another worktree.
+        if badge.worktree != nil, symbol == nil { symbol = Self.worktreeSymbol }
         if emphasized {
             textColor = .white
             fill = .white.withAlphaComponent(badge.style == .head ? 0.32 : 0.16)
@@ -408,7 +425,8 @@ final class DescriptionCellView: NSTableCellView {
         ]))
 
         let padding: CGFloat = 5
-        let leadingSymbolWidth: CGFloat = symbol == nil ? 0 : 11
+        // The folder is wider than the other symbols.
+        let leadingSymbolWidth: CGFloat = symbol == nil ? 0 : symbol == Self.worktreeSymbol ? 12.5 : 11
         let trailingSymbolWidth: CGFloat = (badge.synced || badge.trailingSymbol != nil) ? 12 : 0
         let textWidth = min(ceil(label.size().width), max(16, maxWidth - padding * 2 - leadingSymbolWidth - trailingSymbolWidth))
         let width = textWidth + padding * 2 + leadingSymbolWidth + trailingSymbolWidth

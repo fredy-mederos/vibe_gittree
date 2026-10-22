@@ -20,6 +20,8 @@ enum SidebarItem: Hashable {
     case workingTree(UUID)
     /// A stash, by its commit's hash (its `stash@{n}` changes as others come and go).
     case stash(UUID, String)
+    /// Another worktree of the window's repository, by its folder.
+    case worktree(UUID, String)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -154,6 +156,10 @@ enum SidebarItem: Hashable {
             graph?.clearSidebarHighlight()
             if let stash = ObjectID(hex: hash) { graph?.showStash(stash) }
             showInspector = true
+        case .worktree(let id, let path):
+            if id != repositoryID { open(id) }
+            graph?.clearSidebarHighlight()
+            graph?.reveal(worktreeAt: path)
         case .pullRequest(let id, let number):
             if id != repositoryID { open(id) }
             graph?.clearSidebarHighlight()
@@ -334,12 +340,20 @@ enum SidebarItem: Hashable {
     }
 
     func showInFinder(_ repository: Repository) {
-        NSWorkspace.shared.activateFileViewerSelecting([repository.directory])
+        showInFinder(folder: repository.directory)
+    }
+
+    func showInFinder(folder: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([folder])
     }
 
     func openInTerminal(_ repository: Repository) {
+        openInTerminal(folder: repository.directory)
+    }
+
+    func openInTerminal(folder: URL) {
         guard let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") else { return }
-        NSWorkspace.shared.open([repository.directory], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
+        NSWorkspace.shared.open([folder], withApplicationAt: terminal, configuration: NSWorkspace.OpenConfiguration())
     }
 
     func hosting(for repository: Repository) -> HostingService? {

@@ -153,6 +153,8 @@ struct RepositoryWindow: View {
 #if DEBUG
 /// Launch arguments for testing without clicking through the UI:
 /// `-GTOpenRepository <path>` adds and opens a local repository, `-GTCloneURL <url>` clones one,
+/// `-GTOpenLink <gittree://…>` opens a deep link (as another app's `open` would, without reaching
+/// the installed Vibe GitTree),
 /// `-GTAddFolder <path>` adds every repository in a folder, `-GTShowSwitcher YES` opens the ⌘K switcher,
 /// `-GTSearch <text>` searches once a repository is open, `-GTScope local|head|<full ref name>`
 /// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` shows
@@ -164,9 +166,10 @@ struct RepositoryWindow: View {
 /// for a script to capture each), `-GTRefresh releases|release|epics` refreshes those sections or the
 /// selected fix version after `-GTRefreshAfter` seconds (10 by default), and
 /// `-GTCompare <base>...<head>` opens the branch comparison, `-GTAllowChanges YES` turns on staging,
-/// committing and stashing for the run, `-GTSelect changes|stash:<n>` selects the uncommitted changes
-/// or a stash, and `-GTDescribeChanges <file>` (after `-GTDescribeAfter` seconds) writes the working
-/// tree's status, the stashes and what the details show, `-GTPerform <steps>` runs changes one
+/// committing and stashing for the run, `-GTSelect changes|stash:<n>|worktree:<name>` selects the
+/// uncommitted changes, a stash or another worktree, and `-GTDescribeChanges <file>` (after
+/// `-GTDescribeAfter` seconds) writes the working tree's status, the stashes, the worktrees and what
+/// the details show, `-GTPerform <steps>` runs changes one
 /// after another (`stage:<path>`, `unstage:<path>`, `stageAll`, `unstageAll`, `commit:<message>`,
 /// `stash:<message>`, `stashStaged:<message>`, `apply:<n>`, `pop:<n>`, `drop:<n>`, separated by
 /// `;`, with `-GTAllowChanges YES`), `-GTZoom <seconds>` zooms every window in and out a few times
@@ -193,8 +196,8 @@ struct RepositoryWindow: View {
         return defaults
     }()
 
-    /// `-GTDescribeChanges <file>`: the working tree's status, the stashes, the graph's row for
-    /// uncommitted changes and what the details show, as text.
+    /// `-GTDescribeChanges <file>`: the working tree's status, the stashes, the worktrees, the
+    /// graph's row for uncommitted changes and what the details show, as text.
     static func describeChanges(_ state: WindowState, to path: String) {
         guard let graph = state.graph else { return }
         let model = graph.model
@@ -217,6 +220,20 @@ struct RepositoryWindow: View {
         lines.append("Stashes: \(model.stashes.count)")
         for stash in model.stashes {
             lines.append("  \(stash.name) \(stash.title) [\(stash.branch ?? "-")] untracked: \(stash.untracked != nil)")
+        }
+        if let commitGraph = graph.commitGraph {
+            lines.append("Worktrees: \(commitGraph.worktrees.count), head commit \(commitGraph.headCommit), scope \(graph.scope.title)")
+            for worktree in commitGraph.worktrees {
+                let flags = [worktree.isMain ? "main" : nil, worktree.isCurrent ? "current" : nil, worktree.isMissing ? "missing" : nil,
+                             worktree.lockReason.map { "locked (\($0))" }].compactMap { $0 }
+                let shown = worktree.commit >= 0 && graph.layout.map { $0.rowOfCommit[Int(worktree.commit)] >= 0 } == true
+                lines.append("  \(worktree.name) in \(worktree.location): \(worktree.branchName ?? "detached at \(worktree.head?.short ?? "-")"), "
+                    + "commit \(worktree.commit)\(shown ? " shown" : " not shown") [\(flags.joined(separator: ", "))] \(worktree.path)")
+            }
+            if let tree = graph.refTree(filter: "") {
+                lines.append("Sidebar worktrees: " + tree.worktrees.groups.map { "\($0.title) (\($0.worktrees.map(\.name).joined(separator: ", ")))" }
+                    .joined(separator: " | ") + " | flat: " + tree.worktrees.items.map(\.name).joined(separator: ", "))
+            }
         }
         if let progress = model.changeInProgress { lines.append("In progress: \(progress)") }
         if let error = model.changeError { lines.append("Error: \(error)") }
@@ -298,6 +315,9 @@ struct RepositoryWindow: View {
         case "stash":
             guard let index = Int(value), index < graph.model.stashes.count else { return nil }
             return .stash(id, graph.model.stashes[index].id.hex)
+        case "worktree":
+            let worktree = graph.commitGraph?.worktrees.first { !$0.isCurrent && ($0.name == value || $0.path == value) }
+            return worktree.map { .worktree(id, $0.path) }
         case "pr":
             guard let pullRequests = graph.model.pullRequests else { return nil }
             let stacked = Set(pullRequests.stacks.flatMap { $0.map(\.number) })
@@ -456,6 +476,13 @@ struct RepositoryWindow: View {
         }
         if let url = defaults.string(forKey: "GTCloneURL") {
             state.cloneRemoteRepository(prefilledURL: url)
+        }
+        if let link = defaults.string(forKey: "GTOpenLink").flatMap(URL.init(string:)) {
+            Task {
+                // After -GTOpenRepository has added its repository.
+                try? await Task.sleep(for: .seconds(2))
+                state.handle(link)
+            }
         }
         if let folder = defaults.string(forKey: "GTAddFolder") {
             Task {

@@ -16,6 +16,7 @@ struct SidebarView: View {
     @AppStorage("sidebar.epicsExpanded") private var epicsExpanded = true
     @AppStorage("sidebar.releasesExpanded") private var releasesExpanded = true
     @AppStorage("sidebar.localChangesExpanded") private var localChangesExpanded = true
+    @AppStorage("sidebar.worktreesExpanded") private var worktreesExpanded = true
     /// Settings › General: the Features section, off unless turned on there.
     @AppStorage(AppSettings.groupsFeaturesKey) private var groupsFeatures = false
     @State private var expanded: [String: Bool] = [:]
@@ -126,10 +127,15 @@ struct SidebarView: View {
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if let item = items.first { contextMenu(for: item) }
         } primaryAction: { items in
-            // Double-click or Return on a branch, tag or open pull request shows only its history.
+            // Double-click or Return on a branch, tag, open pull request or a worktree on a branch
+            // shows only its history.
             switch items.first {
             case .ref(_, let fullName)?:
                 state.graph?.showOnly(refNamed: fullName)
+            case .worktree(_, let path)?:
+                if let branch = state.graph?.commitGraph?.worktree(at: path)?.branch {
+                    state.graph?.showOnly(refNamed: branch)
+                }
             case .pullRequest(_, let number)?:
                 if let graph = state.graph, let commitGraph = graph.commitGraph,
                    let pullRequest = graph.model.pullRequests?.byNumber[number], pullRequest.state == .open,
@@ -151,6 +157,7 @@ struct SidebarView: View {
             case .epic(_, let key)?: expanded[scopedKey("epic:\(key)")] = true
             case .release(_, let id)?: expanded[scopedKey("release:\(id)")] = true
             case .pullRequest(_, let number)?: revealPullRequest(number)
+            case .worktree(_, let path)?: revealWorktree(path)
             default: break
             }
         }
@@ -184,6 +191,9 @@ struct SidebarView: View {
     private func refSections(_ tree: RefTree, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
         if let graph = state.graph, !isFiltering {
             localChangesSection(graph, repositoryID: repositoryID)
+        }
+        worktreesSection(tree.worktrees, commitGraph: commitGraph, repositoryID: repositoryID)
+        if let graph = state.graph, !isFiltering {
             epicsSection(graph, repositoryID: repositoryID)
             releasesSection(graph, repositoryID: repositoryID)
             if groupsFeatures {
@@ -310,7 +320,7 @@ struct SidebarView: View {
         let pullRequest = item.ref.kind == .tag ? nil
             : state.graph?.model.pullRequests?.openPullRequest(forBranch: item.ref.remoteParts?.branch ?? item.ref.name)
         return RefRow(item: item, date: commitGraph.date(of: item.ref.commit), subject: commitGraph.subjects[Int(item.ref.commit)],
-                      systemImage: icon, pullRequest: pullRequest)
+                      systemImage: icon, pullRequest: pullRequest, worktree: commitGraph.otherWorktree(checkingOut: item.ref.fullName))
             .tag(SidebarItem.ref(repositoryID, item.ref.fullName))
     }
 
@@ -441,6 +451,49 @@ struct SidebarView: View {
                 }
             }
         }
+    }
+
+    // MARK: Worktrees
+
+    /// The repository's other worktrees, with what each has checked out. Selecting one goes to its
+    /// commit; double-clicking one on a branch shows only that branch.
+    @ViewBuilder
+    private func worktreesSection(_ section: WorktreeSection, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
+        if section.count > 0 {
+            FoldingSection(isExpanded: isFiltering ? .constant(true) : $worktreesExpanded) {
+                ForEach(section.groups) { group in
+                    let isExpanded = expansion(group.id)
+                    DisclosureGroup(isExpanded: isExpanded) {
+                        ForEach(group.worktrees) { worktree in
+                            worktreeRow(worktree, commitGraph: commitGraph, repositoryID: repositoryID)
+                        }
+                    } label: {
+                        // A long path keeps its end, the folders nearest the worktrees.
+                        CountedLabel(title: group.title, systemImage: "folder", count: group.worktrees.count, truncation: .head)
+                            .togglesDisclosure(isExpanded)
+                            .help(group.title)
+                    }
+                }
+                ForEach(section.items) { worktree in
+                    worktreeRow(worktree, commitGraph: commitGraph, repositoryID: repositoryID)
+                }
+            } header: {
+                SectionHeader(title: "Worktrees", count: section.count,
+                              fold: worktreesExpanded ? fold(section.groups.map { ($0.id, false) }) : nil)
+            }
+        }
+    }
+
+    private func worktreeRow(_ worktree: Worktree, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
+        WorktreeRow(worktree: worktree, date: worktree.commit >= 0 ? commitGraph.date(of: worktree.commit) : nil)
+            .tag(SidebarItem.worktree(repositoryID, worktree.path))
+    }
+
+    /// Opens the section and the folder a worktree is listed in (selected from elsewhere).
+    private func revealWorktree(_ path: String) {
+        guard let worktree = state.graph?.commitGraph?.worktree(at: path) else { return }
+        worktreesExpanded = true
+        expanded[scopedKey("worktrees/\(worktree.location)")] = true
     }
 
     // MARK: Epics and releases
@@ -746,6 +799,8 @@ struct SidebarView: View {
                 }
                 Button("Copy Name") { copy(stash.name) }
             }
+        case .worktree(_, let path):
+            if let worktree = state.graph?.commitGraph?.worktree(at: path) { worktreeMenu(worktree) }
         case .pullRequest(_, let number):
             if let pullRequest = state.graph?.model.pullRequests?.byNumber[number] {
                 Button("Open on GitHub") { NSWorkspace.shared.open(pullRequest.url) }
@@ -772,6 +827,29 @@ struct SidebarView: View {
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// Open as Repository adds the worktree to the list on its own, where its uncommitted changes show.
+    @ViewBuilder
+    private func worktreeMenu(_ worktree: Worktree) -> some View {
+        if let branch = worktree.branch {
+            Button("Show Only This Branch") { state.graph?.showOnly(refNamed: branch) }
+        }
+        Button("Reveal in Graph") { state.graph?.reveal(worktreeAt: worktree.path) }
+            .disabled(worktree.commit < 0)
+        Divider()
+        let folder = URL(fileURLWithPath: worktree.path, isDirectory: true)
+        Button("Open as Repository") { state.addLocal(urls: [folder]) }
+            .disabled(worktree.isMissing)
+        Button("Show in Finder") { state.showInFinder(folder: folder) }
+            .disabled(worktree.isMissing)
+        Button("Open in Terminal") { state.openInTerminal(folder: folder) }
+            .disabled(worktree.isMissing)
+        Divider()
+        Button("Copy Path") { copy(worktree.path) }
+        if let branch = worktree.branchName {
+            Button("Copy Branch Name") { copy(branch) }
+        }
     }
 
     @ViewBuilder
@@ -938,6 +1016,8 @@ private struct RefRow: View {
     let systemImage: String
     /// The branch's open pull request, if any.
     var pullRequest: PullRequest?
+    /// The other worktree the branch is checked out in, if any.
+    var worktree: Worktree?
 
     var body: some View {
         Label {
@@ -947,6 +1027,12 @@ private struct RefRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
+                if worktree != nil {
+                    Image(systemName: "folder")
+                        .imageScale(.small)
+                        .foregroundStyle(.tertiary, selected: .secondary)
+                        .accessibilityLabel("Checked out in a worktree")
+                }
                 if let pullRequest {
                     Text(verbatim: "#\(pullRequest.number)")
                         .font(.caption.monospacedDigit())
@@ -970,6 +1056,69 @@ private struct RefRow: View {
     private var help: String {
         var lines = [item.ref.name, subject]
         if let pullRequest { lines.append("Pull request #\(pullRequest.number): \(pullRequest.title)") }
+        if let worktree { lines.append("Checked out in worktree \(worktree.name)") }
+        return lines.joined(separator: "\n")
+    }
+}
+
+/// Another worktree: its folder's name and how old its commit is, then the branch checked out there.
+private struct WorktreeRow: View {
+    let worktree: Worktree
+    /// When its commit was made; nil when it isn't in the history.
+    let date: Date?
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(worktree.name)
+                        .foregroundStyle(worktree.isMissing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary), selected: .primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    if worktree.lockReason != nil {
+                        Image(systemName: "lock.fill")
+                            .imageScale(.small)
+                            .foregroundStyle(.tertiary, selected: .secondary)
+                            .accessibilityLabel("Locked")
+                    }
+                    if let date {
+                        Text(RelativeAge.short(date))
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.tertiary, selected: .secondary)
+                    }
+                }
+                Text(verbatim: detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        } icon: {
+            Image(systemName: worktree.isMissing ? "questionmark.folder" : "folder")
+                .foregroundStyle(.secondary)
+        }
+        .help(Text(verbatim: help))
+    }
+
+    /// The branch checked out there, or the commit when its HEAD is detached.
+    private var checkout: String {
+        worktree.branchName ?? worktree.head.map { "Detached at \($0.short)" } ?? "Detached"
+    }
+
+    private var detail: String {
+        var parts: [String] = []
+        if worktree.isMissing { parts.append("Folder missing") }
+        if worktree.isMain { parts.append("Main worktree") }
+        parts.append(checkout)
+        return parts.joined(separator: " · ")
+    }
+
+    private var help: String {
+        var lines = [(worktree.path as NSString).abbreviatingWithTildeInPath, checkout]
+        if let reason = worktree.lockReason { lines.append(reason.isEmpty ? "Locked" : "Locked: \(reason)") }
+        if worktree.isMissing { lines.append("Its folder is gone; git worktree prune would forget it.") }
         return lines.joined(separator: "\n")
     }
 }
@@ -1422,11 +1571,12 @@ private struct CountedLabel: View {
     let title: String
     let systemImage: String
     let count: Int
+    var truncation: Text.TruncationMode = .tail
 
     var body: some View {
         Label {
             HStack {
-                Text(title).lineLimit(1)
+                Text(title).lineLimit(1).truncationMode(truncation)
                 Spacer(minLength: 4)
                 Text(count.formatted())
                     .font(.caption)

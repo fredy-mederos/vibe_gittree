@@ -101,6 +101,8 @@ enum CommitDetailsLoader {
 /// Which branches and tags contain a commit, found by walking from the commit to its descendants.
 struct Containment: Sendable {
     let branches: [GitRef]
+    /// Other worktrees with a detached HEAD that contains it (those on a branch count with the branch).
+    let worktrees: [Worktree]
     let tagCount: Int
     /// Earliest tag that matches the repository's release pattern.
     let release: GitRef?
@@ -114,6 +116,7 @@ struct Containment: Sendable {
         var locals: [GitRef] = []
         var remotes: [GitRef] = []
         var tags: [GitRef] = []
+        var worktrees: [Worktree] = []
         while let current = stack.popLast() {
             let i = Int(current)
             if seen[i] { continue }
@@ -128,6 +131,7 @@ struct Containment: Sendable {
                     }
                 }
             }
+            worktrees += graph.detachedWorktrees(at: current)
             for child in graph.children(current) where !seen[Int(child)] {
                 stack.append(child)
             }
@@ -142,7 +146,8 @@ struct Containment: Sendable {
             guard let release else { return false }
             return release.firstMatch(in: tag.name, range: NSRange(tag.name.startIndex..., in: tag.name)) != nil
         }
-        return Containment(branches: branches, tagCount: tags.count, release: earliest(releases), firstTag: earliest(tags))
+        return Containment(branches: branches, worktrees: worktrees.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending },
+                           tagCount: tags.count, release: earliest(releases), firstTag: earliest(tags))
     }
 }
 

@@ -193,7 +193,19 @@ private struct CommitDetailView: View {
                         Button("Show All \(containment.branches.count.formatted())") { showAllBranches = true }
                             .buttonStyle(.link)
                     }
-                    if containment.branches.isEmpty {
+                    // Worktrees with a detached HEAD, which no branch may lead to.
+                    ForEach(containment.worktrees.prefix(12)) { worktree in
+                        Button {
+                            graph.reveal(worktreeAt: worktree.path)
+                        } label: {
+                            Label("\(worktree.name) (worktree)", systemImage: "folder")
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Go to the commit checked out in \(worktree.name)")
+                    }
+                    if containment.branches.isEmpty && containment.worktrees.isEmpty {
                         Text("No branch contains this commit.").foregroundStyle(.secondary)
                     }
                 } else {

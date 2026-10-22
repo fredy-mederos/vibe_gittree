@@ -304,6 +304,12 @@ import Observation
         select(graph.headCommit)
     }
 
+    /// The commit a worktree has checked out.
+    func reveal(worktreeAt path: String) {
+        guard let worktree = commitGraph?.worktree(at: path), worktree.commit >= 0 else { return }
+        select(worktree.commit)
+    }
+
     func showOnly(refNamed fullName: String) {
         scope = .ref(fullName)
     }
