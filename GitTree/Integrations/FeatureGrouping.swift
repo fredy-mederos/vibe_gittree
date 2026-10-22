@@ -240,7 +240,7 @@ enum FeatureGrouper {
             case .available:
                 let batches = stride(from: 0, to: unassigned.count, by: 15).map { Array(unassigned[$0..<min($0 + 15, unassigned.count)]) }
                 for (number, batch) in batches.enumerated() {
-                    await progress("Matching work to terms… \(number + 1) of \(batches.count)")
+                    await progress(String(localized: "Matching work to terms… \(number + 1) of \(batches.count)", comment: "Batches of commits sent to Apple's on-device model"))
                     let answers = await OnDeviceTermMatcher.assign(batch.map { items[$0] }, catalog: catalog, ticketRegex: ticketRegex)
                     for (offset, answer) in answers {
                         guard offset < batch.count, let term = answer else { continue }
@@ -260,7 +260,7 @@ enum FeatureGrouper {
         }
         #endif
         await update(report(items, catalog: catalog, commitCount: commits.count, usedAI: false,
-                            note: "Matching work without a term needs macOS 26 or later with Apple Intelligence."))
+                            note: String(localized: "Matching work without a term needs macOS 26 or later with Apple Intelligence.")))
     }
 
     /// Tickets become features named after their most descriptive commit; commits without a ticket
@@ -269,7 +269,7 @@ enum FeatureGrouper {
         var groups: [FeatureGroup] = []
         var loose: [String: [FeatureCommit]] = [:]
         for item in items {
-            let area = item.termKey.flatMap { catalog.terms[$0]?.name } ?? "Other"
+            let area = item.termKey.flatMap { catalog.terms[$0]?.name } ?? String(localized: "Other", comment: "The Features group for work without a term")
             if let ticket = item.ticket {
                 groups.append(FeatureGroup(id: ticket, name: featureName(item.commits, ticket: ticket), area: area,
                                            ticket: ticket, commits: item.commits))
@@ -278,7 +278,7 @@ enum FeatureGrouper {
             }
         }
         for (area, commits) in loose {
-            groups.append(FeatureGroup(id: "loose-\(area)", name: commits.count == 1 ? cleanedSubject(commits[0].subject, removing: "") : "Without a ticket",
+            groups.append(FeatureGroup(id: "loose-\(area)", name: commits.count == 1 ? cleanedSubject(commits[0].subject, removing: "") : String(localized: "Without a ticket"),
                                        area: area, ticket: nil, commits: commits))
         }
         return FeatureReport(groups: groups, commitCount: commitCount, usedAI: usedAI, note: note)
@@ -307,13 +307,13 @@ enum FeatureGrouper {
     private static func describe(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
         switch reason {
         case .appleIntelligenceNotEnabled:
-            return "Turn on Apple Intelligence in System Settings to sort work that has no term; until then it's under Other."
+            return String(localized: "Turn on Apple Intelligence in System Settings to sort work that has no term; until then it's under Other.")
         case .deviceNotEligible:
-            return "This Mac can't run Apple's on-device model, so work without a term stays under Other."
+            return String(localized: "This Mac can't run Apple's on-device model, so work without a term stays under Other.")
         case .modelNotReady:
-            return "Apple's on-device model is still downloading; work without a term is under Other for now."
+            return String(localized: "Apple's on-device model is still downloading; work without a term is under Other for now.")
         @unknown default:
-            return "Apple's on-device model isn't available, so work without a term stays under Other."
+            return String(localized: "Apple's on-device model isn't available, so work without a term stays under Other.")
         }
     }
 

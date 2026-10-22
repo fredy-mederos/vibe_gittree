@@ -71,23 +71,24 @@ struct UpdatesSection: View {
     }
 
     private var title: String {
-        if updater.isChecking { return "Checking for updates…" }
-        if let release = updater.available { return "\(BuildInfo.name) \(release.version) is available" }
-        if updater.failure != nil { return "Couldn't check for updates" }
-        if updater.lastChecked != nil { return "\(BuildInfo.name) is up to date" }
-        return "Not checked yet"
+        if updater.isChecking { return String(localized: "Checking for updates…") }
+        if let release = updater.available { return String(localized: "\(BuildInfo.name) \(release.version) is available") }
+        if updater.failure != nil { return String(localized: "Couldn't check for updates") }
+        if updater.lastChecked != nil { return String(localized: "\(BuildInfo.name) is up to date") }
+        return String(localized: "Not checked yet")
     }
 
     private var detail: String {
         if let release = updater.available {
-            let released = release.publishedAt.map { " · released \($0.formatted(date: .abbreviated, time: .omitted))" } ?? ""
-            return "You have \(BuildInfo.version)\(released)"
+            guard let published = release.publishedAt else { return String(localized: "You have \(BuildInfo.version)", comment: "The version installed") }
+            return String(localized: "You have \(BuildInfo.version) · released \(published.formatted(date: .abbreviated, time: .omitted))",
+                          comment: "The version installed, then when the newer one was released")
         }
         if let failure = updater.failure { return failure }
         if let checked = updater.lastChecked {
-            let when = "Checked \(checked.formatted(.relative(presentation: .named)))"
-            return updater.latest == nil ? "\(when) · no releases yet" : when
+            let when = String(localized: "Checked \(checked.formatted(.relative(presentation: .named)))", comment: "When updates were last checked, like Checked 5 minutes ago")
+            return updater.latest == nil ? String(localized: "\(when) · no releases yet") : when
         }
-        return BuildInfo.isDebug ? "Debug builds check only when you ask." : "\(BuildInfo.name) checks when it opens."
+        return BuildInfo.isDebug ? String(localized: "Debug builds check only when you ask.") : String(localized: "\(BuildInfo.name) checks when it opens.")
     }
 }

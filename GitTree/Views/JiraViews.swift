@@ -9,7 +9,7 @@ struct IssueTypeIcon: View {
     var body: some View {
         Image(systemName: style.symbol)
             .foregroundStyle(style.color, selected: .primary)
-            .help(type ?? "Ticket")
+            .help(type ?? String(localized: "Ticket"))
     }
 
     private var style: (symbol: String, color: Color) {
@@ -67,7 +67,7 @@ struct TicketProgressLabel: View {
         HStack(spacing: 6) {
             TicketProgressBar(progress: progress)
                 .frame(maxWidth: 80)
-            Text(verbatim: "\(progress.done)/\(progress.total) done")
+            Text("\(progress.done)/\(progress.total) done", comment: "Tickets done out of all of them, as in 5/8 done")
                 .font(.caption)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -79,8 +79,9 @@ extension TicketProgress {
     /// "5 of 8 tickets done · 2 in progress".
     var summary: String? {
         guard total > 0 else { return nil }
-        var text = "\(done) of \(counted(total, "ticket", "tickets")) done"
-        if inProgress > 0 { text += " · \(inProgress) in progress" }
+        let tickets = String(localized: "\(total) tickets")
+        var text = String(localized: "\(done) of \(tickets) done", comment: "5 of 8 tickets done")
+        if inProgress > 0 { text += " · " + String(localized: "\(inProgress) in progress", comment: "Tickets in progress") }
         return text
     }
 }

@@ -607,26 +607,26 @@ import Observation
     func stage(_ changes: [WorkingChange]) async {
         let paths = Self.paths(of: changes)
         guard !paths.isEmpty else { return }
-        await perform("Staging…") { try await WorkingTreeActions.stage(paths, in: $0) }
+        await perform(String(localized: "Staging…")) { try await WorkingTreeActions.stage(paths, in: $0) }
     }
 
     func unstage(_ changes: [WorkingChange]) async {
         let paths = Self.paths(of: changes)
         guard !paths.isEmpty else { return }
-        await perform("Unstaging…") { try await WorkingTreeActions.unstage(paths, in: $0) }
+        await perform(String(localized: "Unstaging…")) { try await WorkingTreeActions.unstage(paths, in: $0) }
     }
 
     func stageAll() async {
-        await perform("Staging…") { try await WorkingTreeActions.stageAll(in: $0) }
+        await perform(String(localized: "Staging…")) { try await WorkingTreeActions.stageAll(in: $0) }
     }
 
     func unstageAll() async {
-        await perform("Unstaging…") { try await WorkingTreeActions.unstageAll(in: $0) }
+        await perform(String(localized: "Unstaging…")) { try await WorkingTreeActions.unstageAll(in: $0) }
     }
 
     /// Commits what's staged; the history shows the new commit right away.
     func commit(message: String) async -> Bool {
-        let committed = await perform("Committing…") { try await WorkingTreeActions.commit(message: message, in: $0) }
+        let committed = await perform(String(localized: "Committing…")) { try await WorkingTreeActions.commit(message: message, in: $0) }
         if committed { reload() }
         return committed
     }
@@ -636,22 +636,22 @@ import Observation
         let paths = changes.map(Self.paths(of:))
         // No files would mean every file to `git stash push`.
         if paths?.isEmpty == true { return false }
-        return await perform("Stashing…") { try await WorkingTreeActions.stash(paths, message: message, in: $0) }
+        return await perform(String(localized: "Stashing…")) { try await WorkingTreeActions.stash(paths, message: message, in: $0) }
     }
 
     func applyStash(_ stash: StashEntry) async -> Bool {
         let id = stash.id
-        return await perform("Applying \(stash.name)…") { try await WorkingTreeActions.apply(id, in: $0) }
+        return await perform(String(localized: "Applying \(stash.name)…")) { try await WorkingTreeActions.apply(id, in: $0) }
     }
 
     func popStash(_ stash: StashEntry) async -> Bool {
         let id = stash.id
-        return await perform("Popping \(stash.name)…") { try await WorkingTreeActions.pop(id, in: $0) }
+        return await perform(String(localized: "Popping \(stash.name)…")) { try await WorkingTreeActions.pop(id, in: $0) }
     }
 
     func dropStash(_ stash: StashEntry) async -> Bool {
         let id = stash.id
-        return await perform("Dropping \(stash.name)…") { try await WorkingTreeActions.drop(id, in: $0) }
+        return await perform(String(localized: "Dropping \(stash.name)…")) { try await WorkingTreeActions.drop(id, in: $0) }
     }
 
     func dismissChangeError() {

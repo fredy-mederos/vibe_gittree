@@ -1,0 +1,4 @@
+interface:
+  display_name: "Localize Vibe GitTree"
+  short_description: "Translate new or changed strings into Vibe GitTree's 20 languages"
+  default_prompt: "Sync Vibe GitTree's String Catalog with the code, have subagents on a lighter model translate what each of the 20 languages misses, import and check their work, and build."

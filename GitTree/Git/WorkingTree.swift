@@ -22,6 +22,26 @@ struct WorkingChange: Identifiable, Hashable, Sendable {
 struct WorkingTreeStatus: Equatable, Sendable {
     enum Operation: String, Sendable {
         case merge = "A merge", rebase = "A rebase", cherryPick = "A cherry-pick", revert = "A revert"
+
+        /// For the uncommitted changes' details.
+        var finishOrStop: String {
+            switch self {
+            case .merge: String(localized: "A merge is under way: finish or stop it in Terminal.")
+            case .rebase: String(localized: "A rebase is under way: finish or stop it in Terminal.")
+            case .cherryPick: String(localized: "A cherry-pick is under way: finish or stop it in Terminal.")
+            case .revert: String(localized: "A revert is under way: finish or stop it in Terminal.")
+            }
+        }
+
+        /// Why nothing can be committed here meanwhile (a merge's commit can).
+        var finish: String {
+            switch self {
+            case .merge: String(localized: "A merge is under way: finish it in Terminal.")
+            case .rebase: String(localized: "A rebase is under way: finish it in Terminal.")
+            case .cherryPick: String(localized: "A cherry-pick is under way: finish it in Terminal.")
+            case .revert: String(localized: "A revert is under way: finish it in Terminal.")
+            }
+        }
     }
 
     /// Every changed file, up to `WorkingTreeLoader.fileLimit`.
@@ -51,10 +71,10 @@ struct WorkingTreeStatus: Equatable, Sendable {
     /// "2 staged · 3 changed · 1 new", for the graph's row.
     var summary: String {
         var parts: [String] = []
-        if conflictedCount > 0 { parts.append(counted(conflictedCount, "conflict", "conflicts")) }
-        if stagedCount > 0 { parts.append("\(stagedCount.formatted()) staged") }
-        if unstagedCount > 0 { parts.append("\(unstagedCount.formatted()) changed") }
-        if untrackedCount > 0 { parts.append("\(untrackedCount.formatted()) new") }
+        if conflictedCount > 0 { parts.append(String(localized: "\(conflictedCount) conflicts")) }
+        if stagedCount > 0 { parts.append(String(localized: "\(stagedCount) staged", comment: "Files: 2 staged · 3 changed · 1 new")) }
+        if unstagedCount > 0 { parts.append(String(localized: "\(unstagedCount) changed", comment: "Files: 2 staged · 3 changed · 1 new")) }
+        if untrackedCount > 0 { parts.append(String(localized: "\(untrackedCount) new", comment: "Files: 2 staged · 3 changed · 1 new")) }
         return parts.joined(separator: " · ")
     }
 

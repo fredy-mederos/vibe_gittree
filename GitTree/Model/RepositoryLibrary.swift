@@ -8,9 +8,9 @@ enum RepositorySort: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .manual: "Manual Order"
-        case .name: "Name"
-        case .recent: "Recently Opened"
+        case .manual: String(localized: "Manual Order")
+        case .name: String(localized: "Name")
+        case .recent: String(localized: "Recently Opened")
         }
     }
 }
@@ -22,9 +22,9 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .none: "None"
-        case .folder: "Folder"
-        case .host: "Host"
+        case .none: String(localized: "None", comment: "Repositories not grouped")
+        case .folder: String(localized: "Folder", comment: "Repositories grouped by folder")
+        case .host: String(localized: "Host", comment: "Repositories grouped by host, like github.com")
         }
     }
 }
@@ -72,7 +72,7 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
 
         var errorDescription: String? {
             switch self {
-            case .notARepository(let name): "“\(name)” isn't a git repository. Choose the folder that contains the .git folder."
+            case .notARepository(let name): String(localized: "“\(name)” isn't a git repository. Choose the folder that contains the .git folder.")
             }
         }
     }

@@ -95,7 +95,7 @@ private struct FileDiffView: View {
 
     /// The file on its own when one is shown; the window's own title for All Files.
     private var title: String {
-        if showsAllFiles || current.path.isEmpty { return target.title ?? "All Changes" }
+        if showsAllFiles || current.path.isEmpty { return target.title ?? String(localized: "All Changes") }
         return URL(fileURLWithPath: current.path).lastPathComponent
     }
 
@@ -238,8 +238,8 @@ private struct FileDiffView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 12) {
-                    Text("+\(diff.addedCount)").foregroundStyle(.green)
-                    Text("−\(diff.removedCount)").foregroundStyle(.red)
+                    Text(verbatim: "+\(diff.addedCount.formatted())").foregroundStyle(.green)
+                    Text(verbatim: "−\(diff.removedCount.formatted())").foregroundStyle(.red)
                     Text(current.path)
                         .lineLimit(1)
                         .truncationMode(.head)
@@ -337,7 +337,7 @@ private struct FileDiffView: View {
         }
     }
 
-    private func note(_ text: String) -> some View {
+    private func note(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -361,8 +361,8 @@ private struct FileDiffView: View {
             }
             Spacer(minLength: 8)
             if let added = file.added, let removed = file.removed {
-                Text("+\(added)").foregroundStyle(.green)
-                Text("−\(removed)").foregroundStyle(.red)
+                Text(verbatim: "+\(added.formatted())").foregroundStyle(.green)
+                Text(verbatim: "−\(removed.formatted())").foregroundStyle(.red)
             }
             Button {
                 showAlone(file)
@@ -385,10 +385,10 @@ private struct FileDiffView: View {
             if !files.isEmpty {
                 let added = files.reduce(0) { $0 + ($1.added ?? 0) }
                 let removed = files.reduce(0) { $0 + ($1.removed ?? 0) }
-                parts.append(counted(files.count, "file", "files") + (repository.kind == .local ? " · +\(added.formatted()) −\(removed.formatted())" : ""))
+                parts.append(String(localized: "\(files.count) files") + (repository.kind == .local ? " · +\(added.formatted()) −\(removed.formatted())" : ""))
             }
             if target.uncommitted != nil {
-                parts.append("not committed")
+                parts.append(String(localized: "not committed"))
             } else if let base = target.base {
                 parts.append("\(base.prefix(8)) → \(target.commit.prefix(8))")
             } else {
@@ -398,27 +398,27 @@ private struct FileDiffView: View {
         }
         if let uncommitted = current.uncommitted {
             switch uncommitted {
-            case .staged: parts.append("Staged, not committed")
-            case .unstaged: parts.append("Not staged")
-            case .untracked: parts.append("New file, not committed")
+            case .staged: parts.append(String(localized: "Staged, not committed"))
+            case .unstaged: parts.append(String(localized: "Not staged"))
+            case .untracked: parts.append(String(localized: "New file, not committed"))
             }
         } else if let base = current.base {
             parts.append("\(base.prefix(8)) → \(current.commit.prefix(8))")
         } else {
             parts.append(String(current.commit.prefix(8)))
         }
-        if let oldPath = current.oldPath { parts.append("renamed from \(oldPath)") }
-        if let line = current.line { parts.append("line \(line)") }
+        if let oldPath = current.oldPath { parts.append(String(localized: "renamed from \(oldPath)")) }
+        if let line = current.line { parts.append(String(localized: "line \(String(line))", comment: "A line number in a file")) }
         return parts.joined(separator: " · ")
     }
 
     private var noChanges: String {
         switch current.uncommitted {
-        case .staged: return "Nothing in this file is staged now."
-        case .unstaged: return "This file has no changes that aren't staged now."
-        case .untracked: return "This file isn't there anymore, or git tracks it now."
-        case nil: return current.base == nil ? "This file didn't change in this commit compared to its first parent."
-            : "This file is the same in both commits."
+        case .staged: return String(localized: "Nothing in this file is staged now.")
+        case .unstaged: return String(localized: "This file has no changes that aren't staged now.")
+        case .untracked: return String(localized: "This file isn't there anymore, or git tracks it now.")
+        case nil: return current.base == nil ? String(localized: "This file didn't change in this commit compared to its first parent.")
+            : String(localized: "This file is the same in both commits.")
         }
     }
 
@@ -545,7 +545,7 @@ private struct DiffFileList: View {
                 .fixedSize()
                 .help("List the files by path, or with the most changed lines first")
                 Spacer()
-                Text(counted(files.count, "file", "files"))
+                Text("\(files.count) files")
                     .foregroundStyle(.secondary)
             }
             .font(.caption)
@@ -565,10 +565,10 @@ private struct DiffFileList: View {
     /// Uncommitted files by kind, as Uncommitted Changes lists them.
     private var groups: [(title: String, files: [DiffFile])] {
         let kinds: [(String, (DiffFile) -> Bool)] = [
-            ("Conflicts", { $0.status == "!" }),
-            ("Staged", { $0.uncommitted == .staged }),
-            ("Not Staged", { $0.uncommitted == .unstaged && $0.status != "!" }),
-            ("New Files", { $0.uncommitted == .untracked }),
+            (String(localized: "Conflicts"), { $0.status == "!" }),
+            (String(localized: "Staged"), { $0.uncommitted == .staged }),
+            (String(localized: "Not Staged"), { $0.uncommitted == .unstaged && $0.status != "!" }),
+            (String(localized: "New Files"), { $0.uncommitted == .untracked }),
         ]
         return kinds.map { kind in (kind.0, files.filter(kind.1)) }.filter { !$0.files.isEmpty }
     }

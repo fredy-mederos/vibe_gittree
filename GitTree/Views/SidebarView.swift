@@ -230,7 +230,8 @@ struct SidebarView: View {
                             stackRow(pullRequest, position: position, commitGraph: commitGraph, repositoryID: repositoryID)
                         }
                     } label: {
-                        CountedLabel(title: "on \(stack.first?.base ?? "")", systemImage: "square.stack.3d.up", count: stack.count)
+                        CountedLabel(title: String(localized: "on \(stack.first?.base ?? "")", comment: "A stack of pull requests, named after the branch it’s based on"),
+                                     systemImage: "square.stack.3d.up", count: stack.count)
                             .togglesDisclosure(isExpanded)
                             .contextMenu {
                                 if let top = stack.last {
@@ -341,10 +342,10 @@ struct SidebarView: View {
         let merged = Array(newest.filter { $0.state == .merged }.prefix(25))
         let closed = Array(newest.filter { $0.state == .closed }.prefix(15))
         return [
-            PullRequestGroup(id: "pulls:open", title: "Open", systemImage: "arrow.triangle.pull", pullRequests: open, expandedByDefault: true),
-            PullRequestGroup(id: "pulls:drafts", title: "Drafts", systemImage: "circle.dashed", pullRequests: drafts, expandedByDefault: false),
-            PullRequestGroup(id: "pulls:merged", title: "Recently Merged", systemImage: "arrow.triangle.merge", pullRequests: merged, expandedByDefault: false),
-            PullRequestGroup(id: "pulls:closed", title: "Recently Closed", systemImage: "xmark.circle", pullRequests: closed, expandedByDefault: false),
+            PullRequestGroup(id: "pulls:open", title: String(localized: "pulls.open", defaultValue: "Open", comment: "The sidebar's group of open pull requests"), systemImage: "arrow.triangle.pull", pullRequests: open, expandedByDefault: true),
+            PullRequestGroup(id: "pulls:drafts", title: String(localized: "Drafts"), systemImage: "circle.dashed", pullRequests: drafts, expandedByDefault: false),
+            PullRequestGroup(id: "pulls:merged", title: String(localized: "Recently Merged"), systemImage: "arrow.triangle.merge", pullRequests: merged, expandedByDefault: false),
+            PullRequestGroup(id: "pulls:closed", title: String(localized: "Recently Closed"), systemImage: "xmark.circle", pullRequests: closed, expandedByDefault: false),
         ].filter { !$0.pullRequests.isEmpty }
     }
 
@@ -440,7 +441,7 @@ struct SidebarView: View {
                                 .tag(SidebarItem.stash(repositoryID, stash.id.hex))
                         }
                     } label: {
-                        CountedLabel(title: "Stashes", systemImage: "tray.full", count: model.stashes.count)
+                        CountedLabel(title: String(localized: "Stashes"), systemImage: "tray.full", count: model.stashes.count)
                             .togglesDisclosure(isExpanded)
                     }
                 }
@@ -511,17 +512,18 @@ struct SidebarView: View {
                     epicGroup(group, graph: graph, repositoryID: repositoryID)
                 }
                 if report.groups.isEmpty, report.liveEpics == 0, graph.epicProgress == nil {
-                    Text(report.ticketCount == 0 ? "No tickets in the latest \(report.commitLimit.formatted()) commits." : "Waiting for Jira…")
+                    Text(report.ticketCount == 0 ? "No tickets in the latest \(report.commitLimit) commits." : "Waiting for Jira…")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if report.liveEpics > 0 {
-                    Text("\(counted(report.liveEpics, "live epic", "live epics")) not shown.")
+                    Text("\(report.liveEpics) live epics not shown.",
+                         comment: "Epics already done or released (in Jira's done category), which the Epics section leaves out")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if report.notInJira > 0 {
-                    Text("\(counted(report.notInJira, "ticket isn't", "tickets aren't")) in Jira.")
+                    Text("\(report.notInJira) tickets aren't in Jira.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -537,7 +539,7 @@ struct SidebarView: View {
                                                           action: graph.refreshJiraOverview))
                     Menu {
                         Picker("Commits to Include", selection: Bindable(graph).epicCommitLimit) {
-                            ForEach([200, 500, 1000, 2000], id: \.self) { Text("Latest \($0.formatted())").tag($0) }
+                            ForEach([200, 500, 1000, 2000], id: \.self) { Text("Latest \($0)").tag($0) }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -584,7 +586,8 @@ struct SidebarView: View {
                             releaseGroup(version, graph: graph, repositoryID: repositoryID)
                         }
                     } label: {
-                        CountedLabel(title: report.used.isEmpty ? "All Fix Versions" : "Other Fix Versions", systemImage: "shippingbox",
+                        CountedLabel(title: report.used.isEmpty ? String(localized: "All Fix Versions") : String(localized: "Other Fix Versions"),
+                                     systemImage: "shippingbox",
                                      count: report.other.count)
                             .togglesDisclosure(isExpanded)
                             .help(graph.model.repository.fixVersionRegex == nil
@@ -599,7 +602,7 @@ struct SidebarView: View {
                             releaseGroup(version, graph: graph, repositoryID: repositoryID)
                         }
                     } label: {
-                        CountedLabel(title: "Recently Released", systemImage: "checkmark.seal", count: report.recent.count)
+                        CountedLabel(title: String(localized: "Recently Released"), systemImage: "checkmark.seal", count: report.recent.count)
                             .togglesDisclosure(isExpanded)
                             .help("This repository's fix versions released in the last 30 days")
                     }
@@ -656,7 +659,7 @@ struct SidebarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ProgressNote(text: "Loading tickets…")
+                ProgressNote(text: String(localized: "Loading tickets…"))
             }
         } label: {
             ReleaseRow(version: version, problem: graph.releaseTickets[version.id] == nil ? nil : graph.releaseProblems[version.id],
@@ -1055,8 +1058,8 @@ private struct RefRow: View {
 
     private var help: String {
         var lines = [item.ref.name, subject]
-        if let pullRequest { lines.append("Pull request #\(pullRequest.number): \(pullRequest.title)") }
-        if let worktree { lines.append("Checked out in worktree \(worktree.name)") }
+        if let pullRequest { lines.append(String(localized: "Pull request #\(String(pullRequest.number)): \(pullRequest.title)")) }
+        if let worktree { lines.append(String(localized: "Checked out in worktree \(worktree.name)")) }
         return lines.joined(separator: "\n")
     }
 }
@@ -1104,21 +1107,22 @@ private struct WorktreeRow: View {
 
     /// The branch checked out there, or the commit when its HEAD is detached.
     private var checkout: String {
-        worktree.branchName ?? worktree.head.map { "Detached at \($0.short)" } ?? "Detached"
+        worktree.branchName ?? worktree.head.map { String(localized: "Detached at \($0.short)", comment: "A worktree whose HEAD is detached at a commit") }
+            ?? String(localized: "Detached", comment: "A worktree whose HEAD is detached")
     }
 
     private var detail: String {
         var parts: [String] = []
-        if worktree.isMissing { parts.append("Folder missing") }
-        if worktree.isMain { parts.append("Main worktree") }
+        if worktree.isMissing { parts.append(String(localized: "Folder missing")) }
+        if worktree.isMain { parts.append(String(localized: "Main worktree")) }
         parts.append(checkout)
         return parts.joined(separator: " · ")
     }
 
     private var help: String {
         var lines = [(worktree.path as NSString).abbreviatingWithTildeInPath, checkout]
-        if let reason = worktree.lockReason { lines.append(reason.isEmpty ? "Locked" : "Locked: \(reason)") }
-        if worktree.isMissing { lines.append("Its folder is gone; git worktree prune would forget it.") }
+        if let reason = worktree.lockReason { lines.append(reason.isEmpty ? String(localized: "Locked") : String(localized: "Locked: \(reason)")) }
+        if worktree.isMissing { lines.append(String(localized: "Its folder is gone; git worktree prune would forget it.")) }
         return lines.joined(separator: "\n")
     }
 }
@@ -1207,7 +1211,8 @@ private struct FeatureRow: View {
             Image(systemName: group.ticket == nil ? "circle.grid.cross" : "ticket")
                 .foregroundStyle(.secondary)
         }
-        .help(Text(verbatim: "\(group.name)\n\(group.commits.count) commits by \(group.authors.prefix(3).joined(separator: ", "))"))
+        .help(Text(verbatim: group.name + "\n"
+            + String(localized: "\(group.commits.count) commits by \(group.authors.prefix(3).joined(separator: ", "))")))
     }
 }
 
@@ -1238,7 +1243,7 @@ private struct EpicRow: View {
                         IssueStatusText(status: epic.status, category: JiraStore.shared.category(of: epic, connection: connection))
                         Text(verbatim: "·")
                     }
-                    Text(counted(group.tickets.count, "ticket", "tickets"))
+                    Text("\(group.tickets.count) tickets")
                     Text(verbatim: "· \(RelativeAge.short(group.latest))")
                 }
                 .font(.caption)
@@ -1260,21 +1265,27 @@ private struct EpicRow: View {
         .help(Text(verbatim: help))
     }
 
+    /// The Definition of Done that progress counts as done, for a tooltip.
+    static func doneCounts(_ statuses: [String]) -> String {
+        String(localized: "Done counts \(statuses.joined(separator: ", ")) (Settings › Jira)", comment: "Followed by Jira status names")
+    }
+
     private var title: String {
-        guard let epic = group.epic else { return "No Epic" }
+        guard let epic = group.epic else { return String(localized: "No Epic") }
         return epic.summary.isEmpty ? epic.key : epic.summary
     }
 
     private var help: String {
-        let tickets = counted(group.tickets.count, "ticket", "tickets")
-        let commits = counted(group.commits, "commit", "commits")
-        guard let epic = group.epic else { return "Tickets without an epic\n\(tickets), \(commits)" }
-        var lines = ["\(epic.key) \(epic.summary)", "\(epic.status) · \(tickets) in the latest commits, \(commits)"]
+        let tickets = String(localized: "\(group.tickets.count) tickets")
+        let commits = String(localized: "\(group.commits) commits")
+        guard let epic = group.epic else { return String(localized: "Tickets without an epic") + "\n" + "\(tickets), \(commits)" }
+        var lines = ["\(epic.key) \(epic.summary)",
+                     String(localized: "\(epic.status) · \(tickets) in the latest commits, \(commits)", comment: "An epic's status, then its tickets and their commits")]
         if let progress = group.progress?.summary {
-            lines.append("All its stories and tasks: \(progress)")
-            if !doneStatuses.isEmpty { lines.append("Done counts \(doneStatuses.joined(separator: ", ")) (Settings › Jira)") }
+            lines.append(String(localized: "All its stories and tasks: \(progress)"))
+            if !doneStatuses.isEmpty { lines.append(Self.doneCounts(doneStatuses)) }
         }
-        lines.append("Select to highlight every commit of the epic's tickets")
+        lines.append(String(localized: "Select to highlight every commit of the epic's tickets"))
         return lines.joined(separator: "\n")
     }
 }
@@ -1332,9 +1343,9 @@ private struct SidebarTicketRow: View {
         var lines = [[key, issue?.summary].compactMap { $0 }.joined(separator: " ")]
         if let issue {
             lines.append([issue.type, issue.status, issue.assignee].compactMap { $0 }.joined(separator: " · "))
-            if let parent = issue.parent { lines.append("In \(parent.key) \(parent.summary)") }
+            if let parent = issue.parent { lines.append(String(localized: "In \(parent.key) \(parent.summary)", comment: "The story or epic a ticket belongs to: its key and summary")) }
         }
-        lines.append(commits == 0 ? "No commit in this history mentions it" : counted(commits, "commit", "commits"))
+        lines.append(commits == 0 ? String(localized: "No commit in this history mentions it") : String(localized: "\(commits) commits"))
         return lines.joined(separator: "\n")
     }
 }
@@ -1396,13 +1407,14 @@ private struct ReleaseRow: View {
         var lines = [version.name]
         if let details = version.details { lines.append(details) }
         if let date = version.shortReleaseDate {
-            lines.append((version.released == true ? "Released " : version.overdue ? "Overdue, was due " : "Release date ") + date)
+            lines.append(version.released == true ? String(localized: "Released \(date)")
+                         : version.overdue ? String(localized: "Overdue, was due \(date)") : String(localized: "Release date \(date)"))
         }
         if let progress = version.progressSummary {
             lines.append(progress)
-            if !doneStatuses.isEmpty { lines.append("Done counts \(doneStatuses.joined(separator: ", ")) (Settings › Jira)") }
+            if !doneStatuses.isEmpty { lines.append(EpicRow.doneCounts(doneStatuses)) }
         }
-        lines.append("Select to highlight its tickets' commits")
+        lines.append(String(localized: "Select to highlight its tickets' commits"))
         return lines.joined(separator: "\n")
     }
 }
@@ -1422,7 +1434,7 @@ private struct PullRequestTimelineRow: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                ProgressNote(text: "Loading timeline…")
+                ProgressNote(text: String(localized: "Loading timeline…"))
             }
         }
         .padding(.leading, 24)
@@ -1500,7 +1512,7 @@ private struct FoldControl {
 /// A section's or a fix version's Refresh: whether it's under way, and how to start it.
 private struct RefreshControl {
     let isRefreshing: Bool
-    let help: String
+    let help: LocalizedStringKey
     let action: () -> Void
 }
 
@@ -1544,7 +1556,7 @@ private struct FoldButton: View {
 }
 
 private struct SectionHeader: View {
-    let title: String
+    let title: LocalizedStringKey
     let count: Int
     /// Collapse All / Expand All for the section's groups, when it has any.
     var fold: FoldControl?
@@ -1629,13 +1641,15 @@ enum RelativeAge {
     static func short(_ date: Date, now: Date = Date()) -> String {
         let seconds = max(0, now.timeIntervalSince(date))
         switch seconds {
-        case ..<3600: return "\(max(1, Int(seconds / 60)))m"
-        case ..<86_400: return "\(Int(seconds / 3600))h"
-        case ..<(86_400 * 45): return "\(Int(seconds / 86_400))d"
-        case ..<(86_400 * 365): return "\(Int(seconds / (86_400 * 30.4)))mo"
+        case ..<3600: return String(localized: "\(max(1, Int(seconds / 60)))m", comment: "A compact age in minutes, as in 5m")
+        case ..<86_400: return String(localized: "\(Int(seconds / 3600))h", comment: "A compact age in hours, as in 3h")
+        case ..<(86_400 * 45): return String(localized: "\(Int(seconds / 86_400))d", comment: "A compact age in days, as in 12d")
+        case ..<(86_400 * 365): return String(localized: "\(Int(seconds / (86_400 * 30.4)))mo", comment: "A compact age in months, as in 4mo")
         default:
+            // 2.5y under three years, whole years after that.
             let years = seconds / (86_400 * 365.25)
-            return years < 3 ? String(format: "%.1fy", years).replacingOccurrences(of: ".0y", with: "y") : "\(Int(years))y"
+            let value = years < 3 ? years.formatted(.number.precision(.fractionLength(0...1))) : Int(years).formatted()
+            return String(localized: "\(value)y", comment: "A compact age in years, as in 2.5y")
         }
     }
 }

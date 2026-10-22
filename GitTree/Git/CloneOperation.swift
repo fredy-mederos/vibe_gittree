@@ -22,7 +22,7 @@ import Observation
     func start(remoteURL: String, destination: URL, completion: @escaping @MainActor (Result<Void, Error>) -> Void) {
         guard state != .running else { return }
         state = .running
-        phase = "Connecting…"
+        phase = String(localized: "Connecting…")
         fraction = nil
         pendingProgress = ""
 
@@ -90,7 +90,7 @@ import Observation
             phase = display.replacingOccurrences(of: ", done.", with: "")
             fraction = (Double(match.2) ?? 0) / 100
         } else if display.hasPrefix("Cloning into") {
-            phase = "Connecting…"
+            phase = String(localized: "Connecting…")
         }
     }
 
@@ -112,7 +112,7 @@ import Observation
         // A bare clone has no fetch refspec; map the remote's branches straight onto ours so
         // `git fetch` keeps every branch current and prunes deleted ones.
         _ = try? await Git.run(["config", "remote.origin.fetch", "+refs/heads/*:refs/heads/*"], in: destination)
-        phase = "Done"
+        phase = String(localized: "Done", comment: "A clone finished")
         fraction = 1
         state = .finished
         completion(.success(()))

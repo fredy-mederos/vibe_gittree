@@ -125,7 +125,8 @@ struct RepositorySettingsSheet: View {
     /// What GitTree found in the commit messages, shown when no keys are set.
     private var detectedPrefixes: String {
         let detected = RepositoryModelStore.shared.existingModel(id: repository.id)?.graph?.ticketPrefixes ?? []
-        return detected.isEmpty ? "Detected from commit messages" : "Detected: " + detected.prefix(4).joined(separator: ", ")
+        return detected.isEmpty ? String(localized: "Detected from commit messages")
+            : String(localized: "Detected: \(detected.prefix(4).joined(separator: ", "))", comment: "Followed by ticket keys found in commit messages, like PROJ, ABC")
     }
 
     private var patternError: String? {
@@ -134,13 +135,13 @@ struct RepositorySettingsSheet: View {
             _ = try NSRegularExpression(pattern: pattern)
             return nil
         } catch {
-            return "This isn't a valid regular expression."
+            return String(localized: "This isn't a valid regular expression.")
         }
     }
 
     private var fixVersionError: String? {
         guard let pattern = repository.fixVersionPattern?.trimmingCharacters(in: .whitespaces), !pattern.isEmpty else { return nil }
-        return repository.fixVersionRegex == nil ? "This isn't a valid regular expression." : nil
+        return repository.fixVersionRegex == nil ? String(localized: "This isn't a valid regular expression.") : nil
     }
 
     /// The repository's history, when it's loaded, for the branches it has.
@@ -156,8 +157,8 @@ struct RepositorySettingsSheet: View {
     private var defaultMainBranch: String {
         var automatic = repository
         automatic.mainBranch = nil
-        guard let graph, let name = automatic.effectiveMainBranch(in: graph) else { return "The default branch" }
-        return "Default: \(name)"
+        guard let graph, let name = automatic.effectiveMainBranch(in: graph) else { return String(localized: "The default branch") }
+        return String(localized: "Default: \(name)", comment: "The main branch used when none is typed")
     }
 
     /// Branches matching what's typed, likely trunks (develop, main, release branches) first.
@@ -184,7 +185,7 @@ struct RepositorySettingsSheet: View {
     private var mainBranchError: String? {
         let name = typedMainBranch
         guard !name.isEmpty, let graph, !MainBranch.exists(name, in: graph) else { return nil }
-        return "There's no branch named \(name); the default branch is drawn instead."
+        return String(localized: "There's no branch named \(name); the default branch is drawn instead.")
     }
 
     var body: some View {
@@ -325,9 +326,9 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "System"
-        case .light: "Light"
-        case .dark: "Dark"
+        case .system: String(localized: "System", comment: "Appearance that follows the system's")
+        case .light: String(localized: "Light", comment: "Light appearance")
+        case .dark: String(localized: "Dark", comment: "Dark appearance")
         }
     }
 
@@ -401,7 +402,7 @@ private struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .task(id: gitPath) {
-            version = (try? await Git.string(["--version"], in: nil)) ?? "Not found"
+            version = (try? await Git.string(["--version"], in: nil)) ?? String(localized: "Not found")
         }
     }
 }
@@ -649,28 +650,28 @@ private struct JiraProfileEditor: View {
         isNew = false
         hasSavedToken = JiraProfiles.token(for: profile.id) != nil
         guard let connection = JiraStore.shared.connection(for: profile) else {
-            status = "Add the site, email and API token."
+            status = String(localized: "Add the site, email and API token.")
             return
         }
         isTesting = true
         defer { isTesting = false }
         do {
             let name = try await JiraClient.myself(connection)
-            status = "Saved. Connected as \(name)."
+            status = String(localized: "Saved. Connected as \(name).")
         } catch {
-            status = "Saved, but the test failed: \(error.localizedDescription)"
+            status = String(localized: "Saved, but the test failed: \(error.localizedDescription)")
         }
     }
 }
 
 /// Pull requests come from the GitHub CLI; this shows whether it's installed and signed in.
 private struct GitHubSettingsView: View {
-    @State private var status = "Checking…"
+    @State private var status = String(localized: "Checking…")
 
     var body: some View {
         Form {
             Section {
-                LabeledContent("GitHub CLI", value: GitHubCLI.executableURL?.path ?? "Not installed")
+                LabeledContent("GitHub CLI", value: GitHubCLI.executableURL?.path ?? String(localized: "Not installed"))
                 Text(status)
                     .font(.callout.monospaced())
                     .foregroundStyle(.secondary)
@@ -687,7 +688,7 @@ private struct GitHubSettingsView: View {
 
     private func check() async {
         guard let gh = GitHubCLI.executableURL else {
-            status = "Install the GitHub CLI to see pull requests."
+            status = String(localized: "Install the GitHub CLI to see pull requests.")
             return
         }
         let output = try? await ProcessRunner.run(gh, ["auth", "status"], environment: Git.environment, timeout: 15, allowFailure: true)
@@ -695,6 +696,6 @@ private struct GitHubSettingsView: View {
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.contains("Logged in") || $0.contains("Active account") || $0.contains("not logged") }
-        status = lines.isEmpty ? "Run `gh auth login` in Terminal to sign in." : lines.joined(separator: "\n")
+        status = lines.isEmpty ? String(localized: "Run `gh auth login` in Terminal to sign in.") : lines.joined(separator: "\n")
     }
 }

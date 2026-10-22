@@ -71,7 +71,7 @@ extension RepositoryLibrary {
             if let added = try? await addLocal(at: URL(fileURLWithPath: path)) {
                 return .found(added)
             }
-            return .notFound("No git repository at \(spec).")
+            return .notFound(String(localized: "No git repository at \(spec)."))
         }
         if HostingService.split(spec) != nil {
             let key = HostingService.normalizedKey(spec)
@@ -88,7 +88,7 @@ extension RepositoryLibrary {
         if let match = byName.max(by: { $0.recency < $1.recency }) {
             return .found(match)
         }
-        return .notFound("No repository named “\(spec)” in Vibe GitTree.")
+        return .notFound(String(localized: "No repository named “\(spec)” in Vibe GitTree."))
     }
 
     /// The folders of every worktree of the repository at a path, the main one (or the bare

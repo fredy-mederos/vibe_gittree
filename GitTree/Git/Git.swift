@@ -18,7 +18,7 @@ struct GitError: LocalizedError {
             }
             .filter { !$0.isEmpty && !$0.hasPrefix("hint:") }
         guard !lines.isEmpty else {
-            return "git \(arguments.first ?? "") failed with exit code \(status)."
+            return String(localized: "git \(arguments.first ?? "") failed with exit code \(String(status)).", comment: "A git command, like git fetch")
         }
         let message = lines.prefix(3).joined(separator: "\n")
         return message.prefix(1).uppercased() + message.dropFirst()

@@ -21,12 +21,12 @@ struct WorkingTreeInspector: View {
                 Section {
                     header(status)
                 }
-                fileSection("Conflicts", status.conflicted, side: .unstaged, total: status.conflictedCount)
-                fileSection("Staged", status.staged, side: .staged, total: status.stagedCount)
-                fileSection("Not Staged", status.unstaged, side: .unstaged, total: status.unstagedCount)
-                fileSection("New Files", status.untracked, side: .untracked, total: status.untrackedCount)
+                fileSection("Conflicts", id: "conflicts", status.conflicted, side: .unstaged, total: status.conflictedCount)
+                fileSection("Staged", id: "staged", status.staged, side: .staged, total: status.stagedCount)
+                fileSection("Not Staged", id: "unstaged", status.unstaged, side: .unstaged, total: status.unstagedCount)
+                fileSection("New Files", id: "untracked", status.untracked, side: .untracked, total: status.untrackedCount)
                 if status.total > status.changes.count {
-                    Text("\((status.total - status.changes.count).formatted()) more files aren't listed.")
+                    Text("\(status.total - status.changes.count) more files aren't listed.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -59,7 +59,7 @@ struct WorkingTreeInspector: View {
                 if !status.isClean {
                     Button {
                         openWindow(id: "diff", value: DiffTarget(repositoryID: model.id, commit: "", path: "", uncommitted: .unstaged,
-                                                                 allFiles: true, title: "Uncommitted Changes"))
+                                                                 allFiles: true, title: String(localized: "Uncommitted Changes")))
                     } label: {
                         Image(systemName: "doc.text.magnifyingglass")
                     }
@@ -72,7 +72,7 @@ struct WorkingTreeInspector: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let operation = status.operation {
-                Label("\(operation.rawValue) is under way: finish or stop it in Terminal.", systemImage: "exclamationmark.triangle.fill")
+                Label(operation.finishOrStop, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -93,27 +93,30 @@ struct WorkingTreeInspector: View {
     private func branchLine(_ status: WorkingTreeStatus) -> String {
         var line: String
         if let branch = status.branch {
-            line = status.head == nil ? "On \(branch), before its first commit" : "On \(branch)"
+            line = status.head == nil ? String(localized: "On \(branch), before its first commit")
+                : String(localized: "On \(branch)", comment: "The checked-out branch")
         } else {
-            line = "HEAD detached at \(status.head.map { String($0.prefix(8)) } ?? "?")"
+            line = String(localized: "HEAD detached at \(status.head.map { String($0.prefix(8)) } ?? "?")")
         }
         if let upstream = status.upstream {
-            switch (status.ahead, status.behind) {
-            case (0, 0): line += " · up to date with \(upstream)"
-            case (let ahead, 0): line += " · \(ahead.formatted()) ahead of \(upstream)"
-            case (0, let behind): line += " · \(behind.formatted()) behind \(upstream)"
-            case (let ahead, let behind): line += " · \(ahead.formatted()) ahead and \(behind.formatted()) behind \(upstream)"
+            let tracking = switch (status.ahead, status.behind) {
+            case (0, 0): String(localized: "up to date with \(upstream)")
+            case (let ahead, 0): String(localized: "\(ahead) ahead of \(upstream)", comment: "Commits ahead of the upstream branch")
+            case (0, let behind): String(localized: "\(behind) behind \(upstream)", comment: "Commits behind the upstream branch")
+            case (let ahead, let behind):
+                String(localized: "\(ahead) ahead and \(behind) behind \(upstream)", comment: "Commits ahead of and behind the upstream branch")
             }
+            line += " · " + tracking
         }
         return line
     }
 
     @ViewBuilder
-    private func fileSection(_ title: String, _ files: [WorkingChange], side: UncommittedSide, total: Int) -> some View {
+    private func fileSection(_ title: LocalizedStringKey, id: String, _ files: [WorkingChange], side: UncommittedSide, total: Int) -> some View {
         if !files.isEmpty {
             let busy = model.changeInProgress != nil
             Section {
-                let shown = showsAll.contains(title) ? files : Array(files.prefix(Self.rowLimit))
+                let shown = showsAll.contains(id) ? files : Array(files.prefix(Self.rowLimit))
                 ForEach(shown) { change in
                     WorkingFileRow(change: change, side: side, staged: canChange ? side == .staged : nil, disabled: busy) {
                         toggle([change], staged: side == .staged)
@@ -124,7 +127,7 @@ struct WorkingTreeInspector: View {
                     }
                 }
                 if files.count > shown.count {
-                    Button("Show All \(files.count.formatted())") { showsAll.insert(title) }
+                    Button("Show All \(files.count)") { showsAll.insert(id) }
                         .buttonStyle(.link)
                 }
             } header: {
@@ -143,7 +146,7 @@ struct WorkingTreeInspector: View {
                         .foregroundStyle(.secondary)
                 }
             } footer: {
-                if title == "Conflicts" {
+                if id == "conflicts" {
                     Text("Both sides changed these files. Resolve them in your editor, then stage them.")
                 }
             }
@@ -230,11 +233,11 @@ private struct WorkingFileRow: View {
     private var help: String {
         var lines = [change.oldPath.map { "\($0) → \(change.path)" } ?? change.path]
         if change.isConflicted {
-            lines.append("Not resolved yet")
+            lines.append(String(localized: "Not resolved yet"))
         } else if change.staged != nil && change.unstaged != nil {
-            lines.append("Partly staged: it's under Staged and Not Staged")
+            lines.append(String(localized: "Partly staged: it's under Staged and Not Staged"))
         }
-        lines.append("Click to see the changes")
+        lines.append(String(localized: "Click to see the changes"))
         return lines.joined(separator: "\n")
     }
 }
@@ -251,11 +254,11 @@ private struct CommitPanel: View {
 
     /// Why there's nothing to commit yet, or where the commit goes.
     private var note: String {
-        if let operation = status.operation, operation != .merge { return "\(operation.rawValue) is under way: finish it in Terminal." }
-        if status.stagedCount == 0 { return "Stage files to commit them." }
-        if summary.isEmpty { return "Write a summary of the changes." }
-        if let branch = status.branch { return "Commits to \(branch)." }
-        return "Commits on a detached HEAD."
+        if let operation = status.operation, operation != .merge { return operation.finish }
+        if status.stagedCount == 0 { return String(localized: "Stage files to commit them.") }
+        if summary.isEmpty { return String(localized: "Write a summary of the changes.") }
+        if let branch = status.branch { return String(localized: "Commits to \(branch).", comment: "Where the commit button commits") }
+        return String(localized: "Commits on a detached HEAD.")
     }
 
     private var canCommit: Bool {
@@ -307,7 +310,8 @@ private struct CommitPanel: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Button(status.stagedCount > 0 ? "Commit \(counted(status.stagedCount, "File", "Files"))" : "Commit") { commit() }
+                Button(status.stagedCount > 0 ? String(localized: "Commit \(status.stagedCount) Files")
+                       : String(localized: "Commit.button", defaultValue: "Commit", comment: "Button: commits the staged files")) { commit() }
                     .keyboardShortcut(.return, modifiers: .command)
                     .buttonStyle(.borderedProminent)
                     .disabled(!canCommit)
@@ -356,8 +360,8 @@ private struct StashForm: View {
             // Offered when every staged file is listed (very long lists stop at a few thousand files).
             if status.stagedCount > 0 && status.stagedCount < status.total && status.staged.count == status.stagedCount {
                 Picker("Stash", selection: $onlyStaged) {
-                    Text("Every changed file (\(status.total.formatted()))").tag(false)
-                    Text("The staged files, all of their changes (\(status.stagedCount.formatted()))").tag(true)
+                    Text("Every changed file (\(status.total))").tag(false)
+                    Text("The staged files, all of their changes (\(status.stagedCount))").tag(true)
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
@@ -366,7 +370,7 @@ private struct StashForm: View {
                 Spacer()
                 Button("Cancel", role: .cancel, action: done)
                     .keyboardShortcut(.cancelAction)
-                Button("Stash") {
+                Button(String(localized: "Stash.button", defaultValue: "Stash", comment: "Button: puts the changes aside in a stash")) {
                     let files = onlyStaged ? status.staged : nil
                     let message = message
                     Task {
@@ -532,7 +536,7 @@ struct StashInspector: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help((file.oldPath.map { "\($0) → \(file.path)" } ?? file.path) + "\nClick to see the changes")
+        .help((file.oldPath.map { "\($0) → \(file.path)" } ?? file.path) + "\n" + String(localized: "Click to see the changes"))
     }
 
     private var actions: some View {

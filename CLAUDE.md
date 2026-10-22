@@ -98,6 +98,27 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
 - The user's global `~/.claude/CLAUDE.md` tells every Claude session to use `gittree <file>:<line>`;
   keep the command's arguments and link format backward compatible.
 
+## Translations
+
+- The app is in English plus 20 languages (the most spoken ones macOS runs in, listed in
+  `scripts/localization.py`), all in the String Catalog `GitTree/Localizable.xcstrings`. Any
+  change that adds or changes text the app shows ships with its translations in the same commit:
+  follow the `localize-vibe-gittree` skill in `skills/` (sync, export, translate with subagents on a
+  lighter model, `haiku` for a few strings or `sonnet` per language for many, import, then
+  `scripts/localization.py check`, which must pass). Don't translate with the main model.
+- SwiftUI literals (`Text("…")`, `Button("…")`, `.help("…")`, a `LocalizedStringKey` parameter) are
+  localized as they are. Text that becomes a `String` first (models' messages, enum titles, a view's
+  `title: String`, tooltips built in code, AppKit menus, alerts and column titles) goes through
+  `String(localized:)`. Data (names, paths, commit messages, git's output) stays as it is.
+- Whole sentences with interpolations, never English pieces joined together. Counts are `Int`
+  interpolations (`"\(count) commits"`) with the English singular added by
+  `scripts/localization.py plural`; one count per string. Pull request numbers, years and line
+  numbers go in as `String(number)`, or they're grouped (`#8,161`). A word used in two senses gets
+  its own key (`String(localized: "Commit.button", defaultValue: "Commit", comment: …)`), and a
+  `comment:` explains anything a translator could misread. The skill has the details.
+- Check the UI in another language with `-AppleLanguages "(de)"` among the debug launch arguments
+  (`ar` for right-to-left, `de` for long words).
+
 ## Git
 
 - This repository's remote is `github.com/fredy-mederos/vibe_gittree`, public (or about to be).

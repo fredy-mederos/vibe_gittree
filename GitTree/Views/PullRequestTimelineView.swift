@@ -101,23 +101,27 @@ private struct TimelineTrack: View {
 
 extension PullRequestTimeline.Event {
     var title: String {
-        let by = actor.map { " by \($0)" } ?? ""
         switch kind {
         case .opened(let commits, let draft):
-            let opened = (draft ? "Opened as a draft" : "Opened") + by
-            return commits > 0 ? "\(opened) · \(counted(commits, "commit", "commits"))" : opened
-        case .commits(let count): return count == 1 ? "New commit" : "\(count) new commits"
-        case .forcePushed: return "Force-pushed" + by
-        case .reviewRequested(let names): return "Review requested: \(names.joined(separator: ", "))"
-        case .approved: return "Approved" + by
-        case .changesRequested: return "Changes requested" + by
-        case .commented: return "Reviewed with comments" + by
-        case .dismissed: return actor.map { "Reviewed by \($0), later dismissed" } ?? "Review dismissed"
-        case .readyForReview: return "Ready for review"
-        case .convertedToDraft: return "Back to draft"
-        case .merged: return "Merged" + by
-        case .closed: return "Closed" + by
-        case .reopened: return "Reopened" + by
+            let opened = switch (draft, actor) {
+            case (true, let actor?): String(localized: "Opened as a draft by \(actor)")
+            case (true, nil): String(localized: "Opened as a draft")
+            case (false, let actor?): String(localized: "Opened by \(actor)")
+            case (false, nil): String(localized: "Opened", comment: "A pull request was opened")
+            }
+            return commits > 0 ? "\(opened) · " + String(localized: "\(commits) commits") : opened
+        case .commits(let count): return String(localized: "\(count) new commits", comment: "Commits pushed to a pull request")
+        case .forcePushed: return actor.map { String(localized: "Force-pushed by \($0)") } ?? String(localized: "Force-pushed")
+        case .reviewRequested(let names): return String(localized: "Review requested: \(names.joined(separator: ", "))", comment: "Followed by who was asked")
+        case .approved: return actor.map { String(localized: "Approved by \($0)") } ?? String(localized: "Approved")
+        case .changesRequested: return actor.map { String(localized: "Changes requested by \($0)") } ?? String(localized: "Changes requested")
+        case .commented: return actor.map { String(localized: "Reviewed with comments by \($0)") } ?? String(localized: "Reviewed with comments")
+        case .dismissed: return actor.map { String(localized: "Reviewed by \($0), later dismissed") } ?? String(localized: "Review dismissed")
+        case .readyForReview: return String(localized: "Ready for review")
+        case .convertedToDraft: return String(localized: "Back to draft")
+        case .merged: return actor.map { String(localized: "Merged by \($0)") } ?? String(localized: "Merged", comment: "A pull request's state, or the event when it was merged")
+        case .closed: return actor.map { String(localized: "Closed by \($0)") } ?? String(localized: "Closed", comment: "A pull request's state, or the event when it was closed")
+        case .reopened: return actor.map { String(localized: "Reopened by \($0)") } ?? String(localized: "Reopened")
         }
     }
 }

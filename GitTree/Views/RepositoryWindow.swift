@@ -79,7 +79,7 @@ struct RepositoryWindow: View {
             guard let id = notification.userInfo?["repository"] as? UUID, id == state.repositoryID,
                   let commits = notification.userInfo?["commits"] as? [String], let graph = state.graph else { return }
             graph.highlightCommits(Set(commits.compactMap { ObjectID(hex: $0) }),
-                                   title: notification.userInfo?["title"] as? String ?? "Compared commits",
+                                   title: notification.userInfo?["title"] as? String ?? String(localized: "Compared commits"),
                                    systemImage: "arrow.left.arrow.right")
         }
         .task {
@@ -146,7 +146,7 @@ struct RepositoryWindow: View {
     }
 
     private var removalTitle: String {
-        "Remove “\(state.repositoryPendingRemoval?.name ?? "")” from Vibe GitTree?"
+        String(localized: "Remove “\(state.repositoryPendingRemoval?.name ?? "")” from Vibe GitTree?")
     }
 }
 

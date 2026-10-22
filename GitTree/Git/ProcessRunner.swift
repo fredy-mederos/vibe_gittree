@@ -8,7 +8,7 @@ struct CommandError: LocalizedError {
     var timedOut = false
 
     var errorDescription: String? {
-        if timedOut { return "\(command) didn't answer in time." }
+        if timedOut { return String(localized: "\(command) didn't answer in time.", comment: "A command, like git fetch") }
         let lines = output
             .split(whereSeparator: \.isNewline)
             .map { line -> String in
@@ -19,7 +19,7 @@ struct CommandError: LocalizedError {
                 return text
             }
             .filter { !$0.isEmpty && !$0.hasPrefix("hint:") }
-        guard !lines.isEmpty else { return "\(command) failed with exit code \(status)." }
+        guard !lines.isEmpty else { return String(localized: "\(command) failed with exit code \(String(status)).", comment: "A command, like git fetch") }
         let message = lines.prefix(3).joined(separator: "\n")
         return message.prefix(1).uppercased() + message.dropFirst()
     }

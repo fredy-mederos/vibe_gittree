@@ -45,7 +45,7 @@ enum SidebarItem: Hashable {
     var pendingCloneURL: String?
     var editingRepository: Repository?
     var repositoryPendingRemoval: Repository?
-    var errorTitle = "Couldn't Add Repository"
+    var errorTitle = String(localized: "Couldn't Add Repository")
     var errorMessage: String?
     /// A diff the window should open in its own window (set by deep links).
     var diffRequest: DiffTarget?
@@ -179,7 +179,7 @@ enum SidebarItem: Hashable {
                                                 systemImage: "arrow.triangle.pull")
                 } else {
                     let numbers = stack.map { "#\($0.number)" }.joined(separator: " → ")
-                    graph.highlightPullRequests(stack, title: "Stack on \(stack[0].base): \(numbers)",
+                    graph.highlightPullRequests(stack, title: String(localized: "Stack on \(stack[0].base): \(numbers)", comment: "Stacked pull requests: the branch they're based on, then their numbers"),
                                                 systemImage: "square.stack.3d.up")
                 }
             }
@@ -195,8 +195,8 @@ enum SidebarItem: Hashable {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = true
-        panel.prompt = "Add"
-        panel.message = "Choose folders that contain git repositories."
+        panel.prompt = String(localized: "Add", comment: "Button that adds the chosen folders")
+        panel.message = String(localized: "Choose folders that contain git repositories.")
         let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard response == .OK else { return }
             let urls = panel.urls
@@ -221,7 +221,7 @@ enum SidebarItem: Hashable {
                 }
             }
             if let added { open(added.id) }
-            if !failures.isEmpty { showError("Couldn't Add Repository", failures.joined(separator: "\n")) }
+            if !failures.isEmpty { showError(String(localized: "Couldn't Add Repository"), failures.joined(separator: "\n")) }
         }
     }
 
@@ -230,20 +230,20 @@ enum SidebarItem: Hashable {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Add Repositories"
-        panel.message = "Choose a folder. Vibe GitTree adds every git repository inside it, up to four levels deep."
+        panel.prompt = String(localized: "Add Repositories")
+        panel.message = String(localized: "Choose a folder. Vibe GitTree adds every git repository inside it, up to four levels deep.")
         let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard response == .OK, let folder = panel.url else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.notice = "Looking for repositories…"
+                self.notice = String(localized: "Looking for repositories…")
                 let before = Set(self.library.repositories.map(\.id))
                 let found = await self.library.addRepositories(in: folder)
                 let new = found.filter { !before.contains($0.id) }
                 switch (found.count, new.count) {
-                case (0, _): self.notice = "No git repositories found in “\(folder.lastPathComponent)”."
-                case (_, 0): self.notice = "All \(counted(found.count, "repository", "repositories")) were already in the list."
-                default: self.notice = "Added \(counted(new.count, "repository", "repositories"))."
+                case (0, _): self.notice = String(localized: "No git repositories found in “\(folder.lastPathComponent)”.")
+                case (_, 0): self.notice = String(localized: "All \(found.count) repositories were already in the list.")
+                default: self.notice = String(localized: "Added \(new.count) repositories.")
                 }
                 if self.repositoryID == nil, let first = new.first { self.open(first.id) }
                 try? await Task.sleep(for: .seconds(4))
@@ -276,7 +276,8 @@ enum SidebarItem: Hashable {
 
     func handle(_ url: URL) {
         guard let link = DeepLink(url: url) else {
-            showError("Can't Open Link", "Vibe GitTree doesn't understand \(url.absoluteString). Links look like gittree://open?repo=<path>&commit=<sha>.")
+            showError(String(localized: "Can't Open Link"),
+                      String(localized: "Vibe GitTree doesn't understand \(url.absoluteString). Links look like gittree://open?repo=<path>&commit=<sha>."))
             return
         }
         Task { await handle(link) }
@@ -292,7 +293,7 @@ enum SidebarItem: Hashable {
     private func handle(_ link: DeepLink) async {
         switch await library.resolve(link.repository) {
         case .notFound(let message):
-            showError("Can't Open Link", message)
+            showError(String(localized: "Can't Open Link"), message)
         case .needsClone(let url):
             pendingDeepLink = link
             cloneRemoteRepository(prefilledURL: url)
@@ -301,7 +302,8 @@ enum SidebarItem: Hashable {
             guard let commit = link.commit else { return }
             guard let graph, await waitForHistory(of: graph), let commitGraph = graph.commitGraph else { return }
             guard let index = commitGraph.index(matching: commit) else {
-                showError("Commit Not Found", "\(commit.prefix(12)) isn't in \(repository.name)'s history. Fetch the repository and try the link again.")
+                showError(String(localized: "Commit Not Found"),
+                          String(localized: "\(String(commit.prefix(12))) isn't in \(repository.name)'s history. Fetch the repository and try the link again."))
                 return
             }
             graph.select(index)

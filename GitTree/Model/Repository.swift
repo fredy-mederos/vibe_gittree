@@ -66,12 +66,12 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
 
     /// The folder it sits in (`~/Documents/projects/acme`), or GitTree's clones for remote ones.
     var folderGroup: String {
-        kind == .local ? locationSummary : "Cloned by Vibe GitTree"
+        kind == .local ? locationSummary : String(localized: "Cloned by Vibe GitTree")
     }
 
     /// Where it's hosted (`github.com/acme`), or "Not hosted" for a local repository without a remote.
     var hostGroup: String {
-        guard let remote = remoteURL ?? originURL, let parts = HostingService.split(remote) else { return "Not hosted" }
+        guard let remote = remoteURL ?? originURL, let parts = HostingService.split(remote) else { return String(localized: "Not hosted") }
         let owner = parts.path.split(separator: "/").dropLast().joined(separator: "/")
         return owner.isEmpty ? parts.host : "\(parts.host)/\(owner)"
     }

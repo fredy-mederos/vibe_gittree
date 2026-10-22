@@ -266,8 +266,8 @@ struct GraphStatusBar: View {
                 Text("No matches")
             } else {
                 // Without a current match the selection is elsewhere (a highlight that didn't move it).
-                Text(graph.currentMatch.map { "\(($0 + 1).formatted()) of \(graph.matchRows.count.formatted())" }
-                     ?? counted(graph.matchRows.count, "match", "matches"))
+                Text(graph.currentMatch.map { String(localized: "\($0 + 1) of \(graph.matchRows.count)", comment: "The current search match and how many there are") }
+                     ?? String(localized: "\(graph.matchRows.count) matches"))
                     .monospacedDigit()
                 Button { graph.previousMatch() } label: { Image(systemName: "chevron.up") }
                     .help("Previous match (⇧⌘G)")
@@ -281,24 +281,20 @@ struct GraphStatusBar: View {
     private func summary(_ layout: GraphLayout) -> String {
         let commitGraph = layout.graph
         if layout.scope != .all {
-            return "\(layout.rowCount.formatted()) of \(counted(commitGraph.count, "commit", "commits")) · \(layout.scope.title)"
+            let commits = String(localized: "\(commitGraph.count) commits")
+            return String(localized: "\(layout.rowCount) of \(commits) · \(layout.scope.title)", comment: "Commits shown of all commits, then which branches are shown")
         }
         let refs = commitGraph.refs
         var parts = [
-            counted(commitGraph.count, "commit", "commits"),
-            counted(commitGraph.mergeCount, "merge", "merges"),
-            counted(refs.filter { $0.kind == .local }.count, "branch", "branches"),
+            String(localized: "\(commitGraph.count) commits"),
+            String(localized: "\(commitGraph.mergeCount) merges"),
+            String(localized: "\(refs.filter { $0.kind == .local }.count) branches"),
         ]
         let remotes = refs.filter { $0.kind == .remote }.count
-        if remotes > 0 { parts.append("\(remotes.formatted()) remote") }
-        parts.append(counted(refs.filter { $0.kind == .tag }.count, "tag", "tags"))
+        if remotes > 0 { parts.append(String(localized: "\(remotes) remote", comment: "Remote branches, after the local ones: 12 branches · 30 remote")) }
+        parts.append(String(localized: "\(refs.filter { $0.kind == .tag }.count) tags"))
         return parts.joined(separator: " · ")
     }
-}
-
-/// "1 branch", "95 branches".
-func counted(_ count: Int, _ singular: String, _ plural: String) -> String {
-    "\(count.formatted()) \(count == 1 ? singular : plural)"
 }
 
 /// Asks which fix version to highlight when it isn't among the ones already seen.

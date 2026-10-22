@@ -15,10 +15,10 @@ enum GraphScope: Hashable, Sendable {
 
     var title: String {
         switch self {
-        case .all: "All Branches"
-        case .local: "Local Branches"
-        case .head: "Current Branch"
-        case .ref(let name): "Only \(GitRef.shortName(fullName: name))"
+        case .all: String(localized: "All Branches")
+        case .local: String(localized: "Local Branches")
+        case .head: String(localized: "Current Branch")
+        case .ref(let name): String(localized: "Only \(GitRef.shortName(fullName: name))", comment: "Only one branch's history is shown")
         }
     }
 }

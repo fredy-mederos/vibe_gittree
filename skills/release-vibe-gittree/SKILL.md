@@ -15,6 +15,8 @@ take the release's only disk image).
 ## Workflow
 
 1. Check pending changes.
+- Run `scripts/localization.py sync`, then `scripts/localization.py check`. If a language misses
+  strings, translate them first with the `localize-vibe-gittree` skill.
 - Run `git status` and `git diff`.
 - If there are changes, commit them with a message that describes them (the repository's own identity,
   `Fredy Mederos <fmfredd@gmail.com>`) and push.

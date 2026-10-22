@@ -25,19 +25,19 @@ struct PullRequest: Identifiable, Hashable, Sendable, Codable {
     var id: Int { number }
 
     var stateTitle: String {
-        if state == .open && isDraft { return "Draft" }
+        if state == .open && isDraft { return String(localized: "Draft", comment: "A pull request's state") }
         switch state {
-        case .open: return "Open"
-        case .merged: return "Merged"
-        case .closed: return "Closed"
+        case .open: return String(localized: "Open", comment: "A pull request's state")
+        case .merged: return String(localized: "Merged", comment: "A pull request's state, or the event when it was merged")
+        case .closed: return String(localized: "Closed", comment: "A pull request's state, or the event when it was closed")
         }
     }
 
     var reviewTitle: String? {
         switch reviewDecision {
-        case "APPROVED": "Approved"
-        case "CHANGES_REQUESTED": "Changes requested"
-        case "REVIEW_REQUIRED": "Review required"
+        case "APPROVED": String(localized: "Approved")
+        case "CHANGES_REQUESTED": String(localized: "Changes requested")
+        case "REVIEW_REQUIRED": String(localized: "Review required")
         default: nil
         }
     }
@@ -64,10 +64,10 @@ struct PullRequest: Identifiable, Hashable, Sendable, Codable {
 
         var explanation: String {
             switch self {
-            case .ready: "Checks passed and approved"
-            case .checksPassed: "Checks passed, waiting for approval"
-            case .checksRunning: "Checks running"
-            case .checksFailing: "Checks failed"
+            case .ready: String(localized: "Checks passed and approved")
+            case .checksPassed: String(localized: "Checks passed, waiting for approval")
+            case .checksRunning: String(localized: "Checks running")
+            case .checksFailing: String(localized: "Checks failed")
             }
         }
     }
@@ -195,7 +195,7 @@ enum GitHubCLI {
     /// `repository` is `owner/name`.
     static func pullRequests(repository: String, mergingInto previous: [PullRequest]? = nil) async throws -> PullRequestIndex {
         guard let gh = executableURL else {
-            throw CommandError(command: "gh", status: 127, output: "Install the GitHub CLI (brew install gh) and run `gh auth login` to see pull requests.")
+            throw CommandError(command: "gh", status: 127, output: String(localized: "Install the GitHub CLI (brew install gh) and run `gh auth login` to see pull requests."))
         }
         let range = previous == nil
             ? ["--state", "all", "--limit", "400"]
@@ -220,14 +220,14 @@ enum GitHubCLI {
     /// The repository's default branch (develop, main…): one `gh` call. `repository` is `owner/name`.
     static func defaultBranch(repository: String) async throws -> String {
         guard let gh = executableURL else {
-            throw CommandError(command: "gh", status: 127, output: "Install the GitHub CLI (brew install gh) and run `gh auth login`.")
+            throw CommandError(command: "gh", status: 127, output: String(localized: "Install the GitHub CLI (brew install gh) and run `gh auth login`."))
         }
         let output = try await ProcessRunner.run(
             gh, ["repo", "view", repository, "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"],
             environment: Git.environment, timeout: 30
         )
         let name = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw CommandError(command: "gh repo view", status: 1, output: "GitHub didn't name a default branch.") }
+        guard !name.isEmpty else { throw CommandError(command: "gh repo view", status: 1, output: String(localized: "GitHub didn't name a default branch.")) }
         return name
     }
 
@@ -345,12 +345,13 @@ struct PullRequestTimeline: Sendable {
     var summary: String {
         var parts: [String] = []
         switch state {
-        case .merged: parts.append("Merged after \(Self.duration(from: createdAt, to: endedAt ?? loadedAt))")
-        case .closed: parts.append("Closed after \(Self.duration(from: createdAt, to: endedAt ?? loadedAt))")
-        case .open: parts.append("Open for \(Self.duration(from: createdAt, to: Date()))")
+        case .merged: parts.append(String(localized: "Merged after \(Self.duration(from: createdAt, to: endedAt ?? loadedAt))", comment: "A pull request: Merged after 21 hours"))
+        case .closed: parts.append(String(localized: "Closed after \(Self.duration(from: createdAt, to: endedAt ?? loadedAt))", comment: "A pull request: Closed after 3 days"))
+        case .open: parts.append(String(localized: "Open for \(Self.duration(from: createdAt, to: Date()))", comment: "A pull request: Open for 5 hours"))
         }
         if let approval = events.first(where: { $0.kind == .approved }) {
-            parts.append("approved after \(Self.duration(from: createdAt, to: approval.date))")
+            parts.append(String(localized: "approved after \(Self.duration(from: createdAt, to: approval.date))",
+                                comment: "After a comma: Merged after 21 hours, approved after 20 hours"))
         }
         return parts.joined(separator: ", ")
     }
@@ -359,9 +360,9 @@ struct PullRequestTimeline: Sendable {
     static func duration(from start: Date, to end: Date) -> String {
         let seconds = max(0, end.timeIntervalSince(start))
         switch seconds {
-        case ..<(90 * 60): return counted(max(1, Int(seconds / 60)), "minute", "minutes")
-        case ..<(36 * 3600): return counted(Int((seconds / 3600).rounded()), "hour", "hours")
-        default: return counted(Int((seconds / 86_400).rounded()), "day", "days")
+        case ..<(90 * 60): return String(localized: "\(max(1, Int(seconds / 60))) minutes", comment: "A duration")
+        case ..<(36 * 3600): return String(localized: "\(Int((seconds / 3600).rounded())) hours", comment: "A duration")
+        default: return String(localized: "\(Int((seconds / 86_400).rounded())) days", comment: "A duration")
         }
     }
 }
@@ -396,10 +397,10 @@ extension GitHubCLI {
     /// One `gh api graphql` call for a pull request's timeline. `repository` is `owner/name`.
     static func timeline(repository: String, number: Int) async throws -> PullRequestTimeline {
         guard let gh = executableURL else {
-            throw CommandError(command: "gh", status: 127, output: "Install the GitHub CLI (brew install gh) and run `gh auth login` to see pull request timelines.")
+            throw CommandError(command: "gh", status: 127, output: String(localized: "Install the GitHub CLI (brew install gh) and run `gh auth login` to see pull request timelines."))
         }
         let parts = repository.split(separator: "/", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { throw CommandError(command: "gh", status: 1, output: "\(repository) isn't a GitHub repository.") }
+        guard parts.count == 2 else { throw CommandError(command: "gh", status: 1, output: String(localized: "\(repository) isn't a GitHub repository.")) }
         let output = try await ProcessRunner.run(
             gh,
             ["api", "graphql", "-f", "owner=\(parts[0])", "-f", "name=\(parts[1])", "-F", "number=\(number)", "-f", "query=\(timelineQuery)"],
@@ -462,7 +463,7 @@ extension GitHubCLI {
         decoder.dateDecodingStrategy = .iso8601
         let response = try decoder.decode(TimelineResponse.self, from: data)
         guard let pullRequest = response.data?.repository?.pullRequest else {
-            throw CommandError(command: "gh api", status: 1, output: response.errors?.first?.message ?? "GitHub didn't return pull request #\(number).")
+            throw CommandError(command: "gh api", status: 1, output: response.errors?.first?.message ?? String(localized: "GitHub didn't return pull request #\(String(number))."))
         }
         let created = pullRequest.createdAt
         let items = pullRequest.timelineItems.nodes.compactMap { $0 }
@@ -503,7 +504,7 @@ extension GitHubCLI {
                 default: break
                 }
             case "ReviewRequestedEvent":
-                let reviewer = item.requestedReviewer?.login ?? item.requestedReviewer?.name ?? "someone"
+                let reviewer = item.requestedReviewer?.login ?? item.requestedReviewer?.name ?? String(localized: "someone", comment: "A reviewer GitHub doesn't name")
                 // Code owners are asked together; one line for all of them.
                 if let last = events.last, case .reviewRequested(let names) = last.kind, date.timeIntervalSince(last.date) < 60 {
                     events[events.count - 1] = (last.date, .reviewRequested(names + [reviewer]), nil)

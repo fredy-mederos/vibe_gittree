@@ -120,10 +120,10 @@ struct GraphTableView: NSViewRepresentable {
         )
     }
 
-    private static func column(_ id: NSUserInterfaceItemIdentifier, title: String, width: CGFloat, minWidth: CGFloat,
+    private static func column(_ id: NSUserInterfaceItemIdentifier, title: String.LocalizationValue, width: CGFloat, minWidth: CGFloat,
                                maxWidth: CGFloat = 10_000) -> NSTableColumn {
         let column = NSTableColumn(identifier: id)
-        column.title = title
+        column.title = String(localized: title)
         column.width = width
         column.minWidth = minWidth
         column.maxWidth = maxWidth
@@ -545,7 +545,7 @@ final class GraphNSTableView: NSTableView {
         }
         // One label for all of them: worktrees often start out on the same commit.
         if let first = worktrees.first {
-            badges.append(.init(style: .worktree, text: worktrees.count == 1 ? first.name : "\(worktrees.count) worktrees",
+            badges.append(.init(style: .worktree, text: worktrees.count == 1 ? first.name : String(localized: "\(worktrees.count) worktrees"),
                                 worktree: worktrees.map(\.name).joined(separator: ", ")))
         }
         let localNames = Set(refs.filter { $0.kind == .local }.map(\.name))
@@ -633,7 +633,7 @@ final class GraphNSTableView: NSTableView {
             menu.addItem(.separator())
             addItem(to: menu, "Open Commit on \(hosting.displayName)", #selector(openURL(_:)), hosting.commitURL(id.hex))
             for number in PullRequestReferences.numbers(in: subject) {
-                addItem(to: menu, "Open Pull Request #\(number)", #selector(openURL(_:)), hosting.pullRequestURL(number))
+                addItem(to: menu, "Open Pull Request #\(String(number))", #selector(openURL(_:)), hosting.pullRequestURL(number))
             }
         }
 
@@ -652,7 +652,7 @@ final class GraphNSTableView: NSTableView {
         // Another commit selected, HEAD, or a branch to pick: compared in their own window.
         let repositoryID = graph.model.id
         if let selected = graph.selectedCommit, selected != commit, Int(selected) < commitGraph.count {
-            let title = "Compare with “\(commitGraph.ids[Int(selected)].short) \(Self.shortened(commitGraph.subjects[Int(selected)]))”"
+            let title: String.LocalizationValue = "Compare with “\(commitGraph.ids[Int(selected)].short) \(Self.shortened(commitGraph.subjects[Int(selected)]))”"
             addItem(to: menu, title, #selector(compare(_:)),
                     CompareTarget(repositoryID: repositoryID, base: commitGraph.ids[Int(selected)].hex, head: id.hex))
         }
@@ -682,8 +682,8 @@ final class GraphNSTableView: NSTableView {
         onShowDetails()
     }
 
-    private func addItem(to menu: NSMenu, _ title: String, _ action: Selector, _ payload: Any?) {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+    private func addItem(to menu: NSMenu, _ title: String.LocalizationValue, _ action: Selector, _ payload: Any?) {
+        let item = NSMenuItem(title: String(localized: title), action: action, keyEquivalent: "")
         item.target = self
         item.representedObject = payload
         menu.addItem(item)

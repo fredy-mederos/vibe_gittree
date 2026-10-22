@@ -66,7 +66,7 @@ enum WorkingTreeActions {
     /// their place in the list, which changes when one is added or dropped.
     private static func reference(to stash: ObjectID, in directory: URL) async throws -> String {
         guard let entry = await StashLoader.list(in: directory).first(where: { $0.id == stash }) else {
-            throw GitError(arguments: ["stash"], status: 1, output: "This stash isn't there anymore: it was applied or dropped elsewhere.")
+            throw GitError(arguments: ["stash"], status: 1, output: String(localized: "This stash isn't there anymore: it was applied or dropped elsewhere."))
         }
         return entry.name
     }

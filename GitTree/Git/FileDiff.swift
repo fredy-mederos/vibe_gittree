@@ -131,9 +131,9 @@ enum UncommittedSide: String, Codable, Hashable, Sendable {
 
     var title: String {
         switch self {
-        case .staged: "Staged"
-        case .unstaged: "Not Staged"
-        case .untracked: "New File"
+        case .staged: String(localized: "Staged")
+        case .unstaged: String(localized: "Not Staged")
+        case .untracked: String(localized: "New File")
         }
     }
 }

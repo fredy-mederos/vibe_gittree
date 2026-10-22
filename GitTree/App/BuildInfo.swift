@@ -47,7 +47,7 @@ enum BuildInfo {
     static var buildDescription: String {
         var text = build
         if let commit { text += " · \(commit)" }
-        if hasLocalChanges { text += " + local changes" }
+        if hasLocalChanges { text += " + " + String(localized: "local changes", comment: "A build made with uncommitted changes: 12 · a481f3a + local changes") }
         return text
     }
 

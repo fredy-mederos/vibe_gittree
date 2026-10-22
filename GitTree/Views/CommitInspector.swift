@@ -190,7 +190,7 @@ private struct CommitDetailView: View {
                         .help("Go to \(ref.name)")
                     }
                     if containment.branches.count > shown.count {
-                        Button("Show All \(containment.branches.count.formatted())") { showAllBranches = true }
+                        Button("Show All \(containment.branches.count)") { showAllBranches = true }
                             .buttonStyle(.link)
                     }
                     // Worktrees with a detached HEAD, which no branch may lead to.
@@ -216,7 +216,7 @@ private struct CommitDetailView: View {
                     Text("Contained In")
                     Spacer()
                     if let containment {
-                        Text("\(counted(containment.branches.count, "branch", "branches")) · \(counted(containment.tagCount, "tag", "tags"))")
+                        Text(verbatim: String(localized: "\(containment.branches.count) branches") + " · " + String(localized: "\(containment.tagCount) tags"))
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
@@ -237,11 +237,11 @@ private struct CommitDetailView: View {
                         .buttonStyle(.plain)
                     }
                     if details.files.count > files.count {
-                        Button("Show All \(details.files.count.formatted())") { showAllFiles = true }
+                        Button("Show All \(details.files.count)") { showAllFiles = true }
                             .buttonStyle(.link)
                     }
                     if details.totalFiles > details.files.count {
-                        Text("\((details.totalFiles - details.files.count).formatted()) more not listed.")
+                        Text("\(details.totalFiles - details.files.count) more not listed.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -369,20 +369,21 @@ private struct CommitDetailView: View {
     private var kind: String {
         let parents = commitGraph.parents(commit).count
         switch parents {
-        case 0: return "Root commit"
-        case 1: return "Commit"
-        default: return "Merge of \(parents) parents"
+        case 0: return String(localized: "Root commit")
+        case 1: return String(localized: "Commit")
+        default: return String(localized: "Merge of \(parents) parents")
         }
     }
 
     private var links: [InspectorLink] {
         var links: [InspectorLink] = []
         if let hosting = graph.model.hosting {
-            links.append(InspectorLink(title: "Open Commit on \(hosting.displayName)", systemImage: "safari", url: hosting.commitURL(id.hex)))
+            links.append(InspectorLink(title: String(localized: "Open Commit on \(hosting.displayName)"), systemImage: "safari", url: hosting.commitURL(id.hex)))
             // With pull requests loaded they get their own section; otherwise link the numbers in the subject.
             let known = Set(relatedPullRequests.map(\.number))
             for number in PullRequestReferences.numbers(in: subject) where !known.contains(number) {
-                links.append(InspectorLink(title: "Pull Request #\(number)", systemImage: "arrow.triangle.pull", url: hosting.pullRequestURL(number)))
+                links.append(InspectorLink(title: String(localized: "Pull Request #\(String(number))"), systemImage: "arrow.triangle.pull",
+                                           url: hosting.pullRequestURL(number)))
             }
         }
         // With Jira connected, tickets get their own section.
@@ -467,7 +468,7 @@ private struct TicketRow: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .help(Text(verbatim: "\(key) is part of \(parent.key)"))
+                    .help("\(key) is part of \(parent.key)")
                 }
                 if case .epic(let epic) = store.epic(of: key, connection: connection), epic.key != key {
                     Button {
@@ -484,7 +485,7 @@ private struct TicketRow: View {
                     }
                     .buttonStyle(.plain)
                     .font(.caption)
-                    .help(Text(verbatim: "Epic \(epic.key): click to highlight the commits of all its tickets"))
+                    .help("Epic \(epic.key): click to highlight the commits of all its tickets")
                 }
             }
         }
@@ -523,8 +524,8 @@ private struct PullRequestRow: View {
                         .multilineTextAlignment(.leading)
                 }
             }
-            .help(Text(verbatim: "Open #\(pullRequest.number) on GitHub"))
-            Text("\(pullRequest.base) ← \(pullRequest.head)")
+            .help("Open #\(String(pullRequest.number)) on GitHub")
+            Text(verbatim: "\(pullRequest.base) ← \(pullRequest.head)")
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -558,7 +559,7 @@ private struct PullRequestRow: View {
                             revealBranch(member.head)
                         } label: {
                             HStack(spacing: 6) {
-                                Text("\(position + 1)")
+                                Text((position + 1).formatted())
                                     .font(.caption.monospacedDigit())
                                     .foregroundStyle(.tertiary)
                                     .frame(width: 14, alignment: .trailing)
@@ -701,7 +702,7 @@ private struct ChangedFileRow: View {
                 .truncationMode(.middle)
             Spacer(minLength: 0)
         }
-        .help((file.oldPath.map { "\($0) → \(file.path)" } ?? file.path) + "\nClick to see the changes")
+        .help((file.oldPath.map { "\($0) → \(file.path)" } ?? file.path) + "\n" + String(localized: "Click to see the changes"))
     }
 
     private var color: Color {
@@ -731,7 +732,7 @@ struct RefBadge: View {
         .padding(.vertical, 2)
         .foregroundStyle(foreground)
         .background(background, in: RoundedRectangle(cornerRadius: 4))
-        .help(ref.isHead ? "Checked out: \(ref.name)" : ref.name)
+        .help(ref.isHead ? String(localized: "Checked out: \(ref.name)") : ref.name)
     }
 
     private var icon: String {

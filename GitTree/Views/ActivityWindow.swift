@@ -173,12 +173,13 @@ private struct ActivityView: View {
             .contentShape(Rectangle())
             .onHover { inside in if inside && inPeriod { hovered = date } }
             .onTapGesture { if inPeriod { pinned = pinned == date ? nil : date } }
-            .help(inPeriod ? "\(date.formatted(date: .abbreviated, time: .omitted)): \(counted(count, "commit", "commits"))" : "")
+            .help(inPeriod ? String(localized: "\(date.formatted(date: .abbreviated, time: .omitted)): \(count) commits", comment: "A day and its commits") : "")
     }
 
     private func legend(_ activity: ActivityData) -> some View {
         HStack(spacing: 14) {
-            Text("\(counted(activity.total, "commit", "commits")) on \(counted(activity.activeDays, "day", "days"))")
+            let commits = String(localized: "\(activity.total) commits")
+            Text("\(commits) on \(activity.activeDays) days", comment: "1,234 commits on 210 days")
             if let busiest = activity.busiest {
                 Text("Busiest: \(busiest.day.formatted(date: .abbreviated, time: .omitted)) with \(busiest.count)")
             }
@@ -225,7 +226,7 @@ private struct DayDetails: View {
                     HStack {
                         Text(day.formatted(date: .complete, time: .omitted))
                             .font(.headline)
-                        Text(counted(commits.count, "commit", "commits"))
+                        Text("\(commits.count) commits")
                             .foregroundStyle(.secondary)
                         Spacer()
                         if isPinned {
@@ -241,7 +242,7 @@ private struct DayDetails: View {
                                 HStack(spacing: 4) {
                                     if let term = ticket.term {
                                         Text(term).foregroundStyle(.secondary)
-                                        Text("·").foregroundStyle(.tertiary)
+                                        Text(verbatim: "·").foregroundStyle(.tertiary)
                                     }
                                     Text(verbatim: ticket.key).monospaced()
                                     Text(verbatim: "\(ticket.count)").foregroundStyle(.secondary)

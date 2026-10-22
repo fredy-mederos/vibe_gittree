@@ -393,7 +393,7 @@ import Observation
         }
         let regex = graph.ticketRegex
         let repositoryID = model.id
-        featureProgress = "Grouping \(commits.count) commits…"
+        featureProgress = String(localized: "Grouping \(commits.count) commits…")
         featureTask = Task { [weak self] in
             await FeatureGrouper.analyze(commits, ticketRegex: regex, repositoryID: repositoryID) { message in
                 self?.featureProgress = message
@@ -493,12 +493,12 @@ import Observation
         JiraStore.shared.refreshVersions(projects: jiraProjects(jira), connection: jira, force: true)
         jiraTask = Task { [weak self] in
             guard let self else { return }
-            self.epicProgress = "Reading \(counted(keys.count, "ticket", "tickets")) from Jira…"
+            self.epicProgress = String(localized: "Reading \(keys.count) tickets from Jira…")
             await JiraStore.shared.refresh(keys, connection: jira)
             guard !Task.isCancelled else { return }
             await self.readEpics(of: keys, connection: jira)
             guard !Task.isCancelled else { return }
-            self.epicProgress = "Reading the epics' stories and tasks…"
+            self.epicProgress = String(localized: "Reading the epics' stories and tasks…")
             await self.refreshEpicProgress(jira, force: true)
             self.epicProgress = nil
         }
@@ -543,13 +543,13 @@ import Observation
         let store = JiraStore.shared
         let unread = keys.filter { store.issue($0, connection: connection)?.knowsParent != true && !store.isMissing($0, connection: connection) }
         if !unread.isEmpty {
-            epicProgress = "Reading \(counted(unread.count, "ticket", "tickets")) from Jira…"
+            epicProgress = String(localized: "Reading \(unread.count) tickets from Jira…")
             await store.ensureKnown(unread, connection: connection)
             guard !Task.isCancelled else { return }
         }
         let parents = store.parentsToRead(of: keys, connection: connection)
         if !parents.isEmpty {
-            epicProgress = "Reading \(counted(parents.count, "parent ticket", "parent tickets")) from Jira…"
+            epicProgress = String(localized: "Reading \(parents.count) parent tickets from Jira…")
             await store.ensureKnown(parents, connection: connection)
             guard !Task.isCancelled else { return }
         }
@@ -743,7 +743,7 @@ import Observation
         guard let jira else { return }
         let base = known.union([key])
         setHighlight(.tickets(title: title, keys: withChildren(base), systemImage: "bolt.fill", followsSidebar: true), base: base)
-        refineHighlight(base: base, what: "the epic's tickets") {
+        refineHighlight(base: base, failureNote: String(localized: "Couldn't ask Jira for the epic's tickets")) {
             try await JiraStore.shared.tickets(inEpic: key, connection: jira).map(\.key)
         }
     }
@@ -796,7 +796,7 @@ import Observation
             }
         }
         cancelHighlightLoad()
-        highlightProgress = "Loading \(counted(keys.count, "ticket", "tickets"))…"
+        highlightProgress = String(localized: "Loading \(keys.count) tickets…")
         highlightLoadTask = Task { [weak self] in
             await JiraStore.shared.ensure(keys, connection: jira)
             guard let self, !Task.isCancelled else { return }
@@ -807,7 +807,7 @@ import Observation
             let unsettled = keys.filter { !JiraStore.shared.isSettled($0, connection: jira) }.count
             self.setHighlight(.tickets(title: filter.title, keys: matching))
             if unsettled > 0 {
-                self.highlightNote = "\(counted(unsettled, "status", "statuses")) still loading"
+                self.highlightNote = String(localized: "\(unsettled) statuses still loading", comment: "Ticket statuses Jira hasn't sent yet")
             }
         }
     }
@@ -816,19 +816,19 @@ import Observation
     /// by Jira: by id for the versions GitTree listed, by name for one typed in.
     func highlightFixVersion(_ name: String, id: String? = nil, fromSidebar: Bool = false) {
         guard let jira else { return }
-        let title = "Fix version \(name)"
+        let title = String(localized: "Fix version \(name)", comment: "A highlight: the commits of a Jira fix version's tickets")
         if let id, let keys = JiraStore.shared.cachedTickets(inFixVersionID: id, connection: jira) {
             // What Jira said last time shows right away; a fresh list follows when it's due.
             setHighlight(.tickets(title: title, keys: withChildren(Set(keys)), systemImage: "shippingbox", followsSidebar: fromSidebar),
                          base: Set(keys))
             highlightedRelease = id
-            refineHighlight(base: [], what: "the fix version's tickets") {
+            refineHighlight(base: [], failureNote: String(localized: "Couldn't ask Jira for the fix version's tickets")) {
                 try await JiraStore.shared.tickets(inFixVersion: id, isID: true, connection: jira).map(\.key)
             }
             return
         }
         cancelHighlightLoad()
-        highlightProgress = "Loading fix version \(name)…"
+        highlightProgress = String(localized: "Loading fix version \(name)…")
         highlightLoadTask = Task { [weak self] in
             do {
                 let issues = try await JiraStore.shared.tickets(inFixVersion: id ?? name, isID: id != nil, connection: jira)
@@ -840,7 +840,7 @@ import Observation
             } catch {
                 guard let self, !Task.isCancelled else { return }
                 self.cancelHighlightLoad()
-                self.highlightNote = "Couldn't load fix version \(name): \(error.localizedDescription)"
+                self.highlightNote = String(localized: "Couldn't load fix version \(name): \(error.localizedDescription)")
             }
         }
     }
@@ -902,7 +902,7 @@ import Observation
 
     /// Widens the current ticket highlight to what Jira lists (an epic's or a fix version's
     /// tickets) when it answers, without moving the selection; a newer highlight cancels it.
-    private func refineHighlight(base: Set<String>, what: String, _ load: @escaping @MainActor () async throws -> [String]) {
+    private func refineHighlight(base: Set<String>, failureNote: String, _ load: @escaping @MainActor () async throws -> [String]) {
         let generation = highlightGeneration
         highlightRefining = true
         highlightLoadTask = Task { [weak self] in
@@ -912,7 +912,7 @@ import Observation
             } catch {
                 guard let self, !Task.isCancelled, self.highlightGeneration == generation else { return }
                 self.highlightRefining = false
-                self.highlightNote = "Couldn't ask Jira for \(what)"
+                self.highlightNote = failureNote
                 return
             }
             guard let self, !Task.isCancelled, self.highlightGeneration == generation else { return }
@@ -1078,9 +1078,9 @@ enum TicketFilter: CaseIterable {
 
     var title: String {
         switch self {
-        case .notDone: "Tickets Not Done"
-        case .inProgress: "Tickets In Progress"
-        case .toDo: "Tickets To Do"
+        case .notDone: String(localized: "Tickets Not Done")
+        case .inProgress: String(localized: "Tickets In Progress")
+        case .toDo: String(localized: "Tickets To Do")
         }
     }
 

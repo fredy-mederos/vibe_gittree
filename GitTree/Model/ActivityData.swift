@@ -7,7 +7,7 @@ enum ActivityPeriod: Hashable {
 
     var title: String {
         switch self {
-        case .lastTwelveMonths: "Last 12 Months"
+        case .lastTwelveMonths: String(localized: "Last 12 Months")
         case .year(let year): String(year)
         }
     }

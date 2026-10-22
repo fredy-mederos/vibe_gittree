@@ -221,6 +221,11 @@ permission to access that folder.
   `^android-v[\d.]+$` when releases are tagged `android-v2.12`).
 - **Appearance**: Settings › General › Appearance picks Light, Dark or System. Dark mode is a bit
   darker than macOS's: the window, the commit list, the sidebar and the details.
+- **Languages**: English, Chinese (Simplified and Traditional), Hindi, Spanish, Arabic, French,
+  Portuguese (Brazil), Russian, Indonesian, German, Japanese, Vietnamese, Turkish, Korean, Italian,
+  Thai, Polish, Ukrainian, Malay and Dutch: the most spoken languages macOS runs in. Vibe GitTree
+  follows the Mac's language; System Settings › General › Language & Region › Applications picks
+  another one for it alone. Names, commit messages and Jira's statuses stay as they are.
 - **About**: Settings › General shows the version, the build number (the commit count when
   `scripts/install.sh` or `scripts/release.sh` built it), the commit, whether it's a Debug or
   Release build, and when it was built, with Copy Version Info.
@@ -328,8 +333,10 @@ GitTree/
   Views/         window, sidebar, switcher, toolbar and status bar, inspector, uncommitted changes and
                  stashes, diff and compare windows, sheets
   Views/Graph    the commit table (NSTableView) and its Core Graphics cells
+  Localizable.xcstrings   every string the app shows, with its translations (String Catalog)
 Support/Info.plist   the gittree:// URL scheme (merged with Xcode's generated keys)
 scripts/gittree      the deep-link command
+scripts/localization.py   keeps the String Catalog in step with the code and imports translations
 ```
 
 - History comes from one `git log --branches --remotes --tags --date-order` plus `git for-each-ref`,
@@ -373,7 +380,8 @@ changes, one after another), `-GTOpenDiff <staged|unstaged|untracked|commit>:<pa
 otherwise only check when asked) and `-GTUpdateRepository <owner/name>` (checks another repository's
 releases, without keeping what it finds; one with a newer version shows the update alert). Test
 runs keep the sidebar's folded sections, the details' width and the Features setting in a
-preferences suite of their own, emptied at launch.
+preferences suite of their own, emptied at launch. macOS's own `-AppleLanguages "(de)"` shows the app in another
+language (`ar` for right-to-left).
 
 `scripts/snapshot-rows.sh` captures the window once per row `-GTSelect` names, for checking how
 selected rows look (in light and dark mode, say):

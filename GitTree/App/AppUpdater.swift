@@ -99,7 +99,7 @@ final class AppUpdater {
     func check() async {
         guard !isChecking else { return }
         guard VersionNumber.isValid(BuildInfo.version) else {
-            failure = "This build has no version number."
+            failure = String(localized: "This build has no version number.")
             return
         }
         isChecking = true
@@ -112,8 +112,21 @@ final class AppUpdater {
             failure = nil
             save(latest.flatMap { try? JSONEncoder().encode($0) }, Key.latest)
             save(lastChecked, Key.lastChecked)
+        } catch let error as UpdateCheckError {
+            failure = Self.describe(error)
         } catch {
             failure = error.localizedDescription
+        }
+    }
+
+    /// GitHub's answer in the user's language: UpdateCheck.swift is the same file in the other apps,
+    /// word for word, so its errors are put into words here.
+    private static func describe(_ error: UpdateCheckError) -> String {
+        switch error {
+        case .unexpectedResponse(let status) where status == 403 || status == 429:
+            String(localized: "GitHub is limiting requests from this network. Try again in an hour.")
+        case .unexpectedResponse(let status):
+            String(localized: "GitHub answered with an error (HTTP \(String(status))).")
         }
     }
 
@@ -124,13 +137,15 @@ final class AppUpdater {
             if let release = available {
                 announce(release, askedFor: true)
             } else if let failure {
-                showAlert("Couldn't check for updates", failure)
+                showAlert(String(localized: "Couldn't check for updates"), failure)
             } else if let latest, latest.version != BuildInfo.version {
-                showAlert("\(BuildInfo.name) is up to date", "You have version \(BuildInfo.version); the newest release is \(latest.version).")
+                showAlert(String(localized: "\(BuildInfo.name) is up to date"),
+                          String(localized: "You have version \(BuildInfo.version); the newest release is \(latest.version)."))
             } else if latest != nil {
-                showAlert("\(BuildInfo.name) is up to date", "Version \(BuildInfo.version) is the newest version.")
+                showAlert(String(localized: "\(BuildInfo.name) is up to date"), String(localized: "Version \(BuildInfo.version) is the newest version."))
             } else {
-                showAlert("\(BuildInfo.name) is up to date", "No version of \(BuildInfo.name) has been released on GitHub yet.")
+                showAlert(String(localized: "\(BuildInfo.name) is up to date"),
+                          String(localized: "No version of \(BuildInfo.name) has been released on GitHub yet."))
             }
         }
     }
@@ -153,11 +168,11 @@ final class AppUpdater {
         announcedVersion = release.version
         save(release.version, Key.announced)
         let alert = NSAlert()
-        alert.messageText = "\(BuildInfo.name) \(release.version) is available"
-        alert.informativeText = "You have version \(BuildInfo.version). Download the new one, open it and drag \(BuildInfo.name) into Applications to replace this copy."
-        let downloadButton = alert.addButton(withTitle: "Download")
-        alert.addButton(withTitle: "Later").keyEquivalent = "\u{1b}"
-        alert.addButton(withTitle: "Release Notes")
+        alert.messageText = String(localized: "\(BuildInfo.name) \(release.version) is available")
+        alert.informativeText = String(localized: "You have version \(BuildInfo.version). Download the new one, open it and drag \(BuildInfo.name) into Applications to replace this copy.")
+        let downloadButton = alert.addButton(withTitle: String(localized: "Download"))
+        alert.addButton(withTitle: String(localized: "Later")).keyEquivalent = "\u{1b}"
+        alert.addButton(withTitle: String(localized: "Release Notes"))
         // An alert that shows up on its own can arrive while you type: Return shouldn't start a download.
         if !askedFor { downloadButton.keyEquivalent = "" }
         present(alert) { [self] response in

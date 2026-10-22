@@ -21,6 +21,15 @@ private enum CompareTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var title: String {
+        switch self {
+        case .commits: String(localized: "Commits")
+        case .tickets: String(localized: "Tickets")
+        case .files: String(localized: "Files")
+        case .authors: String(localized: "Authors")
+        }
+    }
+
     /// The tab a comparison opens on (`-GTCompareTab` picks another in test runs).
     @MainActor static var initial: CompareTab {
         #if DEBUG
@@ -75,7 +84,7 @@ private struct CompareView: View {
     private var title: String {
         guard let graph = model.graph, let base = ComparePoint.resolve(target.base, in: graph),
               let head = ComparePoint.resolve(target.head, in: graph) else {
-            return "Compare Branches"
+            return String(localized: "Compare Branches")
         }
         return "\(head.name) ↔ \(base.name)"
     }
@@ -88,7 +97,8 @@ private struct CompareView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .principal) {
-            RefPickerButton(title: "Base", selection: $target.base, graph: model.graph)
+            RefPickerButton(title: String(localized: "Base", comment: "Picks the branch a comparison is made against, as on GitHub"),
+                            selection: $target.base, graph: model.graph)
                 .help("The branch to compare against")
             Button {
                 let base = target.base
@@ -98,7 +108,8 @@ private struct CompareView: View {
                 Label("Swap", systemImage: "arrow.left.arrow.right")
             }
             .help("Swap the two branches")
-            RefPickerButton(title: "Compare", selection: $target.head, graph: model.graph)
+            RefPickerButton(title: String(localized: "Compare", comment: "Picks the branch that is compared with the base one, as on GitHub"),
+                            selection: $target.head, graph: model.graph)
                 .help("The branch to compare")
         }
         ToolbarItem {
@@ -182,7 +193,7 @@ private struct CompareView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 10)
             Picker("Show", selection: $tab) {
-                ForEach(CompareTab.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(CompareTab.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -199,7 +210,7 @@ private struct CompareView: View {
 
     private func column(_ side: BranchComparison.Side, other: BranchComparison.Side, comparison: BranchComparison) -> some View {
         SideColumn(side: side, other: other, graph: comparison.graph, tab: tab, files: files[side.point.spec],
-                   filesNote: comparison.mergeBase == nil ? "They share no history, so there's nothing to diff against." : filesProblem,
+                   filesNote: comparison.mergeBase == nil ? String(localized: "They share no history, so there's nothing to diff against.") : filesProblem,
                    mergeBase: comparison.mergeBase.map { comparison.graph.ids[Int($0)] },
                    jira: JiraStore.shared.connection(for: model.repository), repositoryID: model.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -234,11 +245,13 @@ private struct CompareView: View {
         let headName = "“\(head.point.name)”"
         let baseName = "“\(base.point.name)”"
         switch (head.nonMergeCount, base.nonMergeCount) {
-        case (0, 0): return "\(headName) and \(baseName) have the same commits."
-        case (0, let behind): return "Everything on \(headName) is on \(baseName), which has \(counted(behind, "commit", "commits")) more."
-        case (let ahead, 0): return "\(headName) has \(counted(ahead, "commit", "commits")) that \(baseName) doesn't, and everything \(baseName) has."
+        case (0, 0): return String(localized: "\(headName) and \(baseName) have the same commits.")
+        case (0, let behind): return String(localized: "Everything on \(headName) is on \(baseName), which has \(behind) commits more.")
+        case (let ahead, 0): return String(localized: "\(headName) has \(ahead) commits that \(baseName) doesn't, and everything \(baseName) has.")
         case (let ahead, let behind):
-            return "\(headName) has \(counted(ahead, "commit", "commits")) that \(baseName) doesn't; \(baseName) has \(counted(behind, "commit", "commits")) that \(headName) doesn't."
+            let aheadClause = String(localized: "\(headName) has \(ahead) commits that \(baseName) doesn't", comment: "One of two clauses about two branches")
+            let behindClause = String(localized: "\(baseName) has \(behind) commits that \(headName) doesn't", comment: "One of two clauses about two branches")
+            return String(localized: "\(aheadClause); \(behindClause).", comment: "Two clauses, each saying what one branch has that the other doesn't")
         }
     }
 
@@ -303,7 +316,7 @@ private struct SideColumn: View {
                     NotificationCenter.default.post(name: .gitTreeHighlightCommits, object: nil, userInfo: [
                         "repository": repositoryID,
                         "commits": side.commits.map { graph.ids[Int($0)].hex },
-                        "title": "Only on \(side.point.name), not on \(other.point.name)",
+                        "title": String(localized: "Only on \(side.point.name), not on \(other.point.name)"),
                     ])
                 }
                 .disabled(side.commits.isEmpty)
@@ -319,15 +332,15 @@ private struct SideColumn: View {
 
     /// "Not on develop: 12 commits (and 2 merges) · 5 tickets · 3 authors · Sep 28 – Oct 9".
     private var details: String {
-        var parts = [counted(side.nonMergeCount, "commit", "commits")
-            + (side.commits.count > side.nonMergeCount ? " and \(counted(side.commits.count - side.nonMergeCount, "merge", "merges"))" : "")]
-        if !side.tickets.isEmpty { parts.append(counted(side.tickets.count, "ticket", "tickets")) }
-        if !side.authors.isEmpty { parts.append(counted(side.authors.count, "author", "authors")) }
+        let commits = String(localized: "\(side.nonMergeCount) commits")
+        let merges = side.commits.count - side.nonMergeCount
+        var parts = [merges > 0 ? String(localized: "\(commits) and \(merges) merges", comment: "12 commits and 2 merges") : commits]
+        if !side.tickets.isEmpty { parts.append(String(localized: "\(side.tickets.count) tickets")) }
+        if !side.authors.isEmpty { parts.append(String(localized: "\(side.authors.count) authors")) }
         if let oldest = side.oldest, let newest = side.newest {
-            let range = oldest.formatted(.dateTime.month(.abbreviated).day()) + " – " + newest.formatted(.dateTime.month(.abbreviated).day())
-            parts.append(range)
+            parts.append(oldest.formatted(.dateTime.month(.abbreviated).day()) + " – " + newest.formatted(.dateTime.month(.abbreviated).day()))
         }
-        return "Not on \(other.point.name): " + parts.joined(separator: " · ")
+        return String(localized: "Not on \(other.point.name): \(parts.joined(separator: " · "))", comment: "Followed by what a branch has: 12 commits · 5 tickets · 3 authors · Sep 28 – Oct 9")
     }
 
     // MARK: Tabs
@@ -359,7 +372,7 @@ private struct SideColumn: View {
                 .help("Select this commit in the graph")
             }
             if side.commits.count > Self.rowLimit {
-                Text("\((side.commits.count - Self.rowLimit).formatted()) more not listed.")
+                Text("\(side.commits.count - Self.rowLimit) more not listed.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -394,7 +407,7 @@ private struct SideColumn: View {
                 }
             }
             if loose > 0 {
-                Text("\(counted(loose, "commit doesn't", "commits don't")) mention a ticket.")
+                Text("\(loose) commits don't mention a ticket.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -444,7 +457,7 @@ private struct SideColumn: View {
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 HStack(spacing: 8) {
-                    Text("\(counted(files.count, "file", "files")) changed on “\(side.point.name)” since the branches diverged")
+                    Text("\(files.count) files changed on “\(side.point.name)” since the branches diverged")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
@@ -496,7 +509,7 @@ private struct SideColumn: View {
         guard let mergeBase else { return }
         openWindow(id: "diff", value: DiffTarget(repositoryID: repositoryID, commit: graph.ids[Int(side.point.commit)].hex, path: file.path,
                                                  base: mergeBase.hex, oldPath: file.oldPath, allFiles: allFiles ? true : nil,
-                                                 title: "\(side.point.name) since \(other.point.name)"))
+                                                 title: String(localized: "\(side.point.name) since \(other.point.name)", comment: "A branch's changes since it diverged from another branch")))
     }
 }
 
@@ -533,7 +546,7 @@ private struct CompareTicketRow: View {
                 .foregroundStyle(.tertiary)
                 .frame(minWidth: 24, alignment: .trailing)
         }
-        .help(Text(verbatim: [ticket.key, issue?.summary, issue.map { "\($0.status) · \(counted(ticket.commits, "commit", "commits"))" }]
+        .help(Text(verbatim: [ticket.key, issue?.summary, issue.map { "\($0.status) · " + String(localized: "\(ticket.commits) commits") }]
             .compactMap { $0 }.joined(separator: "\n")))
     }
 }
@@ -627,7 +640,7 @@ private struct RefPickerList: View {
     }
 
     @ViewBuilder
-    private func section(_ title: String, kind: GitRef.Kind, limit: Int) -> some View {
+    private func section(_ title: LocalizedStringKey, kind: GitRef.Kind, limit: Int) -> some View {
         let needle = filter.trimmingCharacters(in: .whitespaces).lowercased()
         let refs = graph.refs
             .filter { $0.kind == kind && (needle.isEmpty || $0.name.lowercased().contains(needle)) }

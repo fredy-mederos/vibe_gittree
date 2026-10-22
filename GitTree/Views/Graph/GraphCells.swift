@@ -236,8 +236,9 @@ final class DescriptionCellView: NSTableCellView {
 
         /// What the tooltip and VoiceOver say about it.
         var description: String {
-            if style == .worktree { return "Checked out in \(worktree ?? text)" }
-            return prefix + text + (worktree.map { " (checked out in \($0))" } ?? "")
+            if style == .worktree { return String(localized: "Checked out in \(worktree ?? text)") }
+            return worktree.map { String(localized: "\(prefix + text) (checked out in \($0))", comment: "A branch, then the worktree it's checked out in") }
+                ?? prefix + text
         }
     }
 
@@ -310,12 +311,12 @@ final class DescriptionCellView: NSTableCellView {
     /// The row above the history: "Uncommitted Changes", then what changed ("2 staged · 3 changed").
     func configureWorkingRow(summary: String) {
         badges = []
-        subject = "Uncommitted Changes"
+        subject = String(localized: "Uncommitted Changes")
         isMerge = false
         ticketRegex = nil
         highlight = nil
         detail = summary
-        setAccessibilityLabel("Uncommitted changes: \(summary)")
+        setAccessibilityLabel(String(localized: "Uncommitted changes: \(summary)"))
         toolTip = nil
         needsDisplay = true
     }
@@ -323,15 +324,24 @@ final class DescriptionCellView: NSTableCellView {
     override func draw(_ dirtyRect: NSRect) {
         let emphasized = backgroundStyle == .emphasized
         let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        // The labels that fit, measured first: in right-to-left languages they and the subject start
+        // at the right edge (the first label rightmost), so the labels stay next to their subject.
         var x: CGFloat = 4
         let badgeLimit = bounds.width * 0.6
+        var shown: [(badge: Badge, maxWidth: CGFloat)] = []
         for badge in badges {
             let room = badgeLimit - x
             guard room > 36 else { break }
-            x += drawBadge(badge, x: x, maxWidth: min(260, room), emphasized: emphasized, isDark: isDark) + 4
+            x += drawBadge(badge, x: 0, maxWidth: min(260, room), emphasized: emphasized, isDark: isDark, draws: false) + 4
+            shown.append((badge, min(260, room)))
         }
-        if !badges.isEmpty { x += 2 }
-        let rect = NSRect(x: x, y: floor((bounds.height - Self.lineHeight) / 2),
+        if !shown.isEmpty { x += 2 }
+        let mirrored = userInterfaceLayoutDirection == .rightToLeft
+        var cursor = mirrored ? bounds.width - x + 6 : 4
+        for (badge, maxWidth) in mirrored ? shown.reversed() : shown {
+            cursor += drawBadge(badge, x: cursor, maxWidth: maxWidth, emphasized: emphasized, isDark: isDark) + 4
+        }
+        let rect = NSRect(x: mirrored ? 4 : x, y: floor((bounds.height - Self.lineHeight) / 2),
                           width: max(0, bounds.width - x - 4), height: Self.lineHeight)
         attributedSubject(emphasized: emphasized).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
@@ -372,7 +382,8 @@ final class DescriptionCellView: NSTableCellView {
     }
 
     /// Returns the badge's width.
-    private func drawBadge(_ badge: Badge, x: CGFloat, maxWidth: CGFloat, emphasized: Bool, isDark: Bool) -> CGFloat {
+    /// Draws a label at x and returns its width; with `draws` false, only measures it.
+    private func drawBadge(_ badge: Badge, x: CGFloat, maxWidth: CGFloat, emphasized: Bool, isDark: Bool, draws: Bool = true) -> CGFloat {
         var textColor: NSColor
         var fill: NSColor?
         var stroke: NSColor?
@@ -430,6 +441,7 @@ final class DescriptionCellView: NSTableCellView {
         let trailingSymbolWidth: CGFloat = (badge.synced || badge.trailingSymbol != nil) ? 12 : 0
         let textWidth = min(ceil(label.size().width), max(16, maxWidth - padding * 2 - leadingSymbolWidth - trailingSymbolWidth))
         let width = textWidth + padding * 2 + leadingSymbolWidth + trailingSymbolWidth
+        guard draws else { return width }
         let height: CGFloat = 16
         let rect = NSRect(x: x, y: floor((bounds.height - height) / 2), width: width, height: height)
 
@@ -509,8 +521,9 @@ final class TicketStatusCellView: NSTableCellView {
         self.issue = issue
         color = (category ?? issue?.category ?? .unknown).color
         if let issue {
-            let versions = issue.fixVersions.isEmpty ? "" : " · fix version \(issue.fixVersions.joined(separator: ", "))"
-            let epicLine = epic.map { $0.key == issue.key ? "" : "\nEpic: \($0.key) \($0.summary)" } ?? ""
+            let versions = issue.fixVersions.isEmpty ? ""
+                : " · " + String(localized: "fix version \(issue.fixVersions.joined(separator: ", "))", comment: "Followed by Jira fix version names")
+            let epicLine = epic.map { $0.key == issue.key ? "" : "\n" + String(localized: "Epic: \($0.key) \($0.summary)", comment: "An epic's key and summary") } ?? ""
             let type = issue.type.map { " · \($0)" } ?? ""
             toolTip = "\(issue.key)\(type) · \(issue.status)\(versions)\n\(issue.summary)\(epicLine)"
             setAccessibilityLabel("\(issue.key) \(issue.type ?? "") \(issue.status)")
