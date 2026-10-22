@@ -346,6 +346,7 @@ seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), `-
 `drop:<n>`, separated by `;`; try them on a throwaway clone), `-GTCompareTab files` (the tab a
 comparison opens on), `-GTOpenChanges uncommitted|<commit>|<base>...<head>` (every file of those
 changes, one after another), `-GTOpenDiff <staged|unstaged|untracked|commit>:<path>` (one file's diff),
+`-GTZoom <seconds>` (zooms every window in and out, as double-clicking its title bar does),
 `-GTCheckForUpdates YES` (checks for updates at launch, as the installed app does; debug builds
 otherwise only check when asked) and `-GTUpdateRepository <owner/name>` (checks another repository's
 releases, without keeping what it finds; one with a newer version shows the update alert). Test

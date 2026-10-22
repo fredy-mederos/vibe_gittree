@@ -23,6 +23,11 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
 - SwiftUI ignores the inspector's ideal width and resets it to its narrowest when the window's
   content changes; `InspectorWidthKeeper` (`Views/WindowSupport.swift`) keeps the width the user
   drags to, through AppKit.
+- In split-view columns (the sidebar, the details, the diff window's list), whatever is pinned
+  outside a scrolling list (a `safeAreaInset`) must keep a height that doesn't depend on the width:
+  no wrapping text with `.fixedSize(horizontal: false, vertical: true)` there (use `lineLimit`, with
+  `reservesSpace`). Otherwise zooming the window (a double-click on its title bar) loops AppKit's
+  constraint passes until it stops the app. `-GTZoom <seconds>` zooms every window in and out, to check.
 - Read-only unless the user allows changes: never run git commands that change a user's repository,
   except `fetch` (on an explicit user action, or for clones Vibe GitTree manages itself) and, with
   Settings › General › Allow commits and stashes on (off by default), staging, unstaging, committing

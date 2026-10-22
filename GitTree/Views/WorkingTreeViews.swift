@@ -32,11 +32,12 @@ struct WorkingTreeInspector: View {
                 }
             }
             .formStyle(.grouped)
+            // What's pinned below the list keeps a height that doesn't depend on the width: text
+            // that wraps there makes the window's layout go round in circles while it zooms (AppKit
+            // then stops the app), so wrapping text goes in the list above.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if canChange {
                     CommitPanel(graph: graph, status: status)
-                } else if model.hasWorkingTree {
-                    readOnlyNote
                 }
             }
         } else if !model.hasWorkingTree {
@@ -80,6 +81,9 @@ struct WorkingTreeInspector: View {
                 Text("Nothing to commit: the files are as HEAD has them.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+            if !canChange && model.hasWorkingTree {
+                readOnlyNote
             }
         }
         .padding(.vertical, 2)
@@ -157,10 +161,10 @@ struct WorkingTreeInspector: View {
         }
     }
 
+    /// Changes aren't allowed: how to allow them.
     private var readOnlyNote: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: "lock")
-                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Vibe GitTree only reads this repository. To stage, commit and stash here, turn on Allow commits and stashes.")
                     .fixedSize(horizontal: false, vertical: true)
@@ -169,13 +173,10 @@ struct WorkingTreeInspector: View {
                 }
                 .buttonStyle(.link)
             }
-            Spacer(minLength: 0)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .padding(12)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .padding(.top, 4)
     }
 }
 
@@ -267,10 +268,12 @@ private struct CommitPanel: View {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
+                    // Three lines whatever the width (see the note on the list's inset); all of it in the tooltip.
                     Text(error)
                         .font(.caption)
+                        .lineLimit(3, reservesSpace: true)
                         .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .help(error)
                     Spacer(minLength: 0)
                     Button {
                         model.dismissChangeError()
@@ -284,8 +287,9 @@ private struct CommitPanel: View {
             }
             TextField("Summary", text: $graph.commitSummary, prompt: Text("Summary"))
                 .textFieldStyle(.roundedBorder)
+            // Always three lines tall; longer descriptions scroll inside it.
             TextField("Description", text: $graph.commitDescription, prompt: Text("Description"), axis: .vertical)
-                .lineLimit(2...8)
+                .lineLimit(3, reservesSpace: true)
                 .textFieldStyle(.roundedBorder)
             HStack(spacing: 8) {
                 Button("Stash…") { isStashPresented = true }
@@ -301,6 +305,7 @@ private struct CommitPanel: View {
                     Text(progress)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 Button(status.stagedCount > 0 ? "Commit \(counted(status.stagedCount, "File", "Files"))" : "Commit") { commit() }
                     .keyboardShortcut(.return, modifiers: .command)
@@ -311,6 +316,8 @@ private struct CommitPanel: View {
             Text(note)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(note)
         }
         .padding(12)
         .background(.bar)
@@ -534,10 +541,12 @@ struct StashInspector: View {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
+                    // Three lines whatever the width (see the note on the list's inset); all of it in the tooltip.
                     Text(error)
                         .font(.caption)
+                        .lineLimit(3, reservesSpace: true)
                         .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .help(error)
                     Spacer(minLength: 0)
                     Button {
                         model.dismissChangeError()

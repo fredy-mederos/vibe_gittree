@@ -169,7 +169,8 @@ struct RepositoryWindow: View {
 /// tree's status, the stashes and what the details show, `-GTPerform <steps>` runs changes one
 /// after another (`stage:<path>`, `unstage:<path>`, `stageAll`, `unstageAll`, `commit:<message>`,
 /// `stash:<message>`, `stashStaged:<message>`, `apply:<n>`, `pop:<n>`, `drop:<n>`, separated by
-/// `;`, with `-GTAllowChanges YES`), and `-GTSnapshot <folder>` (after
+/// `;`, with `-GTAllowChanges YES`), `-GTZoom <seconds>` zooms every window in and out a few times
+/// (as double-clicking a title bar does), and `-GTSnapshot <folder>` (after
 /// `-GTSnapshotAfter` seconds, 10 by default) has every window draw itself into a PNG there, for
 /// checks where `screencapture` isn't allowed. Elsewhere:
 /// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds),
@@ -524,6 +525,21 @@ struct RepositoryWindow: View {
                 for window in NSApp.windows where window.isVisible { window.orderFrontRegardless() }
                 try? await Task.sleep(for: .seconds(1.5))
                 snapshotWindows(to: folder)
+            }
+        }
+        if defaults.object(forKey: "GTZoom") != nil {
+            Task {
+                let after = defaults.integer(forKey: "GTZoom")
+                try? await Task.sleep(for: .seconds(after > 0 ? after : 10))
+                // Every window zoomed in and out a few times, as a double-click on its title bar does.
+                for round in 0..<4 {
+                    for window in NSApp.windows where window.isVisible && window.styleMask.contains(.titled) {
+                        NSLog("GitTree: zooming %@ (round %d)", window.title, round)
+                        window.zoom(nil)
+                    }
+                    try? await Task.sleep(for: .seconds(1.5))
+                }
+                NSLog("GitTree: zoomed every window")
             }
         }
         if let steps = defaults.string(forKey: "GTPerform") {
