@@ -16,6 +16,10 @@ enum SidebarItem: Hashable {
     /// A ticket listed under an epic or a fix version: its key, and the row it's listed under
     /// (`epic:<key>` or `release:<id>`), so the same ticket in two places is two rows.
     case ticket(UUID, String, under: String)
+    /// The uncommitted changes of the window's repository.
+    case workingTree(UUID)
+    /// A stash, by its commit's hash (its `stash@{n}` changes as others come and go).
+    case stash(UUID, String)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -108,6 +112,8 @@ enum SidebarItem: Hashable {
             }
             model.loadIfNeeded()
             model.refreshPullRequests()
+            // Files that changed while no window showed it are looked at now.
+            model.refreshWorkingTreeIfStale()
             // Back to a repository shown before: its Epics and Releases may be due for a refresh.
             graph?.loadJiraOverview()
             library.markOpened(id)
@@ -137,6 +143,16 @@ enum SidebarItem: Hashable {
         case .ticket(let id, let key, _):
             if id != repositoryID { open(id) }
             graph?.showTicket(key)
+        case .workingTree(let id):
+            if id != repositoryID { open(id) }
+            graph?.clearSidebarHighlight()
+            graph?.selectWorkingTree()
+            showInspector = true
+        case .stash(let id, let hash):
+            if id != repositoryID { open(id) }
+            graph?.clearSidebarHighlight()
+            if let stash = ObjectID(hex: hash) { graph?.showStash(stash) }
+            showInspector = true
         case .pullRequest(let id, let number):
             if id != repositoryID { open(id) }
             graph?.clearSidebarHighlight()

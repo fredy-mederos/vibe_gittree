@@ -99,27 +99,81 @@ struct FileDiff: Sendable {
     }
 }
 
-/// Where to show a diff: a file in a commit of a repository, optionally scrolled to a line.
+/// Where to show a diff: a file in a commit of a repository (compared with the commit's first
+/// parent, or with `base`), or the file's uncommitted changes, optionally scrolled to a line; or
+/// all of them.
 struct DiffTarget: Codable, Hashable, Sendable {
     var repositoryID: UUID
+    /// Empty for uncommitted changes.
     var commit: String
     var path: String
     var line: Int?
+    /// The commit to compare with instead of the first parent: where two branches diverged, say.
+    var base: String?
+    /// The file's path before a rename, so the diff shows what changed rather than a whole new file.
+    var oldPath: String?
+    /// Uncommitted changes instead of a commit's.
+    var uncommitted: UncommittedSide?
+    /// Opens on every file one after another rather than one at a time; `path` can be empty then.
+    var allFiles: Bool?
+    /// What the window is called while it shows every file: "feature/search since develop".
+    var title: String?
+}
+
+/// Which of a file's uncommitted changes a diff shows.
+enum UncommittedSide: String, Codable, Hashable, Sendable {
+    /// What's staged for the next commit, compared with HEAD.
+    case staged
+    /// What isn't staged yet, compared with what is.
+    case unstaged
+    /// A file git doesn't track yet: all of it.
+    case untracked
+
+    var title: String {
+        switch self {
+        case .staged: "Staged"
+        case .unstaged: "Not Staged"
+        case .untracked: "New File"
+        }
+    }
 }
 
 enum FileDiffLoader {
-    /// Compares against the first parent (what a merge brought in). `wholeFile` shows every line
-    /// of the file around the changes instead of a few lines of context.
-    static func load(commit: String, firstParent: String?, path: String, in directory: URL, wholeFile: Bool) async throws -> FileDiff {
-        let context = wholeFile ? "--unified=1000000" : "--unified=4"
+    /// What a target asks for: by default a commit's changes to the file compared with its first
+    /// parent (what a merge brought in). `wholeFile` shows every line of the file around the
+    /// changes instead of a few lines of context.
+    static func load(_ target: DiffTarget, firstParent: String?, in directory: URL, wholeFile: Bool) async throws -> FileDiff {
+        let options = ["--no-color", "--no-ext-diff", wholeFile ? "--unified=1000000" : "--unified=4"]
+        // A rename shows the changes it made when renames are looked for between both paths.
+        let renames = target.oldPath == nil ? [] : ["-M"]
+        let paths = ["--", target.path] + (target.oldPath.map { [$0] } ?? [])
         let arguments: [String]
-        if let firstParent {
-            arguments = ["diff", "--no-color", "--no-ext-diff", context, firstParent, commit, "--", path]
-        } else {
-            arguments = ["show", "--no-color", "--no-ext-diff", "--format=", context, commit, "--", path]
+        var allowFailure = false
+        switch target.uncommitted {
+        case .staged:
+            arguments = ["diff", "--cached"] + options + renames + paths
+        case .unstaged:
+            arguments = ["diff"] + options + paths
+        case .untracked:
+            // Exits with 1 when the files differ, which they always do here.
+            arguments = ["diff", "--no-index"] + options + ["--", "/dev/null", target.path]
+            allowFailure = true
+        case nil:
+            if let base = target.base ?? firstParent {
+                arguments = ["diff"] + options + renames + [base, target.commit] + paths
+            } else {
+                arguments = ["show"] + options + ["--format=", target.commit] + paths
+            }
         }
-        let output = try await Git.run(arguments, in: directory)
-        var diff = parse(String(decoding: output, as: UTF8.self))
+        let output = try await Git.run(arguments, in: directory, allowFailure: allowFailure)
+        return await Task.detached(priority: .userInitiated) {
+            prepare(parse(String(decoding: output, as: UTF8.self)), path: target.path)
+        }.value
+    }
+
+    /// Syntax colors and the side-by-side pairs for a parsed diff.
+    static func prepare(_ parsed: FileDiff, path: String) -> FileDiff {
+        var diff = parsed
         if let highlighter = SyntaxHighlighter(path: path) {
             let highlighted = highlighter.highlight(diff)
             diff.tokens = highlighted.tokens
@@ -177,5 +231,82 @@ enum FileDiffLoader {
             }
         }
         return FileDiff(lines: lines, isBinary: isBinary, addedCount: added, removedCount: removed)
+    }
+}
+
+/// A file the diff window can switch to: one of the commit's files, or one of the uncommitted ones.
+struct DiffFile: Identifiable, Hashable, Sendable {
+    let path: String
+    let oldPath: String?
+    /// git's status letter (A, M, D, R…).
+    let status: String
+    let uncommitted: UncommittedSide?
+    /// Lines added and removed; nil for binary files, new files and where counting them would
+    /// download contents (partial clones).
+    var added: Int?
+    var removed: Int?
+
+    var id: String { Self.id(path: path, uncommitted: uncommitted) }
+    var changes: Int { (added ?? 0) + (removed ?? 0) }
+
+    static func id(path: String, uncommitted: UncommittedSide?) -> String {
+        (uncommitted?.rawValue ?? "commit") + ":" + path
+    }
+}
+
+enum DiffFileListLoader {
+    /// The files that changed with a diff window's target: the commit's (compared with `base` or
+    /// its first parent), or every uncommitted file. `counts`: lines added and removed per file,
+    /// left out for partial clones, where counting would download every file's contents.
+    static func files(for target: DiffTarget, firstParent: String?, workingTree: WorkingTreeStatus?, in directory: URL,
+                      counts: Bool) async throws -> [DiffFile] {
+        if target.uncommitted != nil {
+            guard let workingTree else { return [] }
+            async let staged = counts ? Git.run(["diff", "--cached", "--numstat", "-z", "-M"], in: directory) : nil
+            async let unstaged = counts ? Git.run(["diff", "--numstat", "-z"], in: directory) : nil
+            let stagedCounts = try await staged.map(parseNumstat) ?? [:]
+            let unstagedCounts = try await unstaged.map(parseNumstat) ?? [:]
+            func file(_ change: WorkingChange, _ side: UncommittedSide, _ letter: String?) -> DiffFile {
+                let count = side == .staged ? stagedCounts[change.path] : side == .unstaged ? unstagedCounts[change.path] : nil
+                return DiffFile(path: change.path, oldPath: side == .staged ? change.oldPath : nil, status: letter ?? "M",
+                                uncommitted: side, added: count?.added, removed: count?.removed)
+            }
+            return workingTree.conflicted.map { file($0, .unstaged, "!") }
+                + workingTree.staged.map { file($0, .staged, $0.staged) }
+                + workingTree.unstaged.map { file($0, .unstaged, $0.unstaged) }
+                + workingTree.untracked.map { file($0, .untracked, "A") }
+        }
+        let renames = counts ? "-M" : "--no-renames"
+        let range = (target.base ?? firstParent).map { [$0, target.commit] } ?? ["--root", target.commit]
+        async let names = Git.run(["diff-tree", "-r", "-z", "--name-status", "--no-commit-id", renames] + range, in: directory)
+        async let numbers = counts ? Git.run(["diff-tree", "-r", "-z", "--numstat", "--no-commit-id", renames] + range, in: directory) : nil
+        let listed = CommitDetailsLoader.parseNameStatus(try await names, limit: 5_000).files
+        let lineCounts = try await numbers.map(parseNumstat) ?? [:]
+        return listed.map { file in
+            let count = lineCounts[file.path]
+            return DiffFile(path: file.path, oldPath: file.oldPath, status: file.status, uncommitted: nil,
+                            added: count?.added, removed: count?.removed)
+        }
+    }
+
+    /// `--numstat -z` output by path: lines added and removed (nil for binary files). A rename
+    /// writes an empty path, then the old and the new one.
+    static func parseNumstat(_ data: Data) -> [String: (added: Int?, removed: Int?)] {
+        let tokens = data.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
+        var counts: [String: (added: Int?, removed: Int?)] = [:]
+        var i = 0
+        while i < tokens.count {
+            let fields = tokens[i].split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+            i += 1
+            guard fields.count == 3 else { continue }
+            var path = String(fields[2])
+            if path.isEmpty {
+                guard i + 1 < tokens.count else { break }
+                path = tokens[i + 1]
+                i += 2
+            }
+            counts[path] = (Int(fields[0]), Int(fields[1]))
+        }
+        return counts
     }
 }

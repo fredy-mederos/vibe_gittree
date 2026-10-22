@@ -28,6 +28,8 @@ struct AboutSection: View {
             }
             HStack {
                 Link("Source on GitHub", destination: AppUpdater.repositoryURL)
+                Link("Report an Issue or Idea", destination: AppUpdater.issuesURL)
+                    .padding(.leading, 8)
                 Spacer()
                 Button("Copy Version Info") {
                     NSPasteboard.general.clearContents()

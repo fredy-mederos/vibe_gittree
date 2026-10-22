@@ -27,12 +27,18 @@ struct GraphTableView: NSViewRepresentable {
     // Passed explicitly so SwiftUI calls `updateNSView` when they change.
     let layoutVersion: Int
     let selectedCommit: Int32?
+    /// The row for uncommitted changes is selected.
+    let selectsWorkingTree: Bool
     let revealToken: Int
     let searchVersion: Int
     let showTags: Bool
     /// Pull requests or ticket statuses changed.
     let annotationVersion: Int
+    /// The working tree was looked at again (the uncommitted row's counts).
+    let workingTreeVersion: Int
     let onShowDetails: () -> Void
+    /// Opens a comparison window (two commits picked in the graph, say).
+    let onCompare: (CompareTarget) -> Void
 
     func makeCoordinator() -> GraphTableCoordinator {
         GraphTableCoordinator(graph: graph)
@@ -74,6 +80,7 @@ struct GraphTableView: NSViewRepresentable {
         tableView.menu = menu
         coordinator.tableView = tableView
         coordinator.onShowDetails = onShowDetails
+        coordinator.onCompare = onCompare
 
         let scrollView = NSScrollView()
         scrollView.documentView = tableView
@@ -99,14 +106,17 @@ struct GraphTableView: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.onShowDetails = onShowDetails
+        context.coordinator.onCompare = onCompare
         context.coordinator.update(
             graph: graph,
             layoutVersion: layoutVersion,
             selectedCommit: selectedCommit,
+            selectsWorkingTree: selectsWorkingTree,
             revealToken: revealToken,
             searchVersion: searchVersion,
             showTags: showTags,
-            annotationVersion: annotationVersion
+            annotationVersion: annotationVersion,
+            workingTreeVersion: workingTreeVersion
         )
     }
 
@@ -154,6 +164,7 @@ final class GraphNSTableView: NSTableView {
     private(set) var graph: GraphViewModel
     weak var tableView: NSTableView?
     var onShowDetails: () -> Void = {}
+    var onCompare: (CompareTarget) -> Void = { _ in }
 
     private var layout: GraphLayout?
     private var appliedLayoutVersion = -1
@@ -161,6 +172,7 @@ final class GraphNSTableView: NSTableView {
     private var appliedRevealToken = -1
     private var appliedShowTags = true
     private var appliedAnnotationVersion = -1
+    private var appliedWorkingTreeVersion = -1
     private var isApplyingSelection = false
     /// The Jira this repository's tickets live in, when it has one.
     private var jira: JiraConnection?
@@ -177,10 +189,26 @@ final class GraphNSTableView: NSTableView {
         self.graph = graph
     }
 
+    // MARK: Rows
+
+    /// Table rows above the history: one for uncommitted changes, when there are any.
+    private var leadingRows: Int { layout?.workingRow == nil ? 0 : 1 }
+
+    /// The layout row (commit) a table row shows; nil for the row of uncommitted changes.
+    private func layoutRow(_ row: Int) -> Int? {
+        guard let layout else { return nil }
+        let index = row - leadingRows
+        return index >= 0 && index < layout.rowCount ? index : nil
+    }
+
+    private func isWorkingRow(_ row: Int) -> Bool {
+        row >= 0 && row < leadingRows
+    }
+
     // MARK: Updates from SwiftUI
 
-    func update(graph newGraph: GraphViewModel, layoutVersion: Int, selectedCommit: Int32?, revealToken: Int,
-                searchVersion: Int, showTags: Bool, annotationVersion: Int) {
+    func update(graph newGraph: GraphViewModel, layoutVersion: Int, selectedCommit: Int32?, selectsWorkingTree: Bool, revealToken: Int,
+                searchVersion: Int, showTags: Bool, annotationVersion: Int, workingTreeVersion: Int) {
         guard let tableView else { return }
         let switchedRepository = newGraph !== graph
         graph = newGraph
@@ -197,6 +225,7 @@ final class GraphNSTableView: NSTableView {
             appliedSearchVersion = searchVersion
             appliedShowTags = showTags
             appliedAnnotationVersion = annotationVersion
+            appliedWorkingTreeVersion = workingTreeVersion
             tableView.reloadData()
             if let layout, switchedRepository || previousLayout == nil || previousLayout?.scope != layout.scope {
                 sizeGraphColumn(for: layout)
@@ -217,12 +246,24 @@ final class GraphNSTableView: NSTableView {
             // after statuses arrive they're fresh, so this asks for nothing.
             if annotationsChanged { scheduleTicketRequest() }
         }
+        if workingTreeVersion != appliedWorkingTreeVersion {
+            appliedWorkingTreeVersion = workingTreeVersion
+            if leadingRows > 0 {
+                tableView.reloadData(forRowIndexes: IndexSet(integer: 0), columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns))
+            }
+        }
 
-        applySelection(selectedCommit)
+        applySelection(selectedCommit, workingTree: selectsWorkingTree)
         if revealToken != appliedRevealToken {
             appliedRevealToken = revealToken
             // After this layout pass, so a freshly loaded table has its final size.
-            DispatchQueue.main.async { [weak self] in self?.reveal(selectedCommit) }
+            DispatchQueue.main.async { [weak self] in
+                if selectsWorkingTree {
+                    self?.tableView?.scrollRowToVisible(0)
+                } else {
+                    self?.reveal(selectedCommit)
+                }
+            }
         }
     }
 
@@ -286,10 +327,11 @@ final class GraphNSTableView: NSTableView {
         guard let tableView, let layout, let jira else { return }
         let visible = tableView.rows(in: tableView.visibleRect)
         guard visible.length > 0 else { return }
-        let end = min(layout.rowCount, visible.location + visible.length)
-        let rows = Array(visible.location..<end)
+        let start = max(0, visible.location - leadingRows)
+        let end = min(layout.rowCount, start + visible.length)
+        let rows = Array(start..<end)
             + Array(end..<min(layout.rowCount, end + visible.length))
-            + Array(max(0, visible.location - visible.length)..<visible.location).reversed()
+            + Array(max(0, start - visible.length)..<start).reversed()
         var keys: [String] = []
         var seen: Set<String> = []
         for row in rows {
@@ -316,15 +358,18 @@ final class GraphNSTableView: NSTableView {
         let range = rows.location..<(rows.location + rows.length)
         tableView.reloadData(forRowIndexes: IndexSet(integersIn: range), columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns))
         for row in range {
-            (tableView.rowView(atRow: row, makeIfNecessary: false) as? GraphRowView)?.isMatch = graph.matchSet.contains(Int32(row))
+            let isMatch = layoutRow(row).map { graph.matchSet.contains(Int32($0)) } ?? false
+            (tableView.rowView(atRow: row, makeIfNecessary: false) as? GraphRowView)?.isMatch = isMatch
         }
     }
 
-    private func applySelection(_ commit: Int32?) {
+    private func applySelection(_ commit: Int32?, workingTree: Bool) {
         guard let tableView, let layout else { return }
         var desired = -1
-        if let commit, Int(commit) < layout.rowOfCommit.count {
-            desired = Int(layout.rowOfCommit[Int(commit)])
+        if workingTree {
+            desired = leadingRows > 0 ? 0 : -1
+        } else if let commit, Int(commit) < layout.rowOfCommit.count, layout.rowOfCommit[Int(commit)] >= 0 {
+            desired = Int(layout.rowOfCommit[Int(commit)]) + leadingRows
         }
         guard desired != tableView.selectedRow else { return }
         isApplyingSelection = true
@@ -339,12 +384,12 @@ final class GraphNSTableView: NSTableView {
     /// Scrolls so the commit sits near the middle, unless it's already comfortably visible.
     private func reveal(_ commit: Int32?) {
         guard let tableView, let layout, let commit, Int(commit) < layout.rowOfCommit.count else { return }
-        let row = Int(layout.rowOfCommit[Int(commit)])
-        guard row >= 0 else { return }
+        guard layout.rowOfCommit[Int(commit)] >= 0 else { return }
+        let row = Int(layout.rowOfCommit[Int(commit)]) + leadingRows
         let visible = tableView.rows(in: tableView.visibleRect)
         if visible.length > 4, row > visible.location + 1, row < visible.location + visible.length - 2 { return }
         let half = max(1, visible.length / 2)
-        let target = row >= visible.location ? min(layout.rowCount - 1, row + half - 1) : max(0, row - half + 1)
+        let target = row >= visible.location ? min(layout.rowCount + leadingRows - 1, row + half - 1) : max(0, row - half + 1)
         tableView.scrollRowToVisible(target)
         tableView.scrollRowToVisible(row)
     }
@@ -358,26 +403,28 @@ final class GraphNSTableView: NSTableView {
         let visible = tableView.visibleRect
         guard visible.minY > 1 else { return nil }
         let row = tableView.row(at: NSPoint(x: 1, y: visible.minY + 1))
-        guard row >= 0, row < layout.rowCount else { return nil }
+        guard let index = layoutRow(row) else { return nil }
         let offset = visible.minY - tableView.rect(ofRow: row).minY
-        return (layout.graph.ids[Int(layout.rows[row])], offset)
+        return (layout.graph.ids[Int(layout.rows[index])], offset)
     }
 
     private func restoreScrollAnchor(_ anchor: (id: ObjectID, offset: CGFloat)) {
         guard let tableView, let layout, let commit = layout.graph.indexByID[anchor.id] else { return }
-        let row = Int(layout.rowOfCommit[Int(commit)])
-        guard row >= 0 else { return }
+        guard layout.rowOfCommit[Int(commit)] >= 0 else { return }
+        let row = Int(layout.rowOfCommit[Int(commit)]) + leadingRows
         tableView.scroll(NSPoint(x: 0, y: tableView.rect(ofRow: row).minY + anchor.offset))
     }
 
     // MARK: Data source and delegate
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        layout?.rowCount ?? 0
+        (layout?.rowCount ?? 0) + leadingRows
     }
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let layout, let tableColumn, row < layout.rowCount else { return nil }
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row tableRow: Int) -> NSView? {
+        guard let layout, let tableColumn else { return nil }
+        if isWorkingRow(tableRow) { return workingRowView(tableView, column: tableColumn.identifier, layout: layout) }
+        guard let row = layoutRow(tableRow) else { return nil }
         let commitGraph = layout.graph
         let commit = layout.rows[row]
         let index = Int(commit)
@@ -411,19 +458,19 @@ final class GraphNSTableView: NSTableView {
             return cell
 
         case ColumnID.author:
-            let cell = textCell(tableView, ColumnID.author, font: .systemFont(ofSize: NSFont.systemFontSize), color: .secondaryLabelColor)
+            let cell = textCell(tableView, ColumnID.author)
             let author = Int(commitGraph.authorOf[index])
             cell.textField?.stringValue = commitGraph.authors[author]
             cell.toolTip = "\(commitGraph.authors[author]) <\(commitGraph.authorEmails[author])>"
             return cell
 
         case ColumnID.date:
-            let cell = textCell(tableView, ColumnID.date, font: .monospacedDigitSystemFont(ofSize: 12, weight: .regular), color: .secondaryLabelColor)
+            let cell = textCell(tableView, ColumnID.date)
             cell.textField?.stringValue = Self.dateFormatter.string(from: commitGraph.date(of: commit))
             return cell
 
         case ColumnID.commit:
-            let cell = textCell(tableView, ColumnID.commit, font: .monospacedSystemFont(ofSize: 12, weight: .regular), color: .tertiaryLabelColor)
+            let cell = textCell(tableView, ColumnID.commit)
             cell.textField?.stringValue = commitGraph.ids[index].short
             return cell
 
@@ -432,9 +479,45 @@ final class GraphNSTableView: NSTableView {
         }
     }
 
-    private func textCell(_ tableView: NSTableView, _ identifier: NSUserInterfaceItemIdentifier, font: NSFont, color: NSColor) -> TextCellView {
-        tableView.makeView(withIdentifier: identifier, owner: nil) as? TextCellView
-            ?? TextCellView(identifier: identifier, font: font, color: color)
+    /// A reused cell of a text column, or a new one in that column's font and color (the row for
+    /// uncommitted changes uses them too, so cells made for it suit the commits they're reused for).
+    private func textCell(_ tableView: NSTableView, _ identifier: NSUserInterfaceItemIdentifier) -> TextCellView {
+        if let cell = tableView.makeView(withIdentifier: identifier, owner: nil) as? TextCellView { return cell }
+        switch identifier {
+        case ColumnID.date:
+            return TextCellView(identifier: identifier, font: .monospacedDigitSystemFont(ofSize: 12, weight: .regular), color: .secondaryLabelColor)
+        case ColumnID.commit:
+            return TextCellView(identifier: identifier, font: .monospacedSystemFont(ofSize: 12, weight: .regular), color: .tertiaryLabelColor)
+        default:
+            return TextCellView(identifier: identifier, font: .systemFont(ofSize: NSFont.systemFontSize), color: .secondaryLabelColor)
+        }
+    }
+
+    /// The row above the history: a dashed ring, "Uncommitted Changes" and what changed.
+    private func workingRowView(_ tableView: NSTableView, column: NSUserInterfaceItemIdentifier, layout: GraphLayout) -> NSView? {
+        switch column {
+        case ColumnID.graph:
+            let cell = tableView.makeView(withIdentifier: GraphCellView.identifier, owner: nil) as? GraphCellView ?? GraphCellView()
+            cell.configureWorkingRow(layout: layout)
+            return cell
+        case ColumnID.description:
+            let cell = tableView.makeView(withIdentifier: DescriptionCellView.identifier, owner: nil) as? DescriptionCellView
+                ?? DescriptionCellView()
+            cell.configureWorkingRow(summary: graph.model.workingTree?.summary ?? "")
+            return cell
+        case ColumnID.ticket:
+            let cell = tableView.makeView(withIdentifier: TicketStatusCellView.identifier, owner: nil) as? TicketStatusCellView
+                ?? TicketStatusCellView()
+            cell.configure(key: nil, issue: nil)
+            return cell
+        case ColumnID.author, ColumnID.date, ColumnID.commit:
+            let cell = textCell(tableView, column)
+            cell.textField?.stringValue = ""
+            cell.toolTip = nil
+            return cell
+        default:
+            return nil
+        }
     }
 
     /// Local branches first (merged with their remote counterpart when both point here), each
@@ -500,14 +583,18 @@ final class GraphNSTableView: NSTableView {
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let view = tableView.makeView(withIdentifier: GraphRowView.identifier, owner: nil) as? GraphRowView ?? GraphRowView()
         view.identifier = GraphRowView.identifier
-        view.isMatch = graph.matchSet.contains(Int32(row))
+        view.isMatch = layoutRow(row).map { graph.matchSet.contains(Int32($0)) } ?? false
         return view
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard !isApplyingSelection, let tableView, let layout else { return }
         let row = tableView.selectedRow
-        graph.userSelected(row >= 0 && row < layout.rowCount ? layout.rows[row] : nil)
+        if isWorkingRow(row) {
+            graph.userSelectedWorkingTree()
+        } else {
+            graph.userSelected(layoutRow(row).map { layout.rows[$0] })
+        }
     }
 
     @objc func doubleClicked(_ sender: Any?) {
@@ -520,8 +607,11 @@ final class GraphNSTableView: NSTableView {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         guard let tableView, let layout else { return }
-        let row = tableView.clickedRow
-        guard row >= 0, row < layout.rowCount else { return }
+        if isWorkingRow(tableView.clickedRow) {
+            addItem(to: menu, "Show Uncommitted Changes", #selector(showWorkingTree(_:)), nil)
+            return
+        }
+        guard let row = layoutRow(tableView.clickedRow) else { return }
         let commitGraph = layout.graph
         let commit = layout.rows[row]
         let id = commitGraph.ids[Int(commit)]
@@ -551,7 +641,37 @@ final class GraphNSTableView: NSTableView {
         }
 
         menu.addItem(.separator())
+        // Another commit selected, HEAD, or a branch to pick: compared in their own window.
+        let repositoryID = graph.model.id
+        if let selected = graph.selectedCommit, selected != commit, Int(selected) < commitGraph.count {
+            let title = "Compare with “\(commitGraph.ids[Int(selected)].short) \(Self.shortened(commitGraph.subjects[Int(selected)]))”"
+            addItem(to: menu, title, #selector(compare(_:)),
+                    CompareTarget(repositoryID: repositoryID, base: commitGraph.ids[Int(selected)].hex, head: id.hex))
+        }
+        let head = commitGraph.headCommit
+        if head >= 0, head != commit, head != graph.selectedCommit {
+            addItem(to: menu, "Compare with HEAD", #selector(compare(_:)),
+                    CompareTarget(repositoryID: repositoryID, base: commitGraph.ids[Int(head)].hex, head: id.hex))
+        }
+        addItem(to: menu, "Compare with…", #selector(compare(_:)), CompareTarget(repositoryID: repositoryID, head: id.hex))
+
+        menu.addItem(.separator())
         addItem(to: menu, "Show Details", #selector(showDetails(_:)), NSNumber(value: commit))
+    }
+
+    /// A subject short enough for a menu item.
+    private static func shortened(_ subject: String) -> String {
+        subject.count > 40 ? String(subject.prefix(39)) + "…" : subject
+    }
+
+    @objc private func compare(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? CompareTarget else { return }
+        onCompare(target)
+    }
+
+    @objc private func showWorkingTree(_ sender: NSMenuItem) {
+        graph.selectWorkingTree()
+        onShowDetails()
     }
 
     private func addItem(to menu: NSMenu, _ title: String, _ action: Selector, _ payload: Any?) {

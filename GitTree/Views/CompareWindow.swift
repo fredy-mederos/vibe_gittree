@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Two branches (or tags) side by side: where they diverged, and the commits, tickets, files and
-/// authors each has that the other doesn't.
+/// Two branches (or tags, or commits) side by side: where they diverged, and the commits, tickets,
+/// files and authors each has that the other doesn't.
 struct CompareWindow: View {
     @Binding var target: CompareTarget?
 
@@ -20,6 +20,14 @@ private enum CompareTab: String, CaseIterable, Identifiable {
     case commits = "Commits", tickets = "Tickets", files = "Files", authors = "Authors"
 
     var id: String { rawValue }
+
+    /// The tab a comparison opens on (`-GTCompareTab` picks another in test runs).
+    @MainActor static var initial: CompareTab {
+        #if DEBUG
+        if let name = DebugLaunch.compareTab, let tab = allCases.first(where: { $0.rawValue.lowercased() == name }) { return tab }
+        #endif
+        return .commits
+    }
 }
 
 private struct CompareView: View {
@@ -27,10 +35,10 @@ private struct CompareView: View {
     @Binding var target: CompareTarget
 
     @State private var comparison: BranchComparison?
-    /// Files changed on each side since they diverged, by the side's full ref name.
-    @State private var files: [String: (files: [ChangedFile], total: Int)] = [:]
+    /// Files changed on each side since they diverged, by the side's ref name or hash.
+    @State private var files: [String: [DiffFile]] = [:]
     @State private var filesProblem: String?
-    @State private var tab: CompareTab = .commits
+    @State private var tab = CompareTab.initial
 
     private struct TaskKey: Hashable {
         let base: String?
@@ -42,7 +50,7 @@ private struct CompareView: View {
         Group {
             if let graph = model.graph {
                 if let comparison, comparison.graph === graph,
-                   comparison.base.ref.fullName == target.base, comparison.head.ref.fullName == target.head {
+                   comparison.base.point.spec == target.base, comparison.head.point.spec == target.head {
                     content(comparison)
                 } else if target.base == nil || target.head == nil {
                     ContentUnavailableView("Pick Two Branches", systemImage: "arrow.left.arrow.right",
@@ -65,15 +73,17 @@ private struct CompareView: View {
     }
 
     private var title: String {
-        guard let graph = model.graph, let base = ref(target.base, in: graph), let head = ref(target.head, in: graph) else {
+        guard let graph = model.graph, let base = ComparePoint.resolve(target.base, in: graph),
+              let head = ComparePoint.resolve(target.head, in: graph) else {
             return "Compare Branches"
         }
         return "\(head.name) ↔ \(base.name)"
     }
 
-    private func ref(_ fullName: String?, in graph: CommitGraph) -> GitRef? {
-        guard let fullName else { return nil }
-        return graph.refs.first { $0.fullName == fullName }
+    /// Comparisons opened before in this repository, other than this one.
+    private var recentComparisons: [RecentComparison] {
+        (RepositoryLibrary.shared.repository(id: model.id)?.recentComparisons ?? [])
+            .filter { $0.base != target.base || $0.head != target.head }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -91,6 +101,22 @@ private struct CompareView: View {
             RefPickerButton(title: "Compare", selection: $target.head, graph: model.graph)
                 .help("The branch to compare")
         }
+        ToolbarItem {
+            Menu {
+                ForEach(recentComparisons, id: \.self) { recent in
+                    Button(recent.title) {
+                        target.base = recent.base
+                        target.head = recent.head
+                    }
+                }
+                if recentComparisons.isEmpty {
+                    Text("No Other Comparisons")
+                }
+            } label: {
+                Label("Recent Comparisons", systemImage: "clock.arrow.circlepath")
+            }
+            .help("Comparisons opened before in this repository")
+        }
     }
 
     // MARK: Comparing
@@ -98,15 +124,15 @@ private struct CompareView: View {
     private func compare() async {
         guard let graph = model.graph else { return }
         // Fill in what wasn't picked (or is gone); the task starts again with the new choice.
-        if ref(target.head, in: graph) == nil, let head = BranchComparison.defaultHead(in: graph, other: target.base) {
+        if ComparePoint.resolve(target.head, in: graph) == nil, let head = BranchComparison.defaultHead(in: graph, other: target.base) {
             target.head = head.fullName
             return
         }
-        if ref(target.base, in: graph) == nil, let base = BranchComparison.defaultBase(in: graph, other: target.head) {
+        if ComparePoint.resolve(target.base, in: graph) == nil, let base = BranchComparison.defaultBase(in: graph, other: target.head) {
             target.base = base.fullName
             return
         }
-        guard let base = ref(target.base, in: graph), let head = ref(target.head, in: graph) else { return }
+        guard let base = ComparePoint.resolve(target.base, in: graph), let head = ComparePoint.resolve(target.head, in: graph) else { return }
         let result = await Task.detached(priority: .userInitiated) {
             BranchComparison.compute(graph: graph, base: base, head: head)
         }.value
@@ -114,6 +140,7 @@ private struct CompareView: View {
         comparison = result
         files = [:]
         filesProblem = nil
+        RepositoryLibrary.shared.recordComparison(base: base.spec, head: head.spec, for: model.id)
         #if DEBUG
         DebugLaunch.describeComparison(result)
         #endif
@@ -130,12 +157,14 @@ private struct CompareView: View {
 
         guard let mergeBase = result.mergeBase else { return }
         let directory = model.repository.directory
-        let detectRenames = model.repository.kind == .local
+        // Line counts (and renames) only where the contents are here, not for partial clones.
+        let isLocal = model.repository.kind == .local
         for side in [result.base, result.head] where !side.commits.isEmpty {
+            let changes = DiffTarget(repositoryID: model.id, commit: graph.ids[Int(side.point.commit)].hex, path: "",
+                                     base: graph.ids[Int(mergeBase)].hex)
             do {
-                files[side.ref.fullName] = try await BranchDiffLoader.files(
-                    from: graph.ids[Int(mergeBase)], to: graph.ids[Int(side.ref.commit)], in: directory, detectRenames: detectRenames
-                )
+                files[side.point.spec] = try await DiffFileListLoader.files(for: changes, firstParent: nil, workingTree: nil,
+                                                                             in: directory, counts: isLocal)
             } catch {
                 guard !Task.isCancelled else { return }
                 filesProblem = error.localizedDescription
@@ -169,8 +198,9 @@ private struct CompareView: View {
     }
 
     private func column(_ side: BranchComparison.Side, other: BranchComparison.Side, comparison: BranchComparison) -> some View {
-        SideColumn(side: side, other: other, graph: comparison.graph, tab: tab, files: files[side.ref.fullName],
+        SideColumn(side: side, other: other, graph: comparison.graph, tab: tab, files: files[side.point.spec],
                    filesNote: comparison.mergeBase == nil ? "They share no history, so there's nothing to diff against." : filesProblem,
+                   mergeBase: comparison.mergeBase.map { comparison.graph.ids[Int($0)] },
                    jira: JiraStore.shared.connection(for: model.repository), repositoryID: model.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -201,8 +231,8 @@ private struct CompareView: View {
     }
 
     private func headline(base: BranchComparison.Side, head: BranchComparison.Side) -> String {
-        let headName = "“\(head.ref.name)”"
-        let baseName = "“\(base.ref.name)”"
+        let headName = "“\(head.point.name)”"
+        let baseName = "“\(base.point.name)”"
         switch (head.nonMergeCount, base.nonMergeCount) {
         case (0, 0): return "\(headName) and \(baseName) have the same commits."
         case (0, let behind): return "Everything on \(headName) is on \(baseName), which has \(counted(behind, "commit", "commits")) more."
@@ -225,10 +255,14 @@ private struct SideColumn: View {
     let other: BranchComparison.Side
     let graph: CommitGraph
     let tab: CompareTab
-    let files: (files: [ChangedFile], total: Int)?
+    let files: [DiffFile]?
     let filesNote: String?
+    /// Where the two sides diverged, which their files are compared with.
+    let mergeBase: ObjectID?
     let jira: JiraConnection?
     let repositoryID: UUID
+
+    @Environment(\.openWindow) private var openWindow
 
     /// Lists stop here; the header still counts everything.
     private static let rowLimit = 2_000
@@ -239,7 +273,8 @@ private struct SideColumn: View {
             Divider()
             if side.commits.isEmpty {
                 ContentUnavailableView("Nothing Else Here", systemImage: "checkmark.circle",
-                                       description: Text("Every commit on “\(side.ref.name)” is on “\(other.ref.name)” too."))
+                                       description: Text("Every commit on “\(side.point.name)” is on “\(other.point.name)” too."))
+                    .frame(maxHeight: .infinity)
             } else {
                 switch tab {
                 case .commits: commits
@@ -255,11 +290,11 @@ private struct SideColumn: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Label {
-                    Text(side.ref.name)
+                    Text(side.point.name)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } icon: {
-                    Image(systemName: side.ref.kind == .tag ? "tag" : (side.ref.kind == .remote ? "cloud" : "arrow.triangle.branch"))
+                    Image(systemName: side.point.systemImage)
                         .foregroundStyle(.secondary)
                 }
                 .font(.headline)
@@ -268,7 +303,7 @@ private struct SideColumn: View {
                     NotificationCenter.default.post(name: .gitTreeHighlightCommits, object: nil, userInfo: [
                         "repository": repositoryID,
                         "commits": side.commits.map { graph.ids[Int($0)].hex },
-                        "title": "Only on \(side.ref.name), not on \(other.ref.name)",
+                        "title": "Only on \(side.point.name), not on \(other.point.name)",
                     ])
                 }
                 .disabled(side.commits.isEmpty)
@@ -292,7 +327,7 @@ private struct SideColumn: View {
             let range = oldest.formatted(.dateTime.month(.abbreviated).day()) + " – " + newest.formatted(.dateTime.month(.abbreviated).day())
             parts.append(range)
         }
-        return "Not on \(other.ref.name): " + parts.joined(separator: " · ")
+        return "Not on \(other.point.name): " + parts.joined(separator: " · ")
     }
 
     // MARK: Tabs
@@ -342,7 +377,7 @@ private struct SideColumn: View {
                 Section {
                     ForEach(group.tickets) { ticket in
                         CompareTicketRow(ticket: ticket, issue: jira.flatMap { store.issue(ticket.key, connection: $0) },
-                                         alsoOn: otherKeys.contains(ticket.key) ? other.ref.name : nil, connection: jira)
+                                         alsoOn: otherKeys.contains(ticket.key) ? other.point.name : nil, connection: jira)
                     }
                 } header: {
                     if let epic = group.epic {
@@ -391,36 +426,37 @@ private struct SideColumn: View {
 
     @ViewBuilder private var changedFiles: some View {
         if let files {
+            let most = DiffFileRow.most(of: files)
             List {
-                ForEach(files.files) { file in
-                    HStack(spacing: 8) {
-                        Text(file.status)
-                            .font(.caption.monospaced().weight(.bold))
-                            .foregroundStyle(Self.color(file.status))
-                            .frame(width: 14)
-                        Text(file.path)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer(minLength: 0)
+                ForEach(files) { file in
+                    Button {
+                        openDiff(of: file, allFiles: false)
+                    } label: {
+                        DiffFileRow(file: file, most: most)
+                            .contentShape(Rectangle())
                     }
-                    .help(file.oldPath.map { "\($0) → \(file.path)" } ?? file.path)
+                    .buttonStyle(.plain)
                 }
-                if files.total > files.files.count {
-                    Text("\((files.total - files.files.count).formatted()) more not listed.")
-                        .foregroundStyle(.secondary)
-                }
-                if files.total == 0 {
+                if files.isEmpty {
                     Text("No files differ: the commits cancel out.")
                         .foregroundStyle(.secondary)
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                Text("\(counted(files.total, "file", "files")) changed on “\(side.ref.name)” since the branches diverged")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                HStack(spacing: 8) {
+                    Text("\(counted(files.count, "file", "files")) changed on “\(side.point.name)” since the branches diverged")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    if let first = files.first {
+                        Button("Show All Changes") { openDiff(of: first, allFiles: true) }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                            .help("Every change on this side since the branches diverged, one file after another")
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
             }
         } else if let filesNote {
             ContentUnavailableView("No File List", systemImage: "doc.questionmark", description: Text(filesNote))
@@ -454,13 +490,13 @@ private struct SideColumn: View {
         }
     }
 
-    private static func color(_ status: String) -> Color {
-        switch status {
-        case "A": .green
-        case "D": .red
-        case "R", "C": .blue
-        default: .orange
-        }
+    /// A file's changes on this side, from where the branches diverged to this side's tip, in the
+    /// diff window (listing the side's other files), or all of them one after another.
+    private func openDiff(of file: DiffFile, allFiles: Bool) {
+        guard let mergeBase else { return }
+        openWindow(id: "diff", value: DiffTarget(repositoryID: repositoryID, commit: graph.ids[Int(side.point.commit)].hex, path: file.path,
+                                                 base: mergeBase.hex, oldPath: file.oldPath, allFiles: allFiles ? true : nil,
+                                                 title: "\(side.point.name) since \(other.point.name)"))
     }
 }
 
@@ -515,7 +551,7 @@ private struct RefPickerButton: View {
             isPresented = true
         } label: {
             HStack(spacing: 4) {
-                Text(selection.map { GitRef.shortName(fullName: $0) } ?? title)
+                Text(selection.map(label) ?? title)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: 260)
@@ -525,30 +561,64 @@ private struct RefPickerButton: View {
         }
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             if let graph {
-                RefPickerList(graph: graph, selection: selection) { ref in
-                    selection = ref.fullName
+                RefPickerList(graph: graph, selection: selection) { spec in
+                    selection = spec
                     isPresented = false
                 }
                 .frame(width: 340, height: 440)
             }
         }
     }
+
+    /// A branch's or tag's name, or a commit's short hash and subject.
+    private func label(_ spec: String) -> String {
+        guard !spec.hasPrefix("refs/"), let graph, let commit = graph.index(matching: spec) else { return ComparePoint.shortName(spec) }
+        return "\(graph.ids[Int(commit)].short) \(graph.subjects[Int(commit)])"
+    }
 }
 
-/// Branches, remote branches and tags, newest first, narrowed by what's typed.
+/// Branches, remote branches and tags, newest first, narrowed by what's typed; a commit too, by
+/// its hash.
 private struct RefPickerList: View {
     let graph: CommitGraph
     let selection: String?
-    let pick: (GitRef) -> Void
+    /// Gets a full ref name, or a commit's hash.
+    let pick: (String) -> Void
 
     @State private var filter = ""
 
+    /// The commit whose hash is typed (at least four characters of it).
+    private var typedCommit: Int32? {
+        let text = filter.trimmingCharacters(in: .whitespaces)
+        return text.count >= 4 ? graph.index(matching: text) : nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Filter", text: $filter, prompt: Text("Branches and tags"))
+            TextField("Filter", text: $filter, prompt: Text("Branches, tags or a commit hash"))
                 .textFieldStyle(.roundedBorder)
                 .padding(10)
             List {
+                if let commit = typedCommit {
+                    Section("Commit") {
+                        Button {
+                            pick(graph.ids[Int(commit)].hex)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "smallcircle.filled.circle")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 16)
+                                Text(graph.ids[Int(commit)].short)
+                                    .monospaced()
+                                Text(graph.subjects[Int(commit)])
+                                    .lineLimit(1)
+                                Spacer(minLength: 6)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
                 section("Branches", kind: .local, limit: 500)
                 section("Remote Branches", kind: .remote, limit: 500)
                 section("Tags", kind: .tag, limit: 200)
@@ -567,7 +637,7 @@ private struct RefPickerList: View {
             Section(title) {
                 ForEach(Array(refs)) { ref in
                     Button {
-                        pick(ref)
+                        pick(ref.fullName)
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: ref.fullName == selection ? "checkmark" : (kind == .tag ? "tag" : (kind == .remote ? "cloud" : "arrow.triangle.branch")))

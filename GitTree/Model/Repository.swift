@@ -28,6 +28,12 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     var jiraProfileID: UUID?
     /// Ticket key prefixes to look for, like PROJ in PROJ-123. Nil or empty: detected from commit messages.
     var ticketPrefixes: [String]?
+    /// A regular expression for the names of this repository's fix versions (`Android`, say), for
+    /// projects whose tickets don't tell which fix versions are the repository's. Nil or empty:
+    /// the fix versions its tickets are in.
+    var fixVersionPattern: String?
+    /// Comparisons opened lately, newest first (Repository › Recent Comparisons).
+    var recentComparisons: [RecentComparison]?
 
     static let defaultReleaseTagPattern = #"^v?\d+(\.\d+)+$"#
 
@@ -63,6 +69,12 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
         guard let remote = remoteURL ?? originURL, let parts = HostingService.split(remote) else { return "Not hosted" }
         let owner = parts.path.split(separator: "/").dropLast().joined(separator: "/")
         return owner.isEmpty ? parts.host : "\(parts.host)/\(owner)"
+    }
+
+    /// The fix version pattern, when it's set and valid; case doesn't matter.
+    var fixVersionRegex: NSRegularExpression? {
+        guard let pattern = fixVersionPattern?.trimmingCharacters(in: .whitespaces), !pattern.isEmpty else { return nil }
+        return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }
 
     var effectiveReleaseTagPattern: String {

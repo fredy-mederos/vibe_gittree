@@ -8,6 +8,9 @@ enum AppSettings {
     /// The sidebar's Features section (commits grouped by term, with Apple's on-device model), off
     /// by default: the Epics and Releases sections group the same work by Jira.
     static let groupsFeaturesKey = "groupsFeatures"
+    /// Staging, committing and stashing (Settings › General), off by default: until it's turned on,
+    /// Vibe GitTree never changes a repository (fetching aside).
+    static let allowsChangesKey = "allowsRepositoryChanges"
     /// The details' (inspector's) width, kept for every window and repository.
     static let inspectorWidthKey = "inspectorWidth"
     /// The sidebar's starting width, which the details start with too.
@@ -21,6 +24,16 @@ enum AppSettings {
 
     static var fetchRemotesOnOpen: Bool {
         UserDefaults.standard.object(forKey: fetchOnOpenKey) as? Bool ?? true
+    }
+
+    /// Whether staging, committing and stashing are allowed, from where the windows read it (test
+    /// runs have preferences of their own).
+    @MainActor static var allowsChanges: Bool {
+        #if DEBUG
+        DebugLaunch.appStorage.bool(forKey: allowsChangesKey)
+        #else
+        UserDefaults.standard.bool(forKey: allowsChangesKey)
+        #endif
     }
 }
 

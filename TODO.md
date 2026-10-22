@@ -11,23 +11,19 @@ model, the Light/Dark/System appearance setting, syntax colors with a side-by-si
 diff window, Jira profiles per repository, highlighting a pull request's or a stack's commits in
 the graph, Jira epics in the sidebar (tickets grouped by epic, an epic's commits highlighted),
 unreleased fix versions in the sidebar (Releases, with their tickets), a pull request's timeline
-(opened, commits, reviews, merged), and the branch comparison overview (commits, tickets, files and
-authors on each side, and where the branches diverged).
+(opened, commits, reviews, merged), the branch comparison overview (commits, tickets, files and
+authors on each side, and where the branches diverged), a file's diff since the branches diverged
+and all of one side's changes in one window, comparing any two commits and recent comparisons per
+repository, recently released fix versions and a per-repository fix version pattern in Releases,
+and moving between a commit's files in the diff window (the biggest changes stand out).
+
+Not on the list, but shipped with those: uncommitted changes and stashes (a row above the history,
+Local Changes in the sidebar), staging, committing and stashing behind Settings › General › Allow
+commits and stashes, and Help › Report an Issue or Idea.
 
 Dropped: AI summaries and release notes. Apple's on-device model is only used to sort commits into
 features.
 
 ## Still open
 
-- **Branch comparison, in detail**: click a file in the Files tab to see its diff since the
-  branches diverged (the diff window compares a commit to its first parent today; it would take a
-  base commit too), and a combined diff of one side.
-- **Branch comparison, more ways in**: compare any two commits picked in the graph, and remember
-  recent comparisons per repository.
-- **Releases**: recently released fix versions too (what went out last week), and a per-repository
-  filter for projects whose fix versions don't follow their tickets closely enough for the "this
-  repository's tickets are in it" split.
-- **Diff window, move between a commit's files**: list the commit's other files in the diff window
-  (or step through them with next/previous) instead of closing it and opening the next file from
-  the inspector, and group or highlight the files with the most changes so reviewing a commit goes
-  faster.
+Nothing right now.

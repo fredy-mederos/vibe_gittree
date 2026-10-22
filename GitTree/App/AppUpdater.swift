@@ -12,6 +12,8 @@ final class AppUpdater {
     /// Vibe GitTree's repository: its source, and the releases it checks.
     static let repository = "fredy-mederos/vibe_gittree"
     static var repositoryURL: URL { URL(string: "https://github.com/\(repository)")! }
+    /// Where to report a problem or suggest an idea (Help › Report an Issue or Idea…).
+    static var issuesURL: URL { repositoryURL.appending(path: "issues") }
 
     /// The newest release GitHub named at the last check, kept between launches; nil when there's none yet.
     private(set) var latest: Release?

@@ -220,6 +220,24 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
         RepositoryModelStore.shared.existingModel(id: repository.id)?.update(repository: repository)
     }
 
+    /// Remembers a comparison for Repository › Recent Comparisons: newest first, ten at most.
+    func recordComparison(base: String, head: String, for id: UUID) {
+        guard var repository = repository(id: id) else { return }
+        let comparison = RecentComparison(base: base, head: head)
+        var recent = repository.recentComparisons ?? []
+        guard recent.first != comparison else { return }
+        recent.removeAll { $0 == comparison }
+        recent.insert(comparison, at: 0)
+        repository.recentComparisons = Array(recent.prefix(10))
+        update(repository)
+    }
+
+    func clearRecentComparisons(for id: UUID) {
+        guard var repository = repository(id: id) else { return }
+        repository.recentComparisons = nil
+        update(repository)
+    }
+
     func markFetched(_ id: UUID) {
         guard var repository = self.repository(id: id) else { return }
         repository.lastFetchedAt = Date()

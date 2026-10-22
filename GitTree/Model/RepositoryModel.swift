@@ -30,6 +30,20 @@ import Observation
     private(set) var timelineLoading: Int?
     private(set) var timelineProblems: [Int: String] = [:]
 
+    /// Uncommitted changes, for a repository with a working tree; nil before the first look and
+    /// for bare repositories (Vibe GitTree's clones among them).
+    private(set) var workingTree: WorkingTreeStatus?
+    /// Whether `allLayout` has the row for uncommitted changes; windows lay out their history again
+    /// when it flips.
+    private(set) var hasUncommittedChanges = false
+    /// Stashes, newest first.
+    private(set) var stashes: [StashEntry] = []
+    /// Increments every time the working tree is looked at, so diffs of uncommitted changes reload.
+    private(set) var workingTreeVersion = 0
+    /// A commit, stash or staging change under way ("Committing…"), and why the last one failed.
+    private(set) var changeInProgress: String?
+    private(set) var changeError: String?
+
     @ObservationIgnored private var timelineTask: Task<Void, Never>?
     @ObservationIgnored private var timelineFailedAt: [Int: Date] = [:]
     @ObservationIgnored private var ticketIndexCache: (graph: CommitGraph, index: TicketIndex)?
@@ -48,6 +62,29 @@ import Observation
     @ObservationIgnored private var didAutoFetch = false
     @ObservationIgnored private var didDetectHosting = false
 
+    /// This worktree's own git folder, where a merge or rebase leaves its marks.
+    @ObservationIgnored private var gitDirectory: URL?
+    /// Found out when `git status` fails: a bare repository has no working tree to look at.
+    @ObservationIgnored private var isBare = false
+    @ObservationIgnored private var workingTreeWatcher: WorkingTreeWatcher?
+    @ObservationIgnored private var ignoredPaths: IgnoredPaths?
+    @ObservationIgnored private var ignoredPathsAt = Date.distantPast
+    @ObservationIgnored private var statusTask: Task<Void, Never>?
+    @ObservationIgnored private var statusDebounce: Task<Void, Never>?
+    @ObservationIgnored private var statusPending = false
+    @ObservationIgnored private var lastStatusStart = Date.distantPast
+    /// Files changed while no window showed the repository; it looks again when one does.
+    @ObservationIgnored private var workingTreeIsStale = false
+    /// Diff windows of uncommitted changes open: while there are any, the working tree is looked
+    /// at even when no repository window shows the repository.
+    @ObservationIgnored private var workingTreeViewers = 0
+    /// Every look at the working tree is numbered, so an older answer can't replace a newer one.
+    @ObservationIgnored private var statusSequence = 0
+    @ObservationIgnored private var appliedStatusSequence = 0
+    @ObservationIgnored private var relayoutTask: Task<Void, Never>?
+    @ObservationIgnored private var stashTask: Task<Void, Never>?
+    @ObservationIgnored private var stashDetailsCache: [ObjectID: StashDetails] = [:]
+
     init(repository: Repository) {
         id = repository.id
         self.repository = repository
@@ -64,6 +101,9 @@ import Observation
     }
 
     var isBusy: Bool { status == .loading || isFetching }
+
+    /// Local repositories with a working tree (not bare ones, nor Vibe GitTree's clones).
+    var hasWorkingTree: Bool { repository.kind == .local && !isBare }
 
     func update(repository: Repository) {
         let prefixesChanged = repository.customTicketPrefixes != self.repository.customTicketPrefixes
@@ -86,14 +126,23 @@ import Observation
         if graph == nil { status = .loading }
         let directory = repository.directory
         let ticketPrefixes = repository.customTicketPrefixes
+        // The working tree is looked at along with the history, so the history is laid out once,
+        // with its row for uncommitted changes when there are any.
+        let looksAtWorkingTree = hasWorkingTree
+        let gitDirectory = gitDirectory
+        statusSequence += 1
+        let sequence = statusSequence
         loadTask = Task { [weak self] in
             do {
                 #if DEBUG
                 let started = ContinuousClock.now
                 #endif
+                async let loadedStatus = looksAtWorkingTree ? Self.loadWorkingTree(in: directory, gitDirectory: gitDirectory) : nil
                 let graph = try await GraphLoader.load(repositoryAt: directory, ticketPrefixes: ticketPrefixes)
+                let workingTree = await loadedStatus
+                let dirty = workingTree?.isClean == false
                 let layout = await Task.detached(priority: .userInitiated) {
-                    LaneLayoutEngine.layout(graph: graph, scope: .all)
+                    LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty)
                 }.value
                 #if DEBUG
                 NSLog("GitTree: loaded %d commits and %d refs in %@", graph.count, graph.refs.count,
@@ -102,7 +151,9 @@ import Observation
                 guard !Task.isCancelled, let self else { return }
                 self.graph = graph
                 self.allLayout = layout
+                self.hasUncommittedChanges = dirty
                 self.status = .loaded
+                if looksAtWorkingTree { self.apply(workingTree, sequence: sequence, directory: directory) }
                 self.generation += 1
                 self.didLoad()
             } catch {
@@ -262,6 +313,7 @@ import Observation
 
     private func didLoad() {
         if repository.kind == .local && watcher == nil { startWatching() }
+        refreshStashes()
         if hosting == nil && !didDetectHosting {
             didDetectHosting = true
             Task { await detectHosting() }
@@ -279,10 +331,27 @@ import Observation
         let directory = repository.directory
         Task { [weak self] in
             guard let raw = try? await Git.string(["rev-parse", "--git-common-dir"], in: directory), let self else { return }
-            let gitDirectory = raw.hasPrefix("/") ? URL(fileURLWithPath: raw) : directory.appendingPathComponent(raw)
-            self.watcher = GitDirectoryWatcher(directory: gitDirectory.standardizedFileURL) { [weak self] in
-                MainActor.assumeIsolated { self?.scheduleReloadFromDisk() }
+            let commonDirectory = raw.hasPrefix("/") ? URL(fileURLWithPath: raw) : directory.appendingPathComponent(raw)
+            self.watcher = GitDirectoryWatcher(directory: commonDirectory.standardizedFileURL) { [weak self] change in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    // A reload looks at the working tree and the stashes too.
+                    if change.contains(.refs) {
+                        self.scheduleReloadFromDisk()
+                        return
+                    }
+                    if change.contains(.index) { self.scheduleWorkingTreeRefresh() }
+                    if change.contains(.stash) { self.refreshStashes() }
+                }
             }
+            guard self.hasWorkingTree else { return }
+            let gitDirectory = await WorkingTreeLoader.gitDirectory(of: directory)
+            self.gitDirectory = gitDirectory
+            self.workingTreeWatcher = WorkingTreeWatcher(directory: directory) { [weak self] paths, everything in
+                MainActor.assumeIsolated { self?.workingTreeFilesChanged(paths, everything: everything) }
+            }
+            // The first look didn't know where to find a merge or rebase under way.
+            if gitDirectory != nil { self.refreshWorkingTree() }
         }
     }
 
@@ -294,6 +363,252 @@ import Observation
             guard !Task.isCancelled else { return }
             self?.reload()
         }
+    }
+
+    // MARK: Working tree
+
+    /// The working tree's status, or nil when git couldn't tell (then a bare repository is noted).
+    private static func loadWorkingTree(in directory: URL, gitDirectory: URL?) async -> WorkingTreeStatus? {
+        try? await WorkingTreeLoader.status(in: directory, gitDirectory: gitDirectory)
+    }
+
+    /// Files in the working tree changed: unless they're all in places git ignores (a build
+    /// folder, say), the status is looked at again shortly.
+    private func workingTreeFilesChanged(_ paths: [String], everything: Bool) {
+        if paths.contains(where: { $0 == ".gitignore" || $0.hasSuffix("/.gitignore") }) { ignoredPaths = nil }
+        if !everything, let ignoredPaths, !paths.isEmpty, paths.allSatisfy({ !$0.isEmpty && ignoredPaths.contains($0) }) { return }
+        scheduleWorkingTreeRefresh(fromFileEvents: true)
+    }
+
+    /// Looks at the working tree again after a short pause, at most about once a second, and
+    /// only for a repository a window shows (the others look when they're shown again).
+    func scheduleWorkingTreeRefresh(fromFileEvents: Bool = false) {
+        guard hasWorkingTree, graph != nil else { return }
+        guard WindowState.isShowing(id) || workingTreeViewers > 0 else {
+            workingTreeIsStale = true
+            return
+        }
+        statusDebounce?.cancel()
+        let wait = max(0.25, 1 - Date().timeIntervalSince(lastStatusStart))
+        statusDebounce = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            self?.refreshWorkingTree(fromFileEvents: fromFileEvents)
+        }
+    }
+
+    /// Shown again after files changed out of sight: look at them now.
+    func refreshWorkingTreeIfStale() {
+        guard workingTreeIsStale else { return }
+        refreshWorkingTree()
+    }
+
+    /// A diff window of uncommitted changes opened (restored at launch, say): the repository is
+    /// read if it wasn't, and its working tree followed until `endWatchingWorkingTree()`.
+    func beginWatchingWorkingTree() {
+        workingTreeViewers += 1
+        if graph == nil {
+            loadIfNeeded()
+        } else {
+            refreshWorkingTreeIfStale()
+        }
+    }
+
+    func endWatchingWorkingTree() {
+        workingTreeViewers = max(0, workingTreeViewers - 1)
+    }
+
+    /// Asks git for the working tree's status, one look at a time; a change during a look brings
+    /// another right after.
+    func refreshWorkingTree(fromFileEvents: Bool = false) {
+        guard hasWorkingTree else { return }
+        guard statusTask == nil else {
+            statusPending = true
+            return
+        }
+        workingTreeIsStale = false
+        lastStatusStart = Date()
+        statusSequence += 1
+        let sequence = statusSequence
+        let directory = repository.directory
+        let gitDirectory = gitDirectory
+        let before = workingTree
+        let needsIgnoredPaths = ignoredPaths == nil
+        statusTask = Task { [weak self] in
+            let status = await Self.loadWorkingTree(in: directory, gitDirectory: gitDirectory)
+            let ignored = needsIgnoredPaths ? await WorkingTreeLoader.ignoredPaths(in: directory) : nil
+            guard let self else { return }
+            self.statusTask = nil
+            if let ignored {
+                self.ignoredPaths = ignored
+                self.ignoredPathsAt = Date()
+            }
+            self.apply(status, sequence: sequence, directory: directory)
+            // Files changed but git sees nothing new: likely a folder it ignores that didn't exist
+            // when it was last asked about them (a first build). Ask again, at most every half minute.
+            if fromFileEvents, status != nil, status == before, Date().timeIntervalSince(self.ignoredPathsAt) > 30 {
+                self.ignoredPaths = nil
+            }
+            if self.statusPending {
+                self.statusPending = false
+                self.scheduleWorkingTreeRefresh()
+            }
+        }
+    }
+
+    /// Takes a look's answer unless a newer one came first, and lays the history out again when
+    /// the row for uncommitted changes comes or goes.
+    private func apply(_ status: WorkingTreeStatus?, sequence: Int, directory: URL) {
+        if sequence > appliedStatusSequence {
+            appliedStatusSequence = sequence
+            if let status {
+                if status != workingTree { workingTree = status }
+                workingTreeVersion += 1
+            } else {
+                // No answer: a bare repository has no working tree; anything else keeps the last answer.
+                Task { [weak self] in
+                    let inside = try? await Git.string(["rev-parse", "--is-inside-work-tree"], in: directory)
+                    guard let self, inside != "true" else { return }
+                    self.isBare = true
+                    self.workingTree = nil
+                    self.workingTreeWatcher = nil
+                    self.layOutUncommittedRow()
+                }
+            }
+        }
+        // A newer answer may have come during a reload, which laid the history out for an older one.
+        layOutUncommittedRow()
+    }
+
+    /// Gives `allLayout` the row for uncommitted changes, or takes it away, to match the working tree.
+    private func layOutUncommittedRow() {
+        let dirty = workingTree?.isClean == false
+        guard dirty != hasUncommittedChanges else {
+            // A layout for the other answer may still be on its way.
+            relayoutTask?.cancel()
+            relayoutTask = nil
+            return
+        }
+        guard let graph else {
+            hasUncommittedChanges = dirty
+            return
+        }
+        relayoutTask?.cancel()
+        relayoutTask = Task { [weak self] in
+            let layout = await Task.detached(priority: .userInitiated) {
+                LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty)
+            }.value
+            guard !Task.isCancelled, let self, self.graph === graph else { return }
+            self.allLayout = layout
+            self.hasUncommittedChanges = dirty
+        }
+    }
+
+    func refreshStashes() {
+        guard hasWorkingTree else { return }
+        stashTask?.cancel()
+        let directory = repository.directory
+        stashTask = Task { [weak self] in
+            let list = await StashLoader.list(in: directory)
+            guard !Task.isCancelled, let self else { return }
+            if list != self.stashes { self.stashes = list }
+        }
+    }
+
+    func stashDetails(_ stash: StashEntry) async -> StashDetails? {
+        if let cached = stashDetailsCache[stash.id] { return cached }
+        guard let details = try? await StashLoader.details(of: stash, in: repository.directory) else { return nil }
+        stashDetailsCache[stash.id] = details
+        return details
+    }
+
+    // MARK: Changing the repository
+
+    /// Whether this repository can be changed from Vibe GitTree: it has a working tree and
+    /// Settings › General › Allow commits and stashes is on.
+    var allowsChanges: Bool { hasWorkingTree && AppSettings.allowsChanges }
+
+    /// Runs a change the user clicked for, one at a time, then looks at the working tree and the
+    /// stashes again (the history reloads by itself when refs move). Returns whether it worked.
+    @discardableResult
+    private func perform(_ title: String, _ action: @escaping @Sendable (URL) async throws -> Void) async -> Bool {
+        guard allowsChanges, changeInProgress == nil else { return false }
+        changeInProgress = title
+        changeError = nil
+        let directory = repository.directory
+        do {
+            try await action(directory)
+        } catch {
+            changeError = error.localizedDescription
+        }
+        changeInProgress = nil
+        refreshWorkingTree()
+        refreshStashes()
+        return changeError == nil
+    }
+
+    /// The paths a change touches: a staged rename's old path too, so unstaging it puts the old file back.
+    private static func paths(of changes: [WorkingChange]) -> [String] {
+        var paths: [String] = []
+        for change in changes {
+            paths.append(change.path)
+            if let oldPath = change.oldPath { paths.append(oldPath) }
+        }
+        return paths
+    }
+
+    func stage(_ changes: [WorkingChange]) async {
+        let paths = Self.paths(of: changes)
+        guard !paths.isEmpty else { return }
+        await perform("Staging…") { try await WorkingTreeActions.stage(paths, in: $0) }
+    }
+
+    func unstage(_ changes: [WorkingChange]) async {
+        let paths = Self.paths(of: changes)
+        guard !paths.isEmpty else { return }
+        await perform("Unstaging…") { try await WorkingTreeActions.unstage(paths, in: $0) }
+    }
+
+    func stageAll() async {
+        await perform("Staging…") { try await WorkingTreeActions.stageAll(in: $0) }
+    }
+
+    func unstageAll() async {
+        await perform("Unstaging…") { try await WorkingTreeActions.unstageAll(in: $0) }
+    }
+
+    /// Commits what's staged; the history shows the new commit right away.
+    func commit(message: String) async -> Bool {
+        let committed = await perform("Committing…") { try await WorkingTreeActions.commit(message: message, in: $0) }
+        if committed { reload() }
+        return committed
+    }
+
+    /// Stashes these files' changes (every file's when nil), new files included.
+    func stash(_ changes: [WorkingChange]?, message: String) async -> Bool {
+        let paths = changes.map(Self.paths(of:))
+        // No files would mean every file to `git stash push`.
+        if paths?.isEmpty == true { return false }
+        return await perform("Stashing…") { try await WorkingTreeActions.stash(paths, message: message, in: $0) }
+    }
+
+    func applyStash(_ stash: StashEntry) async -> Bool {
+        let id = stash.id
+        return await perform("Applying \(stash.name)…") { try await WorkingTreeActions.apply(id, in: $0) }
+    }
+
+    func popStash(_ stash: StashEntry) async -> Bool {
+        let id = stash.id
+        return await perform("Popping \(stash.name)…") { try await WorkingTreeActions.pop(id, in: $0) }
+    }
+
+    func dropStash(_ stash: StashEntry) async -> Bool {
+        let id = stash.id
+        return await perform("Dropping \(stash.name)…") { try await WorkingTreeActions.drop(id, in: $0) }
+    }
+
+    func dismissChangeError() {
+        changeError = nil
     }
 
     private func detectHosting() async {

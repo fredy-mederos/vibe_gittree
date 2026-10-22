@@ -101,7 +101,7 @@ struct CloneSheet: View {
     }
 }
 
-/// Per-repository settings: name, issue links and the release tag pattern.
+/// Per-repository settings: name, Jira and issue links, its fix versions and the release tag pattern.
 struct RepositorySettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var repository: Repository
@@ -138,6 +138,11 @@ struct RepositorySettingsSheet: View {
         }
     }
 
+    private var fixVersionError: String? {
+        guard let pattern = repository.fixVersionPattern?.trimmingCharacters(in: .whitespaces), !pattern.isEmpty else { return nil }
+        return repository.fixVersionRegex == nil ? "This isn't a valid regular expression." : nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Form {
@@ -171,6 +176,16 @@ struct RepositorySettingsSheet: View {
                     Text("Ticket keys like ABC-123 in commit messages show their status from this Jira (profiles are in Settings › Jira). Ticket keys limits them to these projects, separated by commas; leave it empty to detect them. Issue link opens tickets somewhere else, with {key} for the key.")
                 }
                 Section {
+                    TextField("Fix versions", text: optional(\.fixVersionPattern), prompt: Text("The ones its tickets are in"))
+                        .monospaced()
+                } footer: {
+                    if let fixVersionError {
+                        Text(fixVersionError).foregroundStyle(.red)
+                    } else {
+                        Text("A regular expression for this repository's fix versions in Releases, like Android or ^iOS, when its Jira project's tickets don't tell (a project shared by several apps, say). Leave it empty for the fix versions its tickets are in.")
+                    }
+                }
+                Section {
                     TextField("Release tags", text: optional(\.releaseTagPattern),
                               prompt: Text(Repository.defaultReleaseTagPattern))
                         .monospaced()
@@ -198,6 +213,7 @@ struct RepositorySettingsSheet: View {
                     latest.name = repository.name.trimmingCharacters(in: .whitespaces)
                     latest.issueURLTemplate = repository.issueURLTemplate
                     latest.releaseTagPattern = repository.releaseTagPattern
+                    latest.fixVersionPattern = repository.fixVersionPattern
                     if repository.jiraProfileID != initialJiraProfileID { latest.jiraProfileID = repository.jiraProfileID }
                     let prefixes = ticketPrefixes.split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init)
                     latest.ticketPrefixes = prefixes.isEmpty ? nil : prefixes
@@ -205,11 +221,11 @@ struct RepositorySettingsSheet: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(repository.name.trimmingCharacters(in: .whitespaces).isEmpty || patternError != nil)
+                .disabled(repository.name.trimmingCharacters(in: .whitespaces).isEmpty || patternError != nil || fixVersionError != nil)
             }
             .padding([.horizontal, .bottom], 20)
         }
-        .frame(width: 560, height: 560)
+        .frame(width: 560, height: 640)
     }
 
     private func optional(_ keyPath: WritableKeyPath<Repository, String?>) -> Binding<String> {
@@ -278,6 +294,7 @@ private struct GeneralSettingsView: View {
     @AppStorage(AppSettings.gitPathKey) private var gitPath = ""
     @AppStorage(AppSettings.fetchOnOpenKey) private var fetchOnOpen = true
     @AppStorage(AppSettings.groupsFeaturesKey) private var groupsFeatures = false
+    @AppStorage(AppSettings.allowsChangesKey) private var allowsChanges = false
     @State private var version = ""
 
     var body: some View {
@@ -295,6 +312,11 @@ private struct GeneralSettingsView: View {
                 Toggle("Group recent commits into features", isOn: $groupsFeatures)
             } footer: {
                 Text("A Features section in the sidebar sorts recent commits by the terms in their messages, with Apple's on-device model for the rest. Epics and Releases group the same work by Jira.")
+            }
+            Section {
+                Toggle("Allow commits and stashes", isOn: $allowsChanges)
+            } footer: {
+                Text("Uncommitted Changes gets checkboxes to stage files, and a box to commit or stash them; stashes can be applied, popped or dropped. Off, Vibe GitTree never changes a repository (fetching aside).")
             }
             Section("Git") {
                 TextField("Git executable", text: $gitPath, prompt: Text(Git.detectedExecutable.path))

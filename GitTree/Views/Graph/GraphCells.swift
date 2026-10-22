@@ -55,6 +55,8 @@ final class GraphCellView: NSTableCellView {
     private var row = 0
     private var isHead = false
     private var isMerge = false
+    /// The row above the history for uncommitted changes.
+    private var isWorkingRow = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -87,11 +89,27 @@ final class GraphCellView: NSTableCellView {
         self.row = row
         self.isHead = isHead
         self.isMerge = isMerge
+        isWorkingRow = false
+        needsDisplay = true
+    }
+
+    /// The row for uncommitted changes: a dashed ring, and a dashed line down toward HEAD.
+    func configureWorkingRow(layout: GraphLayout) {
+        self.layout = layout
+        row = 0
+        isHead = false
+        isMerge = false
+        isWorkingRow = true
         needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let layout, row < layout.rowCount, let context = NSGraphicsContext.current?.cgContext else { return }
+        guard let layout, let context = NSGraphicsContext.current?.cgContext else { return }
+        if isWorkingRow {
+            if let workingRow = layout.workingRow { drawWorkingRow(workingRow, in: context) }
+            return
+        }
+        guard row < layout.rowCount else { return }
         let height = bounds.height
         let middle = height / 2
         context.clip(to: bounds)
@@ -101,7 +119,7 @@ final class GraphCellView: NSTableCellView {
         for segment in layout.segments(inRow: row) {
             let a = GraphMetrics.x(forLane: Int(segment.from))
             let b = GraphMetrics.x(forLane: Int(segment.to))
-            context.setStrokeColor(LanePalette.color(segment.color).cgColor)
+            setStroke(for: segment, in: context)
             context.beginPath()
             switch segment.kind {
             case .through:
@@ -124,6 +142,7 @@ final class GraphCellView: NSTableCellView {
             }
             context.strokePath()
         }
+        context.setLineDash(phase: 0, lengths: [])
 
         let center = CGPoint(x: GraphMetrics.x(forLane: Int(layout.column[row])), y: middle)
         let laneColor = LanePalette.color(layout.color[row]).cgColor
@@ -156,6 +175,40 @@ final class GraphCellView: NSTableCellView {
             context.strokeEllipse(in: circle(isHead ? 6.8 : GraphMetrics.dotRadius + 1.2))
         }
     }
+
+    /// Lane colors solid; the line from uncommitted changes dashed, in a quiet gray. The dashes
+    /// repeat every 6 points, so they run on from one row (24 points) to the next.
+    private func setStroke(for segment: LaneSegment, in context: CGContext) {
+        if segment.color == LaneSegment.uncommittedColor {
+            context.setStrokeColor(NSColor.secondaryLabelColor.cgColor)
+            context.setLineDash(phase: 0, lengths: [3, 3])
+            context.setLineCap(.butt)
+        } else {
+            context.setStrokeColor(LanePalette.color(segment.color).cgColor)
+            context.setLineDash(phase: 0, lengths: [])
+            context.setLineCap(.round)
+        }
+    }
+
+    private func drawWorkingRow(_ workingRow: WorkingRow, in context: CGContext) {
+        let middle = bounds.height / 2
+        let x = GraphMetrics.x(forLane: Int(workingRow.column))
+        let radius: CGFloat = 4.6
+        context.clip(to: bounds)
+        context.setLineWidth(GraphMetrics.lineWidth)
+        for segment in workingRow.segments {
+            setStroke(for: segment, in: context)
+            context.beginPath()
+            context.move(to: CGPoint(x: x, y: middle + radius + 1))
+            context.addLine(to: CGPoint(x: x, y: bounds.height))
+            context.strokePath()
+        }
+        let emphasized = backgroundStyle == .emphasized
+        context.setStrokeColor((emphasized ? NSColor.white : NSColor.secondaryLabelColor).cgColor)
+        context.setLineDash(phase: 0, lengths: [2.4, 1.6])
+        context.setLineWidth(1.6)
+        context.strokeEllipse(in: CGRect(x: x - radius, y: middle - radius, width: radius * 2, height: radius * 2))
+    }
 }
 
 /// Branch and tag labels followed by the commit subject, drawn in one pass.
@@ -183,8 +236,11 @@ final class DescriptionCellView: NSTableCellView {
     private var isMerge = false
     private var ticketRegex: NSRegularExpression?
     private var highlight: String?
+    /// For the row of uncommitted changes: what changed, after its title.
+    private var detail: String?
 
     private static let subjectFont = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    private static let workingFont = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
     private static let ticketFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .medium)
     private static let badgeFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
     private static let badgePrefixFont = NSFont.systemFont(ofSize: 11, weight: .regular)
@@ -232,9 +288,23 @@ final class DescriptionCellView: NSTableCellView {
         self.isMerge = isMerge
         self.ticketRegex = ticketRegex
         self.highlight = highlight
+        detail = nil
         let labels = badges.map { $0.prefix + $0.text }
         setAccessibilityLabel((labels + [subject]).joined(separator: ", "))
         toolTip = labels.isEmpty ? nil : labels.joined(separator: "  ·  ")
+        needsDisplay = true
+    }
+
+    /// The row above the history: "Uncommitted Changes", then what changed ("2 staged · 3 changed").
+    func configureWorkingRow(summary: String) {
+        badges = []
+        subject = "Uncommitted Changes"
+        isMerge = false
+        ticketRegex = nil
+        highlight = nil
+        detail = summary
+        setAccessibilityLabel("Uncommitted changes: \(summary)")
+        toolTip = nil
         needsDisplay = true
     }
 
@@ -257,8 +327,14 @@ final class DescriptionCellView: NSTableCellView {
     private func attributedSubject(emphasized: Bool) -> NSAttributedString {
         let base: NSColor = emphasized ? .alternateSelectedControlTextColor : (isMerge ? .secondaryLabelColor : .labelColor)
         let text = NSMutableAttributedString(string: subject, attributes: [
-            .font: Self.subjectFont, .foregroundColor: base, .paragraphStyle: Self.tailTruncating,
+            .font: detail == nil ? Self.subjectFont : Self.workingFont, .foregroundColor: base, .paragraphStyle: Self.tailTruncating,
         ])
+        if let detail, !detail.isEmpty {
+            text.append(NSAttributedString(string: "   " + detail, attributes: [
+                .font: Self.subjectFont, .paragraphStyle: Self.tailTruncating,
+                .foregroundColor: emphasized ? NSColor.alternateSelectedControlTextColor.withAlphaComponent(0.8) : NSColor.secondaryLabelColor,
+            ]))
+        }
         let full = NSRange(location: 0, length: (subject as NSString).length)
         if let ticketRegex {
             for match in ticketRegex.matches(in: subject, range: full) {

@@ -6,16 +6,18 @@
 
 # Vibe GitTree
 
-**Vibe GitTree** is a fast, read-only explorer for git history: a native macOS app (SwiftUI + AppKit) for
-browsing any number of repositories, local or remote.
+**Vibe GitTree** is a fast explorer for git history: a native macOS app (SwiftUI + AppKit) for
+browsing any number of repositories, local or remote. It only reads them, unless you allow it to
+stage, commit and stash.
 
 <p align="center">
   <img src="screenshots/gittree.png" alt="Vibe GitTree showing a repository's branches, merges and tags, with a commit's details on the right" width="900" />
 </p>
 
 Ideas queued for later are in [TODO.md](TODO.md). It's a personal project under the
-[MIT license](LICENSE): clone it and fork it freely, and open an issue for bugs or ideas; pull
-requests aren't accepted (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+[MIT license](LICENSE): clone it and fork it freely, and [open an issue](https://github.com/fredy-mederos/vibe_gittree/issues)
+for bugs or ideas (Help › Report an Issue or Idea…); pull requests aren't accepted (see
+[CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Vibe GitTree for macOS
 
@@ -72,7 +74,8 @@ permission to access that folder.
   ringed. Narrow it to local branches (⌘2), the current branch (⌘3) or a single branch (right-click
   › Show Only).
 - **Live updates**: local repositories reload by themselves when you commit, check out or fetch in
-  the terminal, keeping your scroll position and selection.
+  the terminal, keeping your scroll position and selection, and their uncommitted changes follow
+  your edits as you save (changes in folders git ignores, like build output, don't count).
 - **Search** (⌘F) across subjects, authors, hashes and branch names; Return or ⌘G for the next match,
   ⇧⌘G for the previous one.
 - **Commit details** (the inspector on the right): full message, author and committer, links to the
@@ -85,7 +88,28 @@ permission to access that folder.
 - **Changes**: click a file in the inspector to open its diff in its own window, with syntax colors
   (Swift, Kotlin, Java, JavaScript/TypeScript, Python, Go, Rust, C/Objective-C, Ruby, shell, JSON,
   YAML, XML/HTML, Markdown and more), a Side by Side toggle that puts the old and new file next to
-  each other, a Whole File toggle, a link to the file on GitHub, and Copy Link.
+  each other, a Whole File toggle, a link to the file on GitHub, and Copy Link. The window lists the
+  commit's other files on the side, each with the lines it added and removed and a bar as long as
+  its changes, so the biggest stand out (or come first, with Most Changes First); click one, or step
+  through them with Previous and Next File (⌥⌘↑, ⌥⌘↓). All Files shows every file's changes one
+  after another, each under its name; the magnifier by Changed Files opens a commit that way. A
+  comparison's files, a stash's and the uncommitted ones open in the same window, which works the
+  same way for all of them.
+- **Uncommitted changes**: a row above the history, a dashed ring with a dashed line down to the
+  checked-out commit, says what changed (2 staged · 3 changed · 1 new); Local Changes in the sidebar
+  has it too. Select it to list the files in the details: Conflicts, Staged, Not Staged and New
+  Files, each opening its diff (what's staged, what isn't yet, or the whole new file), which follows
+  your edits, and the magnifier opens all of them one after another; the branch says how far it is
+  from its upstream, and a merge or rebase under way is pointed out.
+- **Stashes**, under Local Changes in the sidebar, newest first: select one for its message, its
+  branch, the commit it was made on and the files it changed (new files too), each opening its
+  diff, or all of them one after another.
+- **Commits and stashes** (Settings › General › Allow commits and stashes, off until you turn it
+  on): in the uncommitted changes, checkboxes stage and unstage files, a summary and description
+  commit what's staged (⌘Return), and Stash… puts every change aside, or only the staged files'
+  (new files too), with an optional message. A stash can be applied, popped or dropped (after you
+  confirm). Repository hooks run as they would in Terminal; when git refuses (a conflict, nothing
+  staged), its reason shows under the buttons.
 - **Pull requests** (GitHub, through the `gh` command): an open pull request's number next to its
   branch in the graph and sidebar, with its checks (✓ passed, ✗ failed, clock running). Stacked pull
   requests (based on another open PR's branch) show their position, like `#8161 · 5/5`. The sidebar
@@ -129,6 +153,10 @@ permission to access that folder.
   a bar of how many of their tickets are done, in progress or to do (with a Definition of Done,
   counted from the tickets themselves). Versions this repository's
   tickets are in come first; the others (another platform's, say) are under Other Fix Versions.
+  When a shared project's tickets don't say which versions are the repository's, Repository
+  Settings › Fix versions (a regular expression like `Android`) picks them by name instead.
+  Recently Released lists the repository's fix versions released in the last 30 days: what went
+  out last week.
   Select one to highlight the commits of its tickets and their sub-tasks; it opens to list its
   tickets with their status and commits here, dimming those no commit mentions. After changing
   tickets or releases in Jira, the ↻ button in the section's header asks Jira again for the fix
@@ -143,7 +171,13 @@ permission to access that folder.
   each has that the other doesn't and where they diverged, then lists, for each side, its commits,
   its tickets (under their epics, with their status, marked when the other side has commits for
   them too), the files changed since the branches diverged, and its authors. Click a commit to
-  select it in the graph; Highlight in Graph tints one side's commits there.
+  select it in the graph; Highlight in Graph tints one side's commits there. The Files tab lists
+  files as the diff window does, with their added and removed lines; click one for its changes
+  since the branches diverged, in the diff window listing the side's other files, or Show All
+  Changes for all of them one after another.
+  Any two commits compare too: right-click a commit › Compare with the selected one, with HEAD, or
+  with a branch picked from a list (which takes a commit's hash as well). Repository › Recent
+  Comparisons and the window's clock menu bring back the last ten per repository.
 - **Features** (off unless Settings › General › Group recent commits into features turns it on):
   the sidebar's Features section groups the latest commits (100 to 1,000) under the
   terms your team writes in commit messages: bracket tags like `[Search]` or `[Tech Debt]` and scope
@@ -165,7 +199,8 @@ permission to access that folder.
 - **Per-repository settings** (right-click › Repository Settings): display name, the Jira profile,
   the ticket keys to look for (`PROJ`, or several separated by commas; empty detects them from commit
   messages), an issue link such as `https://example.atlassian.net/browse/{key}` for ticket keys when
-  tickets live somewhere else, and the regular expression that marks release tags (for example
+  tickets live somewhere else, the regular expression for its fix versions in Releases (empty: the
+  ones its tickets are in), and the regular expression that marks release tags (for example
   `^android-v[\d.]+$` when releases are tagged `android-v2.12`).
 - **Appearance**: Settings › General › Appearance picks Light, Dark or System. Dark mode is a bit
   darker than macOS's: the window, the commit list, the sidebar and the details.
@@ -177,8 +212,12 @@ permission to access that folder.
   Notes; Settings › General keeps showing it until you update. Vibe GitTree › Check for Updates… and
   Settings › General › Check Now ask any time.
 
-Vibe GitTree never changes your repositories. The only git command that writes anything is `fetch`,
-and only when you ask for it (or when a remote repository Vibe GitTree cloned itself is opened).
+Vibe GitTree doesn't change your repositories unless you allow it. The only git command that writes
+anything is `fetch`, and only when you ask for it (or when a remote repository Vibe GitTree cloned
+itself is opened). With Settings › General › Allow commits and stashes on, it also runs `git add`,
+`git reset` (to unstage; files keep their changes), `git commit` and `git stash`, each only when you
+click for it. Nothing in Vibe GitTree throws away uncommitted work, and dropping a stash asks first.
+Looking at uncommitted changes writes nothing: `git status` runs without refreshing the index.
 
 ### How Vibe GitTree talks to GitHub and Jira
 
@@ -211,8 +250,9 @@ requests (and so is the update check):
   day. The Epics section asks only about recent tickets Jira hasn't answered about yet (three
   requests the first time a 500-commit stretch of a busy repository opens, then only new tickets),
   plus once the stories and tasks above sub-tasks, since a sub-task's parent doesn't name the epic;
-  tickets on screen go ahead of those. A repository's unreleased fix versions are one request per
-  project at most every hour, and only for projects Jira has returned tickets for. For their
+  tickets on screen go ahead of those. A repository's fix versions are two requests per project at
+  most every hour (the unreleased ones, and the latest released ones), and only for projects Jira
+  has returned tickets for. For their
   progress, the stories and tasks of the epics listed are one query (a request per 100 tickets) at
   most every hour, and so are the tickets of the fix versions of projects with a Definition of Done
   (Jira counts a fix version's tickets only by status category). A fix version's or an epic's
@@ -224,7 +264,7 @@ requests (and so is the update check):
   everything else; sites without `parentEpic` get an epic's tickets level by level. Asking again
   is up to you, never automatic: Repository › Refresh Ticket Statuses asks again for what's on
   screen; the Epics section's ↻ for the recent tickets, fix versions and the epics' stories and
-  tasks; the Releases section's ↻ for the fix versions (one request per project), all the tickets
+  tasks; the Releases section's ↻ for the fix versions (two requests per project), all the tickets
   of those with a Definition of Done (one query) and those of the other open ones (one request
   each), plus one for any tickets that left them, the rest waiting until they're next opened; an
   open fix version's own ↻ for its project's fix versions and its tickets.
@@ -243,13 +283,15 @@ requests (and so is the update check):
 | Compare branches | ⇧⌘B |
 | Fetch / reload | ⇧⌘F / ⌘R |
 | Commit details for the selected row | Return or double-click |
+| Previous / next file in a diff | ⌥⌘↑ / ⌥⌘↓ |
+| Commit the staged files (in the details) | ⌘Return |
 | Repository settings | ⌥⌘, |
 
 ### Where things are stored
 
 `~/Library/Application Support/GitTree/` (the app's former name, so nothing had to move): `library.json` (the repository list and per-repository
-settings), `jira-profiles.json` (Jira sites and accounts, without tokens), `jira-cache.json` (ticket
-statuses, with their parents, and unreleased fix versions per profile) and
+settings, recent comparisons among them), `jira-profiles.json` (Jira sites and accounts, without tokens), `jira-cache.json` (ticket
+statuses, with their parents, and fix versions per profile) and
 `Clones/<host>/<owner>/<name>.git` (remote repositories). Jira API tokens
 are in the login keychain. Removing a remote repository from
 Vibe GitTree deletes its clone; removing a local one never touches the folder.
@@ -259,11 +301,13 @@ Vibe GitTree deletes its clone; removing a local one never touches the folder.
 ```
 GitTree/
   App/           app entry point, menu commands, version info and update checks
-  Git/           running git, parsing history, lane layout, diffs, clone, file watching, hosting links
+  Git/           running git, parsing history, lane layout, diffs, clone, file watching, hosting links,
+                 the working tree and stashes, and the commands that stage, commit and stash
   Integrations/  GitHub (gh, pull request timelines), Jira (REST + keychain), feature grouping (Foundation Models)
   Model/         repository library, per-repository model, per-window state, sidebar tree, deep links,
                  epics and releases, branch comparison
-  Views/         window, sidebar, switcher, toolbar and status bar, inspector, diff and compare windows, sheets
+  Views/         window, sidebar, switcher, toolbar and status bar, inspector, uncommitted changes and
+                 stashes, diff and compare windows, sheets
   Views/Graph    the commit table (NSTableView) and its Core Graphics cells
 Support/Info.plist   the gittree:// URL scheme (merged with Xcode's generated keys)
 scripts/gittree      the deep-link command
@@ -290,12 +334,18 @@ scripts/snapshot.sh /tmp/gittree.png 6 -GTOpenRepository ~/code/some-repo -GTSea
 Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>`, `-GTSearch <text>`,
 `-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light` (whatever the Appearance
 setting says), `-GTShowSwitcher YES`, `-GTGroupFeatures YES` (shows the Features section and groups),
-`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>` (selects that sidebar row
-once it's there; `first` for the first epic or release, `open` for the newest open pull request;
-several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
+`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>|changes|stash:<n>` (selects
+that sidebar row once it's there; `first` for the first epic or release, `open` for the newest open
+pull request; several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
 (refreshes the Releases or Epics section, or the selected fix version, after `-GTRefreshAfter`
 seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), `-GTJiraSite <url>`
 (with optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain,
+`-GTAllowChanges YES` (staging, committing and stashing, for that run only), `-GTPerform <steps>`
+(changes one after another, as the buttons make them: `stage:<path>`, `unstage:<path>`, `stageAll`,
+`unstageAll`, `commit:<message>`, `stash:<message>`, `stashStaged:<message>`, `apply:<n>`, `pop:<n>`,
+`drop:<n>`, separated by `;`; try them on a throwaway clone), `-GTCompareTab files` (the tab a
+comparison opens on), `-GTOpenChanges uncommitted|<commit>|<base>...<head>` (every file of those
+changes, one after another), `-GTOpenDiff <staged|unstaged|untracked|commit>:<path>` (one file's diff),
 `-GTCheckForUpdates YES` (checks for updates at launch, as the installed app does; debug builds
 otherwise only check when asked) and `-GTUpdateRepository <owner/name>` (checks another repository's
 releases, without keeping what it finds; one with a newer version shows the update alert). Test
@@ -312,7 +362,12 @@ scripts/snapshot-rows.sh /tmp/rows -GTOpenRepository ~/code/some-repo -GTAppeara
 Some checks don't need a screenshot (or Vibe GitTree in front): `-GTDescribeJira <file>` writes, after
 `-GTDescribeAfter` seconds (20 by default), what the Epics and Releases sections list, the
 highlight, the sidebar selection and a selected pull request's timeline; `-GTDescribeCompare <file>`
-writes what a comparison found.
+writes what a comparison found; `-GTDescribeChanges <file>` the working tree's status, the stashes
+and what the details show.
+
+Where `screencapture` isn't allowed (a shell without the screen recording permission),
+`-GTSnapshot <folder>` has the app capture its own windows into PNGs there after `-GTSnapshotAfter`
+seconds (10 by default), bringing itself to the front for a moment first.
 
 To try the Jira integration without real credentials, run the mock server and point a debug build
 at it; it logs every request, which makes it easy to check that scrolling doesn't flood Jira. Its

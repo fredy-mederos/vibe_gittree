@@ -21,6 +21,12 @@ struct GitTreeCommands: Commands {
             .disabled(AppUpdater.shared.isChecking)
         }
 
+        // There's no help book; the Help menu leads to the project on GitHub instead.
+        CommandGroup(replacing: .help) {
+            Button("Report an Issue or Idea…") { NSWorkspace.shared.open(AppUpdater.issuesURL) }
+            Button("Vibe GitTree on GitHub") { NSWorkspace.shared.open(AppUpdater.repositoryURL) }
+        }
+
         CommandGroup(after: .newItem) {
             Divider()
             Button("Switch to Repository…") { window?.isSwitcherPresented = true }
@@ -86,6 +92,19 @@ struct GitTreeCommands: Commands {
             }
             .keyboardShortcut("b", modifiers: [.command, .shift])
             .disabled(window?.repositoryID == nil)
+            let recent = window?.currentRepository?.recentComparisons ?? []
+            Menu("Recent Comparisons") {
+                if let id = window?.repositoryID {
+                    ForEach(recent, id: \.self) { comparison in
+                        Button(comparison.title) {
+                            openWindow(id: "compare", value: CompareTarget(repositoryID: id, base: comparison.base, head: comparison.head))
+                        }
+                    }
+                    Divider()
+                    Button("Clear Menu") { RepositoryLibrary.shared.clearRecentComparisons(for: id) }
+                }
+            }
+            .disabled(recent.isEmpty)
 
             Divider()
 

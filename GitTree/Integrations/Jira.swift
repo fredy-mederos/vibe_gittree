@@ -73,7 +73,7 @@ struct TicketProgress: Sendable, Hashable, Codable {
     var total: Int { toDo + inProgress + done }
 }
 
-/// An unreleased fix version of a Jira project: a release the team is working toward.
+/// A fix version of a Jira project: a release the team is working toward, or one that went out lately.
 struct JiraVersion: Sendable, Hashable, Codable, Identifiable {
     let id: String
     let name: String
@@ -86,6 +86,8 @@ struct JiraVersion: Sendable, Hashable, Codable, Identifiable {
     /// Jira's count by status category; counted from the tickets themselves when the project has a
     /// Definition of Done.
     var progress: TicketProgress?
+    /// Released already; nil in caches from before released ones were listed.
+    var released: Bool?
 
     /// The release date as a day in the local calendar.
     var releaseDay: Date? {
@@ -287,6 +289,8 @@ struct JiraCacheFile: Codable, Sendable {
         var unknown: [String: Date] = [:]
         /// Unreleased fix versions by project key.
         var versions: [String: VersionList]?
+        /// The latest released fix versions by project key.
+        var released: [String: VersionList]?
     }
 
     var sites: [String: Site] = [:]
@@ -303,7 +307,8 @@ struct JiraCacheFile: Codable, Sendable {
         let cutoff = Date().addingTimeInterval(-30 * 24 * 60 * 60)
         file.sites = file.sites.mapValues { site in
             Site(issues: site.issues.filter { $0.value.fetchedAt > cutoff }, unknown: site.unknown.filter { $0.value > cutoff },
-                 versions: site.versions?.filter { $0.value.fetchedAt > cutoff })
+                 versions: site.versions?.filter { $0.value.fetchedAt > cutoff },
+                 released: site.released?.filter { $0.value.fetchedAt > cutoff })
         }
         return file
     }
@@ -426,11 +431,27 @@ enum JiraClient {
     /// their tickets are in each status category.
     static func unreleasedVersions(project: String, startAt: Int, connection: JiraConnection) async throws
         -> (versions: [JiraVersion], isLast: Bool) {
+        let page = try await versions(project: project, status: "unreleased", orderBy: "releaseDate", startAt: startAt, maxResults: 100,
+                                      connection: connection)
+        return (page.versions.filter { $0.released != true }, page.isLast)
+    }
+
+    /// One page (up to 50) of a project's released fix versions, latest release first, and how
+    /// many it has in all.
+    static func releasedVersions(project: String, startAt: Int, connection: JiraConnection) async throws
+        -> (versions: [JiraVersion], isLast: Bool, total: Int?) {
+        let page = try await versions(project: project, status: "released", orderBy: "-releaseDate", startAt: startAt, maxResults: 50,
+                                      connection: connection)
+        return (page.versions.filter { $0.released == true }, page.isLast, page.total)
+    }
+
+    private static func versions(project: String, status: String, orderBy: String, startAt: Int, maxResults: Int,
+                                 connection: JiraConnection) async throws -> (versions: [JiraVersion], isLast: Bool, total: Int?) {
         let query = [
-            URLQueryItem(name: "status", value: "unreleased"),
+            URLQueryItem(name: "status", value: status),
             URLQueryItem(name: "expand", value: "issuesstatus"),
-            URLQueryItem(name: "orderBy", value: "releaseDate"),
-            URLQueryItem(name: "maxResults", value: "100"),
+            URLQueryItem(name: "orderBy", value: orderBy),
+            URLQueryItem(name: "maxResults", value: String(maxResults)),
             URLQueryItem(name: "startAt", value: String(startAt)),
         ]
         let (data, response) = try await session.data(for: request(connection, path: "rest/api/3/project/\(project)/version", query: query))
@@ -454,20 +475,22 @@ enum JiraClient {
             }
             let values: [Version]
             let isLast: Bool?
+            let total: Int?
         }
         let page = try JSONDecoder().decode(Page.self, from: data)
-        let versions = page.values.filter { $0.released != true && $0.archived != true }.map { version in
+        let versions = page.values.filter { $0.archived != true }.map { version in
             JiraVersion(
                 id: version.id, name: version.name, project: project,
                 details: version.description.flatMap { $0.isEmpty ? nil : $0 }, releaseDate: version.releaseDate,
-                overdue: version.overdue ?? false,
+                overdue: version.released != true && (version.overdue ?? false),
                 progress: version.issuesStatusForFixVersion.map { counts in
                     TicketProgress(toDo: (counts.toDo ?? 0) + (counts.unmapped ?? 0), inProgress: counts.inProgress ?? 0,
                                          done: counts.done ?? 0)
-                }
+                },
+                released: version.released ?? false
             )
         }
-        return (versions, page.isLast ?? true)
+        return (versions, page.isLast ?? true, page.total)
     }
 
     private struct SearchResponse: Decodable {
@@ -568,6 +591,8 @@ enum JiraClient {
         var issues: [String: (issue: JiraIssue, fetchedAt: Date)] = [:]
         var unknown: [String: Date] = [:]
         var versions: [String: (versions: [JiraVersion], fetchedAt: Date)] = [:]
+        /// The latest released fix versions by project, asked for along with the unreleased ones.
+        var released: [String: (versions: [JiraVersion], fetchedAt: Date)] = [:]
     }
 
     private struct Pending {
@@ -637,7 +662,8 @@ enum JiraClient {
         for (key, cache) in JiraCacheFile.load().sites {
             guard let id = UUID(uuidString: key) else { continue }  // caches of earlier versions were per site
             caches[id] = ProfileCache(issues: cache.issues.mapValues { ($0.issue, $0.fetchedAt) }, unknown: cache.unknown,
-                                      versions: (cache.versions ?? [:]).mapValues { ($0.versions, $0.fetchedAt) })
+                                      versions: (cache.versions ?? [:]).mapValues { ($0.versions, $0.fetchedAt) },
+                                      released: (cache.released ?? [:]).mapValues { ($0.versions, $0.fetchedAt) })
         }
     }
 
@@ -726,7 +752,7 @@ enum JiraClient {
         backoff = 30
         flushTask?.cancel()
         flushTask = nil
-        caches = caches.mapValues { ProfileCache(issues: $0.issues, unknown: [:], versions: $0.versions) }
+        caches = caches.mapValues { ProfileCache(issues: $0.issues, unknown: [:], versions: $0.versions, released: $0.released) }
         queue.removeAll()
         queued.removeAll()
         searchOnlySites = []
@@ -923,7 +949,7 @@ enum JiraClient {
     func markAllStale() {
         caches = caches.mapValues { cache in
             ProfileCache(issues: cache.issues.mapValues { ($0.issue, Date.distantPast) }, unknown: [:],
-                         versions: cache.versions.mapValues { ($0.versions, Date.distantPast) })
+                         versions: cache.versions.mapValues { ($0.versions, Date.distantPast) }, released: cache.released)
         }
         listResults = listResults.mapValues { ($0.keys, Date.distantPast) }
         versionFailures = [:]
@@ -1143,9 +1169,24 @@ enum JiraClient {
             .sorted(by: JiraVersion.soonestFirst)
     }
 
-    /// Asks Jira for the projects' unreleased fix versions, unless they were fetched in the last
-    /// hour (or Jira didn't know the project today), or `force` says to ask anyway: one request per
-    /// project, paced like every other. The task returned ends once they've all been answered.
+    /// Fix versions of these projects released in the last `days` days, as last fetched, latest first.
+    func recentlyReleasedVersions(projects: [String], connection: JiraConnection, days: Int = 30) -> [JiraVersion] {
+        let lists = caches[connection.profileID]?.released ?? [:]
+        let now = Date()
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
+        var seen: Set<String> = []
+        return projects.flatMap { lists[$0]?.versions ?? [] }
+            .filter { version in
+                guard let day = version.releaseDay else { return false }
+                return day >= cutoff && day <= now && seen.insert(version.id).inserted
+            }
+            .sorted { ($0.releaseDate ?? "") > ($1.releaseDate ?? "") }
+    }
+
+    /// Asks Jira for the projects' unreleased fix versions and their latest released ones, unless
+    /// they were fetched in the last hour (or Jira didn't know the project today), or `force` says
+    /// to ask anyway: two requests per project, paced like every other. The task returned ends
+    /// once they've all been answered.
     @discardableResult
     func refreshVersions(projects: [String], connection: JiraConnection, force: Bool = false) -> Task<Void, Never> {
         guard isCurrent(connection), !unauthorized.contains(connection.profileID) else { return Task {} }
@@ -1181,6 +1222,27 @@ enum JiraClient {
                     self.caches[connection.profileID, default: ProfileCache()].versions[project] = (versions, Date())
                     self.version += 1
                     self.scheduleSave()
+                    // Then what went out lately: the latest released ones, newest first. A site
+                    // that ignores the order sends the oldest first; its last page has the latest.
+                    // A site that can't list them just has no Recently Released.
+                    do {
+                        var latest = try await self.send(connection) {
+                            try await JiraClient.releasedVersions(project: project, startAt: 0, connection: connection)
+                        }
+                        if !latest.isLast, let total = latest.total, let first = latest.versions.first?.releaseDate,
+                           let last = latest.versions.last?.releaseDate, first < last {
+                            latest = try await self.send(connection) {
+                                try await JiraClient.releasedVersions(project: project, startAt: max(0, total - 50), connection: connection)
+                            }
+                        }
+                        guard sentIn == self.generation else { return }
+                        let released = latest.versions.sorted { ($0.releaseDate ?? "") > ($1.releaseDate ?? "") }
+                        self.caches[connection.profileID, default: ProfileCache()].released[project] = (Array(released.prefix(20)), Date())
+                        self.version += 1
+                        self.scheduleSave()
+                    } catch JiraError.server(404), JiraError.badQuery {
+                        return
+                    }
                 } catch JiraError.server(404), JiraError.badQuery {
                     // Not a project on this site (a ticket prefix that only looks like one).
                     if sentIn == self.generation { self.versionFailures[id] = Date() }
@@ -1353,7 +1415,8 @@ enum JiraClient {
                 file.sites[id.uuidString] = JiraCacheFile.Site(
                     issues: cache.issues.mapValues { JiraCacheFile.Entry(issue: $0.issue, fetchedAt: $0.fetchedAt) },
                     unknown: cache.unknown,
-                    versions: cache.versions.mapValues { JiraCacheFile.VersionList(versions: $0.versions, fetchedAt: $0.fetchedAt) }
+                    versions: cache.versions.mapValues { JiraCacheFile.VersionList(versions: $0.versions, fetchedAt: $0.fetchedAt) },
+                    released: cache.released.mapValues { JiraCacheFile.VersionList(versions: $0.versions, fetchedAt: $0.fetchedAt) }
                 )
             }
             await Task.detached(priority: .utility) { file.save() }.value

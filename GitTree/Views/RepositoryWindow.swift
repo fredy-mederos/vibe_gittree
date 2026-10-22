@@ -102,6 +102,9 @@ struct RepositoryWindow: View {
                                                                    head: fullName(names.count > 1 ? names[1] : nil)))
                 }
             }
+            if DebugLaunch.claimChangeWindows() {
+                await DebugLaunch.openChangeWindows(state: state) { openWindow(id: "diff", value: $0) }
+            }
             if let output = UserDefaults.standard.string(forKey: "GTOpenInNewTab"), DebugLaunch.claimNewTab() {
                 try? await Task.sleep(for: .seconds(3))
                 if let id = state.repositoryID {
@@ -160,7 +163,15 @@ struct RepositoryWindow: View {
 /// open pull request; several, comma-separated, one after another, with `-GTSelectMarkers <folder>`
 /// for a script to capture each), `-GTRefresh releases|release|epics` refreshes those sections or the
 /// selected fix version after `-GTRefreshAfter` seconds (10 by default), and
-/// `-GTCompare <base>...<head>` opens the branch comparison. Elsewhere:
+/// `-GTCompare <base>...<head>` opens the branch comparison, `-GTAllowChanges YES` turns on staging,
+/// committing and stashing for the run, `-GTSelect changes|stash:<n>` selects the uncommitted changes
+/// or a stash, and `-GTDescribeChanges <file>` (after `-GTDescribeAfter` seconds) writes the working
+/// tree's status, the stashes and what the details show, `-GTPerform <steps>` runs changes one
+/// after another (`stage:<path>`, `unstage:<path>`, `stageAll`, `unstageAll`, `commit:<message>`,
+/// `stash:<message>`, `stashStaged:<message>`, `apply:<n>`, `pop:<n>`, `drop:<n>`, separated by
+/// `;`, with `-GTAllowChanges YES`), and `-GTSnapshot <folder>` (after
+/// `-GTSnapshotAfter` seconds, 10 by default) has every window draw itself into a PNG there, for
+/// checks where `screencapture` isn't allowed. Elsewhere:
 /// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds),
 /// `-GTJiraSite <url>` (every repository uses that Jira, e.g. `scripts/mock-jira.py`), and
 /// `-GTCheckForUpdates YES` or `-GTUpdateRepository <owner/name>` (`AppUpdater`).
@@ -177,8 +188,39 @@ struct RepositoryWindow: View {
         UserDefaults.standard.removePersistentDomain(forName: suite)
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.set(UserDefaults.standard.bool(forKey: "GTGroupFeatures"), forKey: AppSettings.groupsFeaturesKey)
+        defaults.set(UserDefaults.standard.bool(forKey: "GTAllowChanges"), forKey: AppSettings.allowsChangesKey)
         return defaults
     }()
+
+    /// `-GTDescribeChanges <file>`: the working tree's status, the stashes, the graph's row for
+    /// uncommitted changes and what the details show, as text.
+    static func describeChanges(_ state: WindowState, to path: String) {
+        guard let graph = state.graph else { return }
+        let model = graph.model
+        var lines = ["Selection: \(state.sidebarSelection.map { String(describing: $0) } ?? "none")"]
+        lines.append("Details: " + (graph.selectedStash.map { "stash \($0.short)" }
+            ?? (graph.selectsWorkingTree ? "uncommitted changes" : graph.selectedCommit.map { "commit \($0)" } ?? "nothing")))
+        lines.append("Allows changes: \(model.allowsChanges)")
+        if let status = model.workingTree {
+            lines.append("Branch: \(status.branch ?? "detached") at \(status.head?.prefix(8) ?? "-"), upstream \(status.upstream ?? "-") +\(status.ahead) -\(status.behind)")
+            lines.append("Changes: \(status.total) (\(status.summary.isEmpty ? "clean" : status.summary))\(status.operation.map { ", \($0.rawValue) under way" } ?? "")")
+            for change in status.changes.prefix(30) {
+                lines.append("  [\(change.staged ?? ".")\(change.unstaged ?? ".")] \(change.path)\(change.oldPath.map { " ← \($0)" } ?? "")")
+            }
+        } else {
+            lines.append("Changes: \(model.hasWorkingTree ? "not looked at yet" : "no working tree")")
+        }
+        if let layout = graph.layout {
+            lines.append("Graph: \(layout.rowCount) rows, uncommitted row: \(layout.workingRow.map { "lane \($0.column)" } ?? "none")")
+        }
+        lines.append("Stashes: \(model.stashes.count)")
+        for stash in model.stashes {
+            lines.append("  \(stash.name) \(stash.title) [\(stash.branch ?? "-")] untracked: \(stash.untracked != nil)")
+        }
+        if let progress = model.changeInProgress { lines.append("In progress: \(progress)") }
+        if let error = model.changeError { lines.append("Error: \(error)") }
+        try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
 
     /// `-GTDescribeJira <file>` (after `-GTDescribeAfter` seconds, 20 by default): what the Epics and
     /// Releases sections list, the highlight, and the selected pull request's timeline, as text.
@@ -197,6 +239,7 @@ struct RepositoryWindow: View {
         if let releases = graph.releases {
             lines.append("Releases used: " + releases.used.map { "\($0.name) (\($0.releaseDate ?? "-"), \($0.progressSummary ?? "-"))" }.joined(separator: " | "))
             lines.append("Releases other: " + releases.other.map(\.name).joined(separator: " | "))
+            lines.append("Releases recent: " + releases.recent.map { "\($0.name) (\($0.releaseDate ?? "-"))" }.joined(separator: " | "))
         }
         for (id, tickets) in graph.releaseTickets.sorted(by: { $0.key < $1.key }) {
             lines.append("Release \(id) tickets: " + tickets.map { "\($0.key)×\($0.commits)" }.joined(separator: ", "))
@@ -228,9 +271,9 @@ struct RepositoryWindow: View {
     static func selection(_ text: String, in state: WindowState) -> SidebarItem? {
         guard let id = state.repositoryID, let graph = state.graph else { return nil }
         let parts = text.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return nil }
-        let value = parts[1]
-        switch parts[0] {
+        guard let kind = parts.first else { return nil }
+        let value = parts.count > 1 ? parts[1] : ""
+        switch kind {
         case "epic":
             guard graph.epicProgress == nil, let groups = graph.epics?.groups, !groups.isEmpty else { return nil }
             let key = value == "first" ? groups.first { !$0.id.isEmpty }?.id : groups.first { $0.id == value }?.id
@@ -249,6 +292,11 @@ struct RepositoryWindow: View {
             return .ticket(id, value, under: "")
         case "ref":
             return graph.commitGraph?.refs.first { $0.name == value }.map { .ref(id, $0.fullName) }
+        case "changes":
+            return graph.model.workingTree?.isClean == false ? .workingTree(id) : nil
+        case "stash":
+            guard let index = Int(value), index < graph.model.stashes.count else { return nil }
+            return .stash(id, graph.model.stashes[index].id.hex)
         case "pr":
             guard let pullRequests = graph.model.pullRequests else { return nil }
             let stacked = Set(pullRequests.stacks.flatMap { $0.map(\.number) })
@@ -269,6 +317,55 @@ struct RepositoryWindow: View {
     }
 
     private static var didOpenCompare = false
+    private static var didOpenChangeWindows = false
+
+    static func claimChangeWindows() -> Bool {
+        defer { didOpenChangeWindows = true }
+        return !didOpenChangeWindows
+    }
+
+    /// `-GTCompareTab commits|tickets|files|authors`: the tab a comparison opens on.
+    static var compareTab: String? { UserDefaults.standard.string(forKey: "GTCompareTab") }
+
+    /// `-GTOpenChanges uncommitted|<commit>|<base>...<head>` opens every file of those changes,
+    /// one after another; `-GTOpenDiff <staged|unstaged|untracked|commit>:<path>` opens a file's
+    /// uncommitted changes, or its changes in a commit (a hash or a branch or tag name).
+    static func openChanges(_ spec: String, repositoryID: UUID, graph: CommitGraph) -> DiffTarget? {
+        if spec == "uncommitted" {
+            return DiffTarget(repositoryID: repositoryID, commit: "", path: "", uncommitted: .unstaged, allFiles: true, title: "Uncommitted Changes")
+        }
+        let names = spec.components(separatedBy: "...")
+        func hash(_ name: String) -> String? {
+            (graph.refs.first { $0.name == name }?.commit ?? graph.index(matching: name)).map { graph.ids[Int($0)].hex }
+        }
+        if names.count == 1, let commit = hash(spec) {
+            return DiffTarget(repositoryID: repositoryID, commit: commit, path: "", allFiles: true, title: spec)
+        }
+        guard names.count == 2, let base = hash(names[0]), let head = hash(names[1]) else { return nil }
+        return DiffTarget(repositoryID: repositoryID, commit: head, path: "", base: base, allFiles: true,
+                          title: "\(names[1]) since \(names[0])")
+    }
+
+    static func openChangeWindows(state: WindowState, diff: (DiffTarget) -> Void) async {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: "GTOpenChanges") != nil || defaults.string(forKey: "GTOpenDiff") != nil else { return }
+        for _ in 0..<60 where state.graph?.commitGraph == nil || state.graph?.model.workingTree == nil {
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        guard let id = state.repositoryID, let graph = state.graph?.commitGraph else { return }
+        if let spec = defaults.string(forKey: "GTOpenChanges"), let target = openChanges(spec, repositoryID: id, graph: graph) {
+            diff(target)
+        }
+        if let spec = defaults.string(forKey: "GTOpenDiff"), let colon = spec.firstIndex(of: ":") {
+            let kind = String(spec[..<colon])
+            let path = String(spec[spec.index(after: colon)...])
+            if let side = UncommittedSide(rawValue: kind) {
+                diff(DiffTarget(repositoryID: id, commit: "", path: path, uncommitted: side))
+            } else if let commit = graph.refs.first(where: { $0.name == kind })?.commit ?? graph.index(matching: kind) {
+                diff(DiffTarget(repositoryID: id, commit: graph.ids[Int(commit)].hex, path: path))
+            }
+        }
+    }
 
     /// `-GTCompare` opens one comparison, from the first window.
     static func claimCompare() -> Bool {
@@ -280,17 +377,65 @@ struct RepositoryWindow: View {
     static func describeComparison(_ comparison: BranchComparison) {
         guard let path = UserDefaults.standard.string(forKey: "GTDescribeCompare") else { return }
         let graph = comparison.graph
-        var lines = ["Base \(comparison.base.ref.name), head \(comparison.head.ref.name)"]
+        var lines = ["Base \(comparison.base.point.name), head \(comparison.head.point.name)"]
         if let mergeBase = comparison.mergeBase {
             lines.append("Merge base \(graph.ids[Int(mergeBase)].short) \(graph.subjects[Int(mergeBase)])")
         }
         for side in [comparison.base, comparison.head] {
-            lines.append("Only on \(side.ref.name): \(side.commits.count) commits (\(side.nonMergeCount) not merges), "
+            lines.append("Only on \(side.point.name): \(side.commits.count) commits (\(side.nonMergeCount) not merges), "
                 + "\(side.tickets.count) tickets, authors \(side.authors.prefix(3).map { "\($0.name)×\($0.commits)" }.joined(separator: ", "))")
             lines.append("  tickets: " + side.tickets.prefix(10).map { "\($0.key)×\($0.commits)" }.joined(separator: ", "))
             lines.append("  newest: " + side.commits.prefix(3).map { graph.subjects[Int($0)] }.joined(separator: " | "))
         }
         try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
+
+    /// Every visible window captured into `<folder>/<title>.png` by the app itself: an app may
+    /// capture its own windows without the screen recording permission `screencapture` needs. The
+    /// window server's call for it is looked up at run time; the SDK no longer offers it.
+    static func snapshotWindows(to folder: String) {
+        typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let symbol = dlsym(dlopen(nil, RTLD_NOW), "CGWindowListCreateImage") else { return }
+        let createImage = unsafeBitCast(symbol, to: CreateImage.self)
+        let directory = URL(fileURLWithPath: folder, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (number, window) in NSApp.windows.filter(\.isVisible).enumerated() {
+            // Just this window (option 8), without its shadow (image option 1).
+            guard let image = createImage(.null, 8, UInt32(window.windowNumber), 1)?.takeRetainedValue() else { continue }
+            let name = window.title.isEmpty ? "window-\(number)" : window.title.replacingOccurrences(of: "/", with: "-")
+            try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?
+                .write(to: directory.appending(path: "\(name).png"))
+        }
+    }
+
+    /// `-GTPerform`: changes as the details' buttons make them, one after another, each once the
+    /// working tree has been looked at again. Failures land in the model's `changeError`.
+    static func perform(_ steps: String, state: WindowState) async {
+        for _ in 0..<60 where state.graph?.model.workingTree == nil {
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        for step in steps.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            guard let model = state.graph?.model, let status = model.workingTree else { return }
+            let parts = step.split(separator: ":", maxSplits: 1).map(String.init)
+            let value = parts.count > 1 ? parts[1] : ""
+            let stash = Int(value).flatMap { $0 < model.stashes.count ? model.stashes[$0] : nil }
+            NSLog("GitTree: performing %@", step)
+            switch parts.first {
+            case "stage": await model.stage(status.changes.filter { $0.path == value })
+            case "unstage": await model.unstage(status.changes.filter { $0.path == value })
+            case "stageAll": await model.stageAll()
+            case "unstageAll": await model.unstageAll()
+            case "commit": _ = await model.commit(message: value)
+            case "stash": _ = await model.stash(nil, message: value)
+            case "stashStaged": _ = await model.stash(status.staged, message: value)
+            case "apply": if let stash { _ = await model.applyStash(stash) }
+            case "pop": if let stash { _ = await model.popStash(stash) }
+            case "drop": if let stash { _ = await model.dropStash(stash) }
+            default: NSLog("GitTree: unknown step %@", step)
+            }
+            if let error = model.changeError { NSLog("GitTree: %@ failed: %@", step, error) }
+            try? await Task.sleep(for: .seconds(2))
+        }
     }
 
     static func describeWindows(to path: String) {
@@ -368,6 +513,27 @@ struct RepositoryWindow: View {
                 let after = defaults.integer(forKey: "GTDescribeAfter")
                 try? await Task.sleep(for: .seconds(after > 0 ? after : 20))
                 describeJira(state, to: output)
+            }
+        }
+        if let folder = defaults.string(forKey: "GTSnapshot") {
+            Task {
+                let after = defaults.integer(forKey: "GTSnapshotAfter")
+                try? await Task.sleep(for: .seconds(after > 0 ? after : 10))
+                // In front only for the capture: with Stage Manager a window behind captures as a thumbnail.
+                NSApp.activate()
+                for window in NSApp.windows where window.isVisible { window.orderFrontRegardless() }
+                try? await Task.sleep(for: .seconds(1.5))
+                snapshotWindows(to: folder)
+            }
+        }
+        if let steps = defaults.string(forKey: "GTPerform") {
+            Task { await perform(steps, state: state) }
+        }
+        if let output = defaults.string(forKey: "GTDescribeChanges") {
+            Task {
+                let after = defaults.integer(forKey: "GTDescribeAfter")
+                try? await Task.sleep(for: .seconds(after > 0 ? after : 20))
+                describeChanges(state, to: output)
             }
         }
         if let text = defaults.string(forKey: "GTSelect") {

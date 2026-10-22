@@ -1,11 +1,22 @@
 import SwiftUI
 
-/// The selected commit: message, author, links, where it shipped, family, branches and changed files.
+/// The selected commit: message, author, links, where it shipped, family, branches and changed
+/// files. Or the uncommitted changes, or a stash picked in the sidebar.
 struct CommitInspector: View {
     let graph: GraphViewModel
 
     var body: some View {
-        if let commit = graph.selectedCommit, let commitGraph = graph.commitGraph, Int(commit) < commitGraph.count {
+        if let id = graph.selectedStash {
+            if let stash = graph.model.stashes.first(where: { $0.id == id }) {
+                StashInspector(graph: graph, stash: stash)
+                    .id(id)
+            } else {
+                ContentUnavailableView("Stash Not Found", systemImage: "tray",
+                                       description: Text("It was applied or dropped."))
+            }
+        } else if graph.selectsWorkingTree {
+            WorkingTreeInspector(graph: graph)
+        } else if let commit = graph.selectedCommit, let commitGraph = graph.commitGraph, Int(commit) < commitGraph.count {
             CommitDetailView(graph: graph, commitGraph: commitGraph, commit: commit)
                 .id(commitGraph.ids[Int(commit)])
         } else {
@@ -205,7 +216,8 @@ private struct CommitDetailView: View {
                     let files = showAllFiles ? details.files : Array(details.files.prefix(60))
                     ForEach(files) { file in
                         Button {
-                            openWindow(id: "diff", value: DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: file.path, line: nil))
+                            openWindow(id: "diff", value: DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: file.path, line: nil,
+                                                                     oldPath: file.oldPath))
                         } label: {
                             ChangedFileRow(file: file)
                                 .contentShape(Rectangle())
@@ -234,6 +246,16 @@ private struct CommitDetailView: View {
                 HStack {
                     Text("Changed Files")
                     Spacer()
+                    if let details, details.totalFiles > 0 {
+                        Button {
+                            openWindow(id: "diff", value: DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: "", allFiles: true,
+                                                                     title: "\(id.short) \(subject)"))
+                        } label: {
+                            Image(systemName: "doc.text.magnifyingglass")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Show all of the commit's changes in one window")
+                    }
                     if let details {
                         Text(details.totalFiles.formatted()).monospacedDigit().foregroundStyle(.secondary)
                     }

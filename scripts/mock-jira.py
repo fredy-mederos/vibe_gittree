@@ -8,8 +8,9 @@ versions without real credentials. Every request is logged to stderr with what i
 Every ticket gets a made-up status, type and fix version. Most belong to one of four mock epics
 (PROJ-90001…90004); a quarter are sub-tasks of mock tasks (PROJ-80000…80004), whose parents are
 the epics, like in a real project. Every project it has answered tickets for lists six unreleased
-fix versions, Android and iOS ones, each with two extra tickets that no commit mentions; other
-projects get 404 (--projects=A,B names the projects instead). List queries can ask for a fix
+fix versions, Android and iOS ones, each with two extra tickets that no commit mentions, and three
+released ones (two six days ago, one six weeks ago); other projects get 404 (--projects=A,B names
+the projects instead). List queries can ask for a fix
 version (by id or name) or several (`fixVersion in (...)`), an epic (`parentEpic`) or the children
 of tickets (`parent in (...)`).
 
@@ -18,6 +19,7 @@ unknown: bulk fetch leaves them out (reporting them in issueErrors), and JQL sea
 like real Jira. Pass --search-only to answer bulk fetch with 404, to exercise GitTree's fallback to
 search, and --no-parent-epic to reject `parentEpic` queries, to exercise its fallback to `parent`.
 """
+import datetime
 import json
 import re
 import sys
@@ -50,6 +52,17 @@ VERSIONS = [
     ("10004", "iOS 2.13", "2026-10-28"),
     ("10006", "Android bug fixes", None),
 ]
+# Released fix versions: id, name, release date (relative to today, so "lately" stays lately).
+def days_ago(days):
+    return (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+
+
+RELEASED = [
+    ("10007", "Android 2.11", days_ago(6)),
+    ("10008", "iOS 2.11", days_ago(6)),
+    ("10009", "Android 2.10", days_ago(42)),
+]
+ALL_VERSIONS = VERSIONS + RELEASED
 # What tickets with commits get: mostly Android versions, some already released.
 TICKET_VERSIONS = ["Android 2.11", "Android 2.12", "Android 2.13", "Payments (Android)",
                    "Android 2.10", "Android 2.11", "Android 2.12"]
@@ -179,8 +192,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(404, {"errorMessages": [f"No project could be found with key '{project.group(1)}'."]})
                 return
             log(f"request {requests}: versions of {project.group(1)} ({self.path.split('?', 1)[-1]})")
+            released = "status=released" in self.path
+            listed = sorted(RELEASED, key=lambda v: v[2], reverse="orderBy=-releaseDate" in self.path) if released else VERSIONS
             values = []
-            for version_id, name, date in VERSIONS:
+            for version_id, name, date in listed:
                 keys = tickets_in(name) + extra_tickets(version_id)
                 counts = {"toDo": 0, "inProgress": 0, "done": 0, "unmapped": 0}
                 for key in keys:
@@ -188,7 +203,8 @@ class Handler(BaseHTTPRequestHandler):
                     counts[{"new": "toDo", "indeterminate": "inProgress", "done": "done"}[category]] += 1
                 values.append({
                     "id": version_id, "name": name, "description": f"Mock release {name}", "archived": False,
-                    "released": False, "releaseDate": date, "overdue": bool(date and date < time.strftime("%Y-%m-%d")),
+                    "released": released, "releaseDate": date,
+                    "overdue": not released and bool(date and date < time.strftime("%Y-%m-%d")),
                     "issuesStatusForFixVersion": counts,
                 })
             self.reply(200, {"values": values, "isLast": True, "startAt": 0, "maxResults": 100, "total": len(values)})
@@ -226,12 +242,14 @@ class Handler(BaseHTTPRequestHandler):
         versions = re.search(r"fixVersion in \(([^)]*)\)", jql)
         if versions:
             wanted = [i.strip() for i in versions.group(1).split(",")]
-            keys = sorted({key for i, n, _ in VERSIONS if i in wanted for key in tickets_in(n) + extra_tickets(i)}, reverse=True)
+            unreleased = {i for i, _, _ in VERSIONS}
+            keys = sorted({key for i, n, _ in ALL_VERSIONS if i in wanted
+                           for key in tickets_in(n) + (extra_tickets(i) if i in unreleased else [])}, reverse=True)
             log(f"request {requests}: fixVersion in {len(wanted)} versions, {len(keys)} tickets")
             return keys
         version = re.search(r'fixVersion = (?:"([^"]+)"|(\d+))', jql)
         if version:
-            name = version.group(1) or next((n for i, n, _ in VERSIONS if i == version.group(2)), version.group(2))
+            name = version.group(1) or next((n for i, n, _ in ALL_VERSIONS if i == version.group(2)), version.group(2))
             version_id = next((i for i, n, _ in VERSIONS if n == name), None)
             keys = tickets_in(name) + (extra_tickets(version_id) if version_id else [])
             log(f"request {requests}: fixVersion {name}, {len(keys)} tickets")

@@ -28,6 +28,13 @@ import Observation
     private(set) var layoutVersion = 0
     private(set) var isLayingOut = false
     private(set) var selectedCommit: Int32?
+    /// The row for uncommitted changes is selected instead of a commit.
+    private(set) var selectsWorkingTree = false
+    /// A stash picked in the sidebar, which the details show instead of a commit.
+    private(set) var selectedStash: ObjectID?
+    /// The commit message being written for the uncommitted changes, kept while looking elsewhere.
+    var commitSummary = ""
+    var commitDescription = ""
     /// Increments when the selection should be scrolled into view.
     private(set) var revealToken = 0
     /// Rows matching the search, top to bottom.
@@ -93,7 +100,11 @@ import Observation
     @ObservationIgnored private var highlightedRelease: String?
 
     @ObservationIgnored private var selectedID: ObjectID?
+    /// Until then the selection follows HEAD: the selected uncommitted changes were committed, and
+    /// the history may need a reload or two to show the new commit.
+    @ObservationIgnored private var followsHeadUntil: Date?
     @ObservationIgnored private var appliedGeneration = -1
+    @ObservationIgnored private var appliedWorkingTree = false
     @ObservationIgnored private var hasInitialSelection = false
     @ObservationIgnored private var layoutTask: Task<Void, Never>?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
@@ -129,19 +140,23 @@ import Observation
         withObservationTracking {
             _ = model.generation
             _ = model.repository
+            _ = model.hasUncommittedChanges
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.syncWithModel()
-                // Another Jira profile (or none) changes the Epics and Releases sections.
+                // Another Jira profile (or none) changes the Epics and Releases sections, and
+                // another fix version pattern what Releases lists as the repository's.
                 self?.loadJiraOverview()
+                self?.rebuildJiraReports()
                 self?.observeModel()
             }
         }
     }
 
     private func syncWithModel() {
-        guard model.generation != appliedGeneration, model.graph != nil else { return }
+        guard model.generation != appliedGeneration || model.hasUncommittedChanges != appliedWorkingTree, model.graph != nil else { return }
         appliedGeneration = model.generation
+        appliedWorkingTree = model.hasUncommittedChanges
         rebuildLayout(reveal: false)
     }
 
@@ -152,7 +167,8 @@ import Observation
             scope = .all  // the branch is gone; this rebuilds again
             return
         }
-        if scope == .all, let all = model.allLayout, all.graph === graph {
+        let workingTree = model.hasUncommittedChanges
+        if scope == .all, let all = model.allLayout, all.graph === graph, all.includesWorkingTree == workingTree {
             isLayingOut = false
             apply(all, reveal: reveal)
             return
@@ -161,7 +177,7 @@ import Observation
         let scope = self.scope
         layoutTask = Task { [weak self] in
             let layout = await Task.detached(priority: .userInitiated) {
-                LaneLayoutEngine.layout(graph: graph, scope: scope)
+                LaneLayoutEngine.layout(graph: graph, scope: scope, workingTree: workingTree)
             }.value
             guard !Task.isCancelled, let self else { return }
             self.isLayingOut = false
@@ -173,7 +189,19 @@ import Observation
         let graph = layout.graph
         self.layout = layout
         layoutVersion += 1
-        if let id = selectedID, let index = graph.indexByID[id] {
+        if selectsWorkingTree {
+            // Committed or stashed away: the commit they became (HEAD) takes their place.
+            if layout.workingRow == nil, layout.includesWorkingTree == false {
+                selectsWorkingTree = false
+                followsHeadUntil = Date().addingTimeInterval(5)
+                selectHead(in: layout)
+            }
+        } else if let until = followsHeadUntil, until > Date() {
+            selectHead(in: layout)
+            selectedCommit = selectedID.flatMap { graph.indexByID[$0] }
+        } else if selectedStash != nil {
+            selectedCommit = nil
+        } else if let id = selectedID, let index = graph.indexByID[id] {
             selectedCommit = index
         } else if !hasInitialSelection {
             let head = graph.headCommit
@@ -194,10 +222,48 @@ import Observation
 
     // MARK: Selection
 
+    /// Selects HEAD's commit, by its id: indexes of the same commit differ from one history to the next.
+    private func selectHead(in layout: GraphLayout) {
+        let head = layout.graph.headCommit
+        guard head >= 0, layout.rowOfCommit[Int(head)] >= 0 else { return }
+        let id = layout.graph.ids[Int(head)]
+        selectedCommit = head
+        guard id != selectedID else { return }
+        selectedID = id
+        revealToken += 1
+    }
+
     /// The user clicked or arrowed to a row; it's already visible.
     func userSelected(_ commit: Int32?) {
         selectedCommit = commit
         selectedID = commit.flatMap { commit in commitGraph.map { $0.ids[Int(commit)] } }
+        selectsWorkingTree = false
+        selectedStash = nil
+        followsHeadUntil = nil
+    }
+
+    /// The user clicked or arrowed to the row for uncommitted changes.
+    func userSelectedWorkingTree() {
+        selectedCommit = nil
+        selectedID = nil
+        selectsWorkingTree = true
+        selectedStash = nil
+        followsHeadUntil = nil
+    }
+
+    /// Selects the row for uncommitted changes and scrolls up to it.
+    func selectWorkingTree() {
+        userSelectedWorkingTree()
+        revealToken += 1
+    }
+
+    /// Shows a stash in the details instead of a commit (picked in the sidebar).
+    func showStash(_ id: ObjectID) {
+        selectedCommit = nil
+        selectedID = nil
+        selectsWorkingTree = false
+        selectedStash = id
+        followsHeadUntil = nil
     }
 
     /// Selects a commit and scrolls to it, widening the scope if it's hidden.
@@ -205,6 +271,9 @@ import Observation
         guard let graph = commitGraph, Int(commit) < graph.count else { return }
         selectedCommit = commit
         selectedID = graph.ids[Int(commit)]
+        selectsWorkingTree = false
+        selectedStash = nil
+        followsHeadUntil = nil
         if let layout, layout.rowOfCommit[Int(commit)] < 0 {
             scope = .all
             return
@@ -526,7 +595,7 @@ import Observation
         guard let jira, let ticketIndex else { return }
         let (graph, index) = ticketIndex
         epics = EpicReport.build(recentTickets, commitLimit: jiraLoadedFor?.limit ?? epicCommitLimit, connection: jira)
-        releases = ReleaseReport.build(projects: jiraProjects(jira), index: index, connection: jira)
+        releases = ReleaseReport.build(projects: jiraProjects(jira), index: index, pattern: model.repository.fixVersionRegex, connection: jira)
         if !openedReleases.isEmpty {
             let children = index.children(connection: jira)
             var lists: [String: [TicketSummary]] = [:]

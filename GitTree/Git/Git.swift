@@ -57,8 +57,10 @@ enum Git {
         return environment
     }()
 
-    /// Keeps machine-readable output stable whatever the user's git config says.
-    static let baseArguments = ["-c", "log.showSignature=false", "-c", "color.ui=never", "-c", "core.quotePath=false"]
+    /// Keeps machine-readable output stable whatever the user's git config says (patches always
+    /// with `a/` and `b/` before their paths, which reading them relies on).
+    static let baseArguments = ["-c", "log.showSignature=false", "-c", "color.ui=never", "-c", "core.quotePath=false",
+                                "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false"]
 
     /// - Parameter timeout: for commands that touch the network, so a stalled connection can't hang a fetch.
     static func run(_ arguments: [String], in directory: URL?, allowFailure: Bool = false, timeout: TimeInterval? = nil) async throws -> Data {
@@ -69,6 +71,40 @@ enum Git {
     static func string(_ arguments: [String], in directory: URL?, allowFailure: Bool = false) async throws -> String {
         let data = try await run(arguments, in: directory, allowFailure: allowFailure)
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Runs a command that changes the repository (staging, committing, stashing). Only the user's
+    /// own clicks start one, and only with Settings › General › Allow commits and stashes on.
+    /// Commit hooks get five minutes, and a failure reads as git explains it, on standard output
+    /// too (a stash that conflicts, say).
+    @discardableResult
+    static func change(_ arguments: [String], in directory: URL, input: Data? = nil) async throws -> String {
+        let result = try await ProcessRunner.execute(executableURL, baseArguments + arguments, in: directory,
+                                                     environment: environment, timeout: 5 * 60, input: input)
+        let output = String(decoding: result.output, as: UTF8.self)
+        guard result.status == 0 else {
+            throw GitError(arguments: arguments, status: result.status, output: failure(errors: String(decoding: result.errors, as: UTF8.self),
+                                                                                     output: output))
+        }
+        return output
+    }
+
+    /// What a failed change says about why: conflicts first (git lists them on standard output),
+    /// then its errors; with no errors, the last line it printed (`git commit` explains there that
+    /// nothing is staged).
+    private static func failure(errors: String, output: String) -> String {
+        let lines = output.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        let conflicts = lines.filter { $0.hasPrefix("CONFLICT") || $0.hasPrefix("error:") || $0.hasPrefix("fatal:") }
+        if !conflicts.isEmpty { return (conflicts + [errors]).joined(separator: "\n") }
+        if errors.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let last = lines.last(where: { !$0.isEmpty }) { return last }
+        return errors
+    }
+
+    /// Paths for `--pathspec-from-file=- --pathspec-file-nul`, so any number of them (and any names)
+    /// fit, each taken literally: a file named `a*b` is just that file. (Not `--literal-pathspecs`,
+    /// which also takes the `:/` that `git stash` uses inside literally, so it would leave new files.)
+    static func pathspecInput(_ paths: [String]) -> Data {
+        Data(paths.map { ":(literal)" + $0 + "\u{0}" }.joined().utf8)
     }
 }
 

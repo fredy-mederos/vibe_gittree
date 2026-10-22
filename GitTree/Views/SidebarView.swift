@@ -15,9 +15,12 @@ struct SidebarView: View {
     @AppStorage("sidebar.featuresExpanded") private var featuresExpanded = true
     @AppStorage("sidebar.epicsExpanded") private var epicsExpanded = true
     @AppStorage("sidebar.releasesExpanded") private var releasesExpanded = true
+    @AppStorage("sidebar.localChangesExpanded") private var localChangesExpanded = true
     /// Settings › General: the Features section, off unless turned on there.
     @AppStorage(AppSettings.groupsFeaturesKey) private var groupsFeatures = false
     @State private var expanded: [String: Bool] = [:]
+    /// A stash whose Drop… was picked in its context menu, waiting for confirmation.
+    @State private var stashPendingDrop: StashEntry?
 
     /// Repositories listed before "Show All" takes over.
     private static let collapsedLimit = 8
@@ -154,6 +157,25 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
+        // The uncommitted changes' row or a stash's stays selected only while the details show it,
+        // so clicking it again after looking elsewhere (or once it's back) shows it again.
+        .onChange(of: state.graph?.selectsWorkingTree) { _, selects in
+            if selects != true, case .workingTree? = state.sidebarSelection { state.sidebarSelection = nil }
+        }
+        .onChange(of: state.graph?.selectedStash) { _, stash in
+            if case .stash(_, let hash)? = state.sidebarSelection, stash?.hex != hash { state.sidebarSelection = nil }
+        }
+        .confirmationDialog(
+            "Drop \(stashPendingDrop?.name ?? "")?",
+            isPresented: Binding(get: { stashPendingDrop != nil }, set: { if !$0 { stashPendingDrop = nil } }),
+            presenting: stashPendingDrop
+        ) { stash in
+            Button("Drop Stash", role: .destructive) {
+                Task { _ = await state.graph?.model.dropStash(stash) }
+            }
+        } message: { stash in
+            Text("“\(stash.title)” is deleted with its changes. Vibe GitTree can't bring it back.")
+        }
     }
 
     // MARK: Refs
@@ -161,6 +183,7 @@ struct SidebarView: View {
     @ViewBuilder
     private func refSections(_ tree: RefTree, commitGraph: CommitGraph, repositoryID: UUID) -> some View {
         if let graph = state.graph, !isFiltering {
+            localChangesSection(graph, repositoryID: repositoryID)
             epicsSection(graph, repositoryID: repositoryID)
             releasesSection(graph, repositoryID: repositoryID)
             if groupsFeatures {
@@ -387,6 +410,39 @@ struct SidebarView: View {
         }
     }
 
+    // MARK: Local changes
+
+    /// The uncommitted changes, when there are any, and the stashes. Selecting one shows it in the details.
+    @ViewBuilder
+    private func localChangesSection(_ graph: GraphViewModel, repositoryID: UUID) -> some View {
+        let model = graph.model
+        if model.hasWorkingTree, model.workingTree?.isClean == false || !model.stashes.isEmpty {
+            FoldingSection(isExpanded: $localChangesExpanded) {
+                if let status = model.workingTree, !status.isClean {
+                    WorkingTreeRow(status: status)
+                        .tag(SidebarItem.workingTree(repositoryID))
+                }
+                if !model.stashes.isEmpty {
+                    let isExpanded = expansion("stashes", default: true)
+                    DisclosureGroup(isExpanded: isExpanded) {
+                        ForEach(model.stashes) { stash in
+                            StashRow(stash: stash)
+                                .tag(SidebarItem.stash(repositoryID, stash.id.hex))
+                        }
+                    } label: {
+                        CountedLabel(title: "Stashes", systemImage: "tray.full", count: model.stashes.count)
+                            .togglesDisclosure(isExpanded)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Local Changes")
+                    Spacer()
+                }
+            }
+        }
+    }
+
     // MARK: Epics and releases
 
     /// The tickets in the latest commits under their Jira epics. Selecting an epic highlights its
@@ -458,8 +514,9 @@ struct SidebarView: View {
         }
     }
 
-    /// The unreleased fix versions of the repository's Jira projects: the ones its tickets are in
-    /// first, the rest folded away. Selecting one highlights its tickets' commits and lists them.
+    /// The unreleased fix versions of the repository's Jira projects: its own first (its tickets are
+    /// in them, or they match its fix version pattern), the rest folded away, then the ones released
+    /// lately. Selecting one highlights its tickets' commits and lists them.
     @ViewBuilder
     private func releasesSection(_ graph: GraphViewModel, repositoryID: UUID) -> some View {
         if let report = graph.releases, !report.all.isEmpty, graph.jira != nil {
@@ -477,7 +534,21 @@ struct SidebarView: View {
                         CountedLabel(title: report.used.isEmpty ? "All Fix Versions" : "Other Fix Versions", systemImage: "shippingbox",
                                      count: report.other.count)
                             .togglesDisclosure(isExpanded)
-                            .help("Unreleased fix versions none of this repository's tickets are in (yet)")
+                            .help(graph.model.repository.fixVersionRegex == nil
+                                  ? "Unreleased fix versions none of this repository's tickets are in (yet)"
+                                  : "Unreleased fix versions whose names don't match this repository's fix version pattern")
+                    }
+                }
+                if !report.recent.isEmpty {
+                    let isExpanded = expansion("releases:recent", default: false)
+                    DisclosureGroup(isExpanded: isExpanded) {
+                        ForEach(report.recent) { version in
+                            releaseGroup(version, graph: graph, repositoryID: repositoryID)
+                        }
+                    } label: {
+                        CountedLabel(title: "Recently Released", systemImage: "checkmark.seal", count: report.recent.count)
+                            .togglesDisclosure(isExpanded)
+                            .help("This repository's fix versions released in the last 30 days")
                     }
                 }
             } header: {
@@ -495,7 +566,8 @@ struct SidebarView: View {
     private func shownReleases(_ report: ReleaseReport) -> Set<String> {
         guard releasesExpanded else { return [] }
         let showsOther = expanded[scopedKey("releases:other")] ?? report.used.isEmpty
-        let versions = report.used + (showsOther ? report.other : [])
+        let showsRecent = expanded[scopedKey("releases:recent")] ?? false
+        let versions = report.used + (showsOther ? report.other : []) + (showsRecent ? report.recent : [])
         return Set(versions.map(\.id).filter { expanded[scopedKey("release:\($0)")] == true })
     }
 
@@ -659,6 +731,21 @@ struct SidebarView: View {
             ticketMenu(key)
             Divider()
             Button("Clear Highlight") { state.graph?.clearHighlight() }
+        case .workingTree:
+            if let model = state.graph?.model, model.allowsChanges, model.workingTree?.isClean == false {
+                Button("Stage All Changes") { Task { await model.stageAll() } }
+                Button("Stash All Changes") { Task { _ = await model.stash(nil, message: "") } }
+            }
+        case .stash(_, let hash):
+            if let model = state.graph?.model, let stash = model.stashes.first(where: { $0.id.hex == hash }) {
+                if model.allowsChanges {
+                    Button("Apply") { Task { _ = await model.applyStash(stash) } }
+                    Button("Pop") { Task { _ = await model.popStash(stash) } }
+                    Button("Drop…") { stashPendingDrop = stash }
+                    Divider()
+                }
+                Button("Copy Name") { copy(stash.name) }
+            }
         case .pullRequest(_, let number):
             if let pullRequest = state.graph?.model.pullRequests?.byNumber[number] {
                 Button("Open on GitHub") { NSWorkspace.shared.open(pullRequest.url) }
@@ -887,6 +974,65 @@ private struct RefRow: View {
     }
 }
 
+/// The uncommitted changes: how many files changed, and how.
+private struct WorkingTreeRow: View {
+    let status: WorkingTreeStatus
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text("Uncommitted Changes")
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(status.total.formatted())
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary, selected: .secondary)
+                }
+                Text(status.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: "circle.dashed")
+                .foregroundStyle(.secondary)
+        }
+        .help("Files changed since the last commit: \(status.summary)")
+    }
+}
+
+/// A stash: its message and age, then its name and the branch it was made on.
+private struct StashRow: View {
+    let stash: StashEntry
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(stash.title)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Text(RelativeAge.short(stash.date))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary, selected: .secondary)
+                }
+                Text(verbatim: [stash.name, stash.branch].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: "tray")
+                .foregroundStyle(.secondary)
+        }
+        .help(Text(verbatim: "\(stash.name): \(stash.subject)"))
+    }
+}
+
 /// A feature: its name, ticket and how many commits it has.
 private struct FeatureRow: View {
     let group: FeatureGroup
@@ -1091,7 +1237,7 @@ private struct ReleaseRow: View {
                 }
             }
         } icon: {
-            Image(systemName: "shippingbox")
+            Image(systemName: version.released == true ? "shippingbox.fill" : "shippingbox")
                 .foregroundStyle(.secondary)
         }
         .help(Text(verbatim: help))
@@ -1100,7 +1246,9 @@ private struct ReleaseRow: View {
     private var help: String {
         var lines = [version.name]
         if let details = version.details { lines.append(details) }
-        if let date = version.shortReleaseDate { lines.append((version.overdue ? "Overdue, was due " : "Release date ") + date) }
+        if let date = version.shortReleaseDate {
+            lines.append((version.released == true ? "Released " : version.overdue ? "Overdue, was due " : "Release date ") + date)
+        }
         if let progress = version.progressSummary {
             lines.append(progress)
             if !doneStatuses.isEmpty { lines.append("Done counts \(doneStatuses.joined(separator: ", ")) (Settings › Jira)") }

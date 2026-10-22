@@ -25,16 +25,42 @@ struct CommandError: LocalizedError {
     }
 }
 
+/// How a finished command exited, and what it printed.
+struct ProcessResult: Sendable {
+    let command: String
+    let status: Int32
+    let output: Data
+    let errors: Data
+}
+
 /// Runs command-line tools off the main thread, draining both pipes so chatty tools can't stall,
 /// and stopping them after a timeout so nothing hangs the app.
 enum ProcessRunner {
+    /// - Parameter input: written to the command's standard input (which is empty otherwise).
     static func run(_ executable: URL, _ arguments: [String], in directory: URL? = nil, environment: [String: String],
-                    timeout: TimeInterval? = nil, allowFailure: Bool = false) async throws -> Data {
+                    timeout: TimeInterval? = nil, allowFailure: Bool = false, input: Data? = nil) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     continuation.resume(returning: try runBlocking(executable, arguments, in: directory, environment: environment,
-                                                                   timeout: timeout, allowFailure: allowFailure))
+                                                                   timeout: timeout, allowFailure: allowFailure, input: input))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// Runs to the end whatever the exit status, for commands that explain a failure on their
+    /// standard output too (a stash that conflicts, say). Throws only when the command can't start
+    /// or runs out of time.
+    static func execute(_ executable: URL, _ arguments: [String], in directory: URL? = nil, environment: [String: String],
+                        timeout: TimeInterval? = nil, input: Data? = nil) async throws -> ProcessResult {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    continuation.resume(returning: try executeBlocking(executable, arguments, in: directory, environment: environment,
+                                                                       timeout: timeout, input: input))
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -43,7 +69,16 @@ enum ProcessRunner {
     }
 
     static func runBlocking(_ executable: URL, _ arguments: [String], in directory: URL?, environment: [String: String],
-                            timeout: TimeInterval?, allowFailure: Bool) throws -> Data {
+                            timeout: TimeInterval?, allowFailure: Bool, input: Data? = nil) throws -> Data {
+        let result = try executeBlocking(executable, arguments, in: directory, environment: environment, timeout: timeout, input: input)
+        if result.status != 0 && !allowFailure {
+            throw CommandError(command: result.command, status: result.status, output: String(decoding: result.errors, as: UTF8.self))
+        }
+        return result.output
+    }
+
+    private static func executeBlocking(_ executable: URL, _ arguments: [String], in directory: URL?, environment: [String: String],
+                                        timeout: TimeInterval?, input: Data?) throws -> ProcessResult {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
@@ -53,7 +88,8 @@ enum ProcessRunner {
         let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
-        process.standardInput = FileHandle.nullDevice
+        let stdin = input.map { _ in Pipe() }
+        process.standardInput = stdin ?? FileHandle.nullDevice
         try process.run()
 
         let timedOut = LockedFlag()
@@ -73,6 +109,16 @@ enum ProcessRunner {
             errors.append(stderr.fileHandleForReading.readDataToEndOfFile())
             group.leave()
         }
+        if let stdin, let input {
+            // A command that exits without reading it all makes the write fail instead of ending the app.
+            _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+            group.enter()
+            DispatchQueue.global(qos: .utility).async {
+                try? stdin.fileHandleForWriting.write(contentsOf: input)
+                try? stdin.fileHandleForWriting.close()
+                group.leave()
+            }
+        }
         let output = stdout.fileHandleForReading.readDataToEndOfFile()
         group.wait()
         process.waitUntilExit()
@@ -82,10 +128,7 @@ enum ProcessRunner {
         if timedOut.isSet {
             throw CommandError(command: name, status: process.terminationStatus, output: "", timedOut: true)
         }
-        if process.terminationStatus != 0 && !allowFailure {
-            throw CommandError(command: name, status: process.terminationStatus, output: String(decoding: errors.data, as: UTF8.self))
-        }
-        return output
+        return ProcessResult(command: name, status: process.terminationStatus, output: output, errors: errors.data)
     }
 }
 

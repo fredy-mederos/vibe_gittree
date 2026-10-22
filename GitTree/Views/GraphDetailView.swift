@@ -53,14 +53,17 @@ struct GraphDetailView: View {
                 graph: graph,
                 layoutVersion: graph.layoutVersion,
                 selectedCommit: graph.selectedCommit,
+                selectsWorkingTree: graph.selectsWorkingTree,
                 revealToken: graph.revealToken,
                 searchVersion: graph.searchVersion,
                 showTags: graph.showTags,
                 annotationVersion: model.annotationVersion &+ JiraStore.shared.version,
-                onShowDetails: { state.showInspector = true }
+                workingTreeVersion: model.workingTreeVersion,
+                onShowDetails: { state.showInspector = true },
+                onCompare: { openWindow(id: "compare", value: $0) }
             )
             .overlay {
-                if graph.layout?.rowCount == 0 {
+                if graph.layout?.rowCount == 0 && graph.layout?.workingRow == nil {
                     ContentUnavailableView("No Commits", systemImage: "circle.dashed",
                                            description: Text("This repository doesn't have any commits yet."))
                 }

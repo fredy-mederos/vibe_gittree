@@ -1,17 +1,63 @@
 import Foundation
 
-/// Which branches (or tags) a comparison window compares, by full ref name; nil until picked.
+/// What a comparison window compares: branches or tags by full ref name, or commits by hash; nil
+/// until picked.
 struct CompareTarget: Codable, Hashable {
     var repositoryID: UUID
     var base: String?
     var head: String?
 }
 
-/// Two branches side by side: where they diverged and what each has that the other doesn't.
+/// A comparison opened before, for Repository › Recent Comparisons: its ends as `CompareTarget` has them.
+struct RecentComparison: Codable, Hashable, Sendable {
+    var base: String
+    var head: String
+
+    /// "feature/login ↔ develop", "1a2b3c4d ↔ main".
+    var title: String {
+        "\(ComparePoint.shortName(head)) ↔ \(ComparePoint.shortName(base))"
+    }
+}
+
+/// One end of a comparison: a branch or tag, or any commit.
+struct ComparePoint: Hashable, Sendable {
+    /// `refs/heads/feature/login`, or a commit's hash.
+    let spec: String
+    /// `feature/login`, or the commit's short hash.
+    let name: String
+    let commit: Int32
+    /// Nil for a commit.
+    let kind: GitRef.Kind?
+
+    static func resolve(_ spec: String?, in graph: CommitGraph) -> ComparePoint? {
+        guard let spec else { return nil }
+        if spec.hasPrefix("refs/") {
+            return graph.refs.first { $0.fullName == spec }.map { ComparePoint(spec: spec, name: $0.name, commit: $0.commit, kind: $0.kind) }
+        }
+        return graph.index(matching: spec).map { ComparePoint(spec: spec, name: graph.ids[Int($0)].short, commit: $0, kind: nil) }
+    }
+
+    /// A ref's short name, or a commit's short hash.
+    static func shortName(_ spec: String) -> String {
+        spec.hasPrefix("refs/") ? GitRef.shortName(fullName: spec) : String(spec.prefix(8))
+    }
+
+    var systemImage: String {
+        switch kind {
+        case .local: "arrow.triangle.branch"
+        case .remote: "cloud"
+        case .tag: "tag"
+        case nil: "smallcircle.filled.circle"
+        }
+    }
+}
+
+/// Two branches (or tags, or commits) side by side: where they diverged and what each has that
+/// the other doesn't.
 struct BranchComparison: Sendable {
-    /// What one branch has that the other doesn't.
+    /// What one side has that the other doesn't.
     struct Side: Sendable {
-        let ref: GitRef
+        let point: ComparePoint
         /// Newest first, merges included.
         let commits: [Int32]
         let nonMergeCount: Int
@@ -22,8 +68,8 @@ struct BranchComparison: Sendable {
         let newest: Date?
         let oldest: Date?
 
-        init(ref: GitRef, commits: [Int32], graph: CommitGraph) {
-            self.ref = ref
+        init(point: ComparePoint, commits: [Int32], graph: CommitGraph) {
+            self.point = point
             self.commits = commits
             var nonMerges = 0
             var order: [String] = []
@@ -57,7 +103,7 @@ struct BranchComparison: Sendable {
 
     /// Walks back from both tips once. The history is in date order with every commit before its
     /// parents, so the first commit both reach is a merge base.
-    static func compute(graph: CommitGraph, base: GitRef, head: GitRef) -> BranchComparison {
+    static func compute(graph: CommitGraph, base: ComparePoint, head: ComparePoint) -> BranchComparison {
         let inBase = reachable(from: base.commit, in: graph)
         let inHead = reachable(from: head.commit, in: graph)
         var onlyBase: [Int32] = []
@@ -71,8 +117,8 @@ struct BranchComparison: Sendable {
             case (false, false): break
             }
         }
-        return BranchComparison(graph: graph, base: Side(ref: base, commits: onlyBase, graph: graph),
-                                head: Side(ref: head, commits: onlyHead, graph: graph), mergeBase: mergeBase)
+        return BranchComparison(graph: graph, base: Side(point: base, commits: onlyBase, graph: graph),
+                                head: Side(point: head, commits: onlyHead, graph: graph), mergeBase: mergeBase)
     }
 
     private static func reachable(from commit: Int32, in graph: CommitGraph) -> [Bool] {
@@ -102,21 +148,6 @@ struct BranchComparison: Sendable {
     static func defaultHead(in graph: CommitGraph, other: String?) -> GitRef? {
         graph.refs.first { $0.isHead && $0.kind == .local && $0.fullName != other }
             ?? graph.refs.filter { $0.kind == .local && $0.fullName != other }.max { graph.times[Int($0.commit)] < graph.times[Int($1.commit)] }
-    }
-}
-
-enum BranchDiffLoader {
-    /// The files that changed between two commits (from where two branches diverged to one tip),
-    /// at most 1,000 listed. Partial clones skip rename detection, which would download contents.
-    static func files(from base: ObjectID, to tip: ObjectID, in directory: URL, detectRenames: Bool) async throws
-        -> (files: [ChangedFile], total: Int) {
-        let output = try await Git.run(
-            ["diff-tree", "-r", "-z", "--name-status", "--no-commit-id", detectRenames ? "-M" : "--no-renames", base.hex, tip.hex],
-            in: directory
-        )
-        return await Task.detached(priority: .userInitiated) {
-            CommitDetailsLoader.parseNameStatus(output, limit: 1_000)
-        }.value
     }
 }
 

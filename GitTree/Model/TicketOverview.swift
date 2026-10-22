@@ -134,35 +134,49 @@ struct EpicReport: Sendable {
     }
 }
 
-/// The unreleased fix versions of the repository's Jira projects: first those its tickets use,
-/// then the others (another platform's, say).
+/// The fix versions of the repository's Jira projects: the unreleased ones that are the
+/// repository's (its tickets are in them, or their names match its fix version pattern), then the
+/// other unreleased ones (another platform's, say), and its own released in the last 30 days.
 struct ReleaseReport: Sendable {
     let used: [JiraVersion]
     let other: [JiraVersion]
+    /// Released lately, latest first: what went out last week.
+    let recent: [JiraVersion]
 
-    var all: [JiraVersion] { used + other }
+    var all: [JiraVersion] { used + other + recent }
 
     func version(id: String) -> JiraVersion? {
         all.first { $0.id == id }
     }
 
-    @MainActor static func build(projects: [String], index: TicketIndex, connection: JiraConnection) -> ReleaseReport {
+    /// `pattern`: the repository's fix version pattern (Repository Settings), which decides which
+    /// versions are its own instead of its tickets.
+    @MainActor static func build(projects: [String], index: TicketIndex, pattern: NSRegularExpression?,
+                                 connection: JiraConnection) -> ReleaseReport {
         let store = JiraStore.shared
-        let versions = store.unreleasedVersions(projects: projects, connection: connection).map { version in
-            // With a Definition of Done, its tickets are counted here once they're listed, since
-            // Jira only counts by status category.
+        // With a Definition of Done, a version's tickets are counted here once they're listed, since
+        // Jira only counts by status category.
+        func counted(_ version: JiraVersion) -> JiraVersion {
             guard store.hasDefinitionOfDone(project: version.project, connection: connection),
                   let keys = store.cachedTickets(inFixVersionID: version.id, connection: connection) else { return version }
             var counted = version
             counted.progress = store.progress(of: keys, connection: connection)
             return counted
         }
-        guard !versions.isEmpty else { return ReleaseReport(used: [], other: []) }
-        var names: Set<String> = []
-        for key in index.commits.keys {
-            if let issue = store.issue(key, connection: connection) { names.formUnion(issue.fixVersions) }
+        let versions = store.unreleasedVersions(projects: projects, connection: connection).map(counted)
+        let released = store.recentlyReleasedVersions(projects: projects, connection: connection).map(counted)
+        guard !versions.isEmpty || !released.isEmpty else { return ReleaseReport(used: [], other: [], recent: []) }
+        let isOwn: (JiraVersion) -> Bool
+        if let pattern {
+            isOwn = { pattern.firstMatch(in: $0.name, range: NSRange($0.name.startIndex..., in: $0.name)) != nil }
+        } else {
+            var names: Set<String> = []
+            for key in index.commits.keys {
+                if let issue = store.issue(key, connection: connection) { names.formUnion(issue.fixVersions) }
+            }
+            isOwn = { names.contains($0.name) }
         }
-        return ReleaseReport(used: versions.filter { names.contains($0.name) }, other: versions.filter { !names.contains($0.name) })
+        return ReleaseReport(used: versions.filter(isOwn), other: versions.filter { !isOwn($0) }, recent: released.filter(isOwn))
     }
 }
 

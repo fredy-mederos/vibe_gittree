@@ -32,12 +32,13 @@ struct GitTreeApp: App {
         .defaultSize(width: 1200, height: 760)
         .handlesExternalEvents(matching: [])
 
-        // One window per file diff, opened from the inspector or a deep link.
+        // One window per file diff (or all of a commit's, a comparison's or the uncommitted ones),
+        // opened from the inspector, a comparison or a deep link.
         WindowGroup("Changes", id: "diff", for: DiffTarget.self) { $target in
             DiffWindow(target: target)
                 .background(DarkerWindowBackground())
         }
-        .defaultSize(width: 980, height: 720)
+        .defaultSize(width: 1200, height: 760)
         .handlesExternalEvents(matching: [])
 
         Settings {

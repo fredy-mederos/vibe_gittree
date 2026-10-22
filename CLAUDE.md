@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-Personal side project: Vibe GitTree, a read-only git history explorer, as a native macOS app. It was
+Personal side project: Vibe GitTree, a git history explorer (read-only unless the user allows commits
+and stashes), as a native macOS app. It was
 called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gittree` command and
 `gittree://` links keep that name; what people see (app name, menus, text, DMG) says Vibe GitTree. Read
 `README.md` first (it describes what's shipped), and `TODO.md` for what's still open or was dropped.
@@ -22,8 +23,15 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
 - SwiftUI ignores the inspector's ideal width and resets it to its narrowest when the window's
   content changes; `InspectorWidthKeeper` (`Views/WindowSupport.swift`) keeps the width the user
   drags to, through AppKit.
-- Read-only by design: never run git commands that change a user's repository. `fetch` is the only
-  exception, and only on an explicit user action or for clones Vibe GitTree manages itself.
+- Read-only unless the user allows changes: never run git commands that change a user's repository,
+  except `fetch` (on an explicit user action, or for clones Vibe GitTree manages itself) and, with
+  Settings › General › Allow commits and stashes on (off by default), staging, unstaging, committing
+  and stashing through `Git/WorkingTreeActions.swift`, each on an explicit click (dropping a stash
+  after a confirmation). Nothing may discard uncommitted work (no `checkout --`, `reset --hard`,
+  `clean`). Looking stays read-only: `git status` runs with `GIT_OPTIONAL_LOCKS=0` (in
+  `Git.environment`), so it never rewrites the index. Paths passed to those commands are marked
+  `:(literal)` (`Git.pathspecInput`); `--literal-pathspecs` would also break the `:/` that `git stash`
+  uses inside, leaving new files behind.
 - Build: `xcodebuild -project GitTree.xcodeproj -scheme GitTree -configuration Debug -derivedDataPath build/DerivedData build`.
   Keep the build free of warnings.
 - Check UI changes visually with `scripts/snapshot.sh <out.png> <seconds> [debug launch args]`; it
@@ -38,7 +46,14 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
   there. Don't `defaults write` settings, and don't pass `-sidebar.*Expanded`-style arguments: they
   override what the user clicks for that run and make the UI look broken.
 - Screenshots only work while Vibe GitTree is frontmost; with Stage Manager, a window behind the user's
-  current app captures as a thumbnail. If the user is working in another app, don't keep stealing
+  current app captures as a thumbnail. `snapshot.sh` quits every running Vibe GitTree, the user's
+  installed copy too; when that one is running, launch the Debug build yourself with `open -n`. When
+  the shell can't capture the screen at all (`screencapture` says it could not create an image),
+  `-GTSnapshot <folder>` has the app capture its own windows, coming to the front for a moment (so
+  not over and over while the user works).
+- Try staging, committing and stashing only in throwaway clones (`git clone` into a temp folder),
+  with `-GTAllowChanges YES`, `-GTPerform "<step>;<step>"` and `-GTDescribeChanges <file>`, and
+  compare the result with the same steps as plain git commands. If the user is working in another app, don't keep stealing
   focus: verify with logs (`mock-jira.py`) or debug output files instead (`-GTDescribeJira`,
   `-GTDescribeCompare`, with the app launched by `open -g -n` so it stays in the background).
 - Install for daily use with `scripts/install.sh` (Release build into ~/Applications, or the folder

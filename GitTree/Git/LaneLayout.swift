@@ -38,6 +38,16 @@ struct LaneSegment: Sendable {
     let to: UInt16
     let kind: Kind
     let color: UInt8
+
+    /// The color of the line from uncommitted changes down to HEAD's commit, drawn dashed.
+    static let uncommittedColor: UInt8 = .max
+}
+
+/// The row above the history for uncommitted changes: its lane, and the line from it toward
+/// HEAD's commit (none before the first commit, or when the scope leaves HEAD out).
+struct WorkingRow: Sendable {
+    let column: UInt16
+    let segments: [LaneSegment]
 }
 
 /// Everything needed to draw the graph column: which commit sits in each row, in which lane, and the
@@ -55,11 +65,17 @@ final class GraphLayout: @unchecked Sendable {
     /// Lanes a row touches, used to size the graph column.
     let laneCount: [UInt16]
     let suggestedLaneCount: Int
+    /// Whether it was laid out with a row for uncommitted changes, and that row when it has one.
+    let includesWorkingTree: Bool
+    let workingRow: WorkingRow?
 
     init(graph: CommitGraph, scope: GraphScope, rows: [Int32], rowOfCommit: [Int32], column: [UInt16], color: [UInt8],
-         segmentStart: [Int32], segments: [LaneSegment], laneCount: [UInt16]) {
+         segmentStart: [Int32], segments: [LaneSegment], laneCount: [UInt16], includesWorkingTree: Bool = false,
+         workingRow: WorkingRow? = nil) {
         self.graph = graph
         self.scope = scope
+        self.includesWorkingTree = includesWorkingTree
+        self.workingRow = workingRow
         self.rows = rows
         self.rowOfCommit = rowOfCommit
         self.column = column
@@ -92,7 +108,10 @@ enum LaneLayoutEngine {
     /// Number of lane colors; matches `LanePalette`.
     static let colorCount = 8
 
-    static func layout(graph: CommitGraph, scope: GraphScope) -> GraphLayout {
+    /// `workingTree`: a row above the history for uncommitted changes, with a dashed line down to
+    /// HEAD's commit in the first lane. When HEAD is the newest commit (the usual case) the rest of
+    /// the graph is laid out as without it; branches newer than HEAD that lead to it join the line.
+    static func layout(graph: CommitGraph, scope: GraphScope, workingTree: Bool = false) -> GraphLayout {
         let rows = visibleCommits(graph: graph, scope: scope)
         let rowCount = rows.count
         var rowOfCommit = [Int32](repeating: -1, count: graph.count)
@@ -128,6 +147,24 @@ enum LaneLayoutEngine {
             return lane
         }
 
+        // The line from uncommitted changes: the first lane, waiting for HEAD's commit. Born last,
+        // it never keeps HEAD's column from a branch that already leads there.
+        var workingRow: WorkingRow?
+        var workingLane = -1
+        let head = graph.headCommit
+        if workingTree {
+            if head >= 0 && rowOfCommit[Int(head)] >= 0 {
+                lanes.append(head)
+                laneColor.append(0)
+                laneBirth.append(.max)
+                workingLane = 0
+                workingRow = WorkingRow(column: 0, segments: [LaneSegment(from: 0, to: 0, kind: .outgoing, color: LaneSegment.uncommittedColor)])
+            } else if head < 0 {
+                // Before the first commit there's nothing to lead to.
+                workingRow = WorkingRow(column: 0, segments: [])
+            }
+        }
+
         for row in 0..<rowCount {
             segmentStart[row] = Int32(segments.count)
             let commit = rows[row]
@@ -138,15 +175,25 @@ enum LaneLayoutEngine {
             for lane in 0..<lanes.count where lanes[lane] == commit {
                 if mine < 0 || laneBirth[lane] < laneBirth[mine] { mine = lane }
             }
-            if mine < 0 { mine = allocate(row) }
+            if mine < 0 {
+                mine = allocate(row)
+            } else if mine == workingLane {
+                // Only the line from uncommitted changes leads here: HEAD's lane starts now, with a
+                // color of its own.
+                laneColor[mine] = UInt8(nextColor % colorCount)
+                laneBirth[mine] = Int32(row)
+                nextColor += 1
+            }
             let dotColor = laneColor[mine]
 
             for lane in 0..<lanes.count {
+                let color = lane == workingLane ? LaneSegment.uncommittedColor : laneColor[lane]
                 if lanes[lane] == commit {
-                    segments.append(LaneSegment(from: UInt16(lane), to: UInt16(mine), kind: .incoming, color: laneColor[lane]))
+                    segments.append(LaneSegment(from: UInt16(lane), to: UInt16(mine), kind: .incoming, color: color))
                     lanes[lane] = -1
+                    if lane == workingLane { workingLane = -1 }
                 } else if lanes[lane] >= 0 {
-                    segments.append(LaneSegment(from: UInt16(lane), to: UInt16(lane), kind: .through, color: laneColor[lane]))
+                    segments.append(LaneSegment(from: UInt16(lane), to: UInt16(lane), kind: .through, color: color))
                 }
             }
             lanes[mine] = -1
@@ -190,7 +237,8 @@ enum LaneLayoutEngine {
         segmentStart[rowCount] = Int32(segments.count)
 
         return GraphLayout(graph: graph, scope: scope, rows: rows, rowOfCommit: rowOfCommit, column: column, color: color,
-                           segmentStart: segmentStart, segments: segments, laneCount: laneCount)
+                           segmentStart: segmentStart, segments: segments, laneCount: laneCount, includesWorkingTree: workingTree,
+                           workingRow: workingRow)
     }
 
     /// Commits reachable from the scope's refs, in history order.
