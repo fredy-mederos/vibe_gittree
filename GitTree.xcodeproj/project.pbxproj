@@ -284,7 +284,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fredymederos.GitTree;
 				PRODUCT_MODULE_NAME = GitTree;
 				PRODUCT_NAME = "Vibe GitTree";
@@ -314,7 +314,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.1;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fredymederos.GitTree;
 				PRODUCT_MODULE_NAME = GitTree;
 				PRODUCT_NAME = "Vibe GitTree";
