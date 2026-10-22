@@ -244,6 +244,14 @@ enum RepositoryGrouping: String, CaseIterable, Identifiable {
         update(repository)
     }
 
+    /// The default branch GitHub named for a repository, which picks its main branch.
+    func recordDefaultBranch(_ name: String, for id: UUID) {
+        guard var repository = self.repository(id: id) else { return }
+        repository.defaultBranch = name
+        repository.defaultBranchCheckedAt = Date()
+        update(repository)
+    }
+
     /// Removes a repository from the library. For remote ones this also deletes GitTree's clone;
     /// local folders are never touched.
     func remove(_ repository: Repository) {

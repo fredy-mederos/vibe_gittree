@@ -16,11 +16,12 @@ enum GraphMetrics {
     }
 }
 
-/// System colors, so lanes adapt to light, dark and increased-contrast appearances.
+/// System colors, so lanes adapt to light, dark and increased-contrast appearances. Blue is the main
+/// line's alone (`LaneLayoutEngine.mainColor`), so the others keep away from it.
 enum LanePalette {
     static let colors: [NSColor] = [
         .systemBlue, .systemGreen, .systemPink, .systemTeal,
-        .systemPurple, .systemOrange, .systemRed, .systemIndigo,
+        .systemPurple, .systemOrange, .systemRed, .systemBrown,
     ]
 
     static func color(_ index: UInt8) -> NSColor {

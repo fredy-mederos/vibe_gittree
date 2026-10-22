@@ -34,6 +34,11 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     var fixVersionPattern: String?
     /// Comparisons opened lately, newest first (Repository › Recent Comparisons).
     var recentComparisons: [RecentComparison]?
+    /// The branch drawn as the graph's trunk, picked in Repository Settings. Nil: the default branch.
+    var mainBranch: String?
+    /// The default branch GitHub names (develop, main…), and when it was last asked.
+    var defaultBranch: String?
+    var defaultBranchCheckedAt: Date?
 
     static let defaultReleaseTagPattern = #"^v?\d+(\.\d+)+$"#
 
@@ -80,6 +85,11 @@ struct Repository: Identifiable, Codable, Hashable, Sendable {
     var effectiveReleaseTagPattern: String {
         guard let pattern = releaseTagPattern, !pattern.isEmpty else { return Self.defaultReleaseTagPattern }
         return pattern
+    }
+
+    /// The branch drawn as the graph's trunk: the one picked, else the default branch (see `MainBranch`).
+    func effectiveMainBranch(in graph: CommitGraph) -> String? {
+        MainBranch.name(in: graph, chosen: mainBranch, hostDefault: defaultBranch, headIsDefault: kind == .remote)
     }
 
     /// Ticket prefixes set by hand, cleaned up (uppercased, without blanks or duplicates).

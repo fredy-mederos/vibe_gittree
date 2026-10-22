@@ -212,7 +212,7 @@ struct RepositoryWindow: View {
             lines.append("Changes: \(model.hasWorkingTree ? "not looked at yet" : "no working tree")")
         }
         if let layout = graph.layout {
-            lines.append("Graph: \(layout.rowCount) rows, uncommitted row: \(layout.workingRow.map { "lane \($0.column)" } ?? "none")")
+            lines.append("Graph: \(layout.rowCount) rows, uncommitted row: \(layout.workingRow.map { "lane \($0.column)" } ?? "none"), main branch: \(layout.mainBranch ?? "none")")
         }
         lines.append("Stashes: \(model.stashes.count)")
         for stash in model.stashes {

@@ -112,6 +112,7 @@ enum SidebarItem: Hashable {
             }
             model.loadIfNeeded()
             model.refreshPullRequests()
+            model.refreshDefaultBranch()
             // Files that changed while no window showed it are looked at now.
             model.refreshWorkingTreeIfStale()
             // Back to a repository shown before: its Epics and Releases may be due for a refresh.

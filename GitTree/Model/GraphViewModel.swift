@@ -105,6 +105,7 @@ import Observation
     @ObservationIgnored private var followsHeadUntil: Date?
     @ObservationIgnored private var appliedGeneration = -1
     @ObservationIgnored private var appliedWorkingTree = false
+    @ObservationIgnored private var appliedMainBranch: String?
     @ObservationIgnored private var hasInitialSelection = false
     @ObservationIgnored private var layoutTask: Task<Void, Never>?
     @ObservationIgnored private var searchTask: Task<Void, Never>?
@@ -154,9 +155,11 @@ import Observation
     }
 
     private func syncWithModel() {
-        guard model.generation != appliedGeneration || model.hasUncommittedChanges != appliedWorkingTree, model.graph != nil else { return }
+        guard model.graph != nil, model.generation != appliedGeneration || model.hasUncommittedChanges != appliedWorkingTree
+                || model.mainBranch != appliedMainBranch else { return }
         appliedGeneration = model.generation
         appliedWorkingTree = model.hasUncommittedChanges
+        appliedMainBranch = model.mainBranch
         rebuildLayout(reveal: false)
     }
 
@@ -168,7 +171,9 @@ import Observation
             return
         }
         let workingTree = model.hasUncommittedChanges
-        if scope == .all, let all = model.allLayout, all.graph === graph, all.includesWorkingTree == workingTree {
+        let mainBranch = model.mainBranch
+        if scope == .all, let all = model.allLayout, all.graph === graph, all.includesWorkingTree == workingTree,
+           all.mainBranch == mainBranch {
             isLayingOut = false
             apply(all, reveal: reveal)
             return
@@ -177,7 +182,7 @@ import Observation
         let scope = self.scope
         layoutTask = Task { [weak self] in
             let layout = await Task.detached(priority: .userInitiated) {
-                LaneLayoutEngine.layout(graph: graph, scope: scope, workingTree: workingTree)
+                LaneLayoutEngine.layout(graph: graph, scope: scope, workingTree: workingTree, mainBranch: mainBranch)
             }.value
             guard !Task.isCancelled, let self else { return }
             self.isLayingOut = false

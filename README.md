@@ -71,8 +71,10 @@ permission to access that folder.
   fetch was over 10 minutes ago) and on Fetch (⇧⌘F).
 - **Commit graph** of every branch, remote branch and tag, newest first, with colored lanes, branch
   and tag labels (a cloud marks a local branch in sync with its remote), and the checked-out commit
-  ringed. Narrow it to local branches (⌘2), the current branch (⌘3) or a single branch (right-click
-  › Show Only).
+  ringed. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
+  line on the left from its newest commit down to the first one, and no other lane is blue; work
+  merged into it keeps a lane and color of its own, even once its branch is deleted. Narrow it to
+  local branches (⌘2), the current branch (⌘3) or a single branch (right-click › Show Only).
 - **Live updates**: local repositories reload by themselves when you commit, check out or fetch in
   the terminal, keeping your scroll position and selection, and their uncommitted changes follow
   your edits as you save (changes in folders git ignores, like build output, don't count).
@@ -196,7 +198,9 @@ permission to access that folder.
   to the line. The `gittree` command builds these links: `gittree <file>:<line>` finds the commit
   that last changed that line with `git blame`; `gittree <file>`, `gittree <commit>` and plain
   `gittree` work too; `--print` prints the link without opening the app.
-- **Per-repository settings** (right-click › Repository Settings): display name, the Jira profile,
+- **Per-repository settings** (right-click › Repository Settings): display name, the main branch
+  (empty: the default branch on GitHub, else the one git noted when cloning, else `main`, `master`,
+  `develop` or `trunk`), the Jira profile,
   the ticket keys to look for (`PROJ`, or several separated by commas; empty detects them from commit
   messages), an issue link such as `https://example.atlassian.net/browse/{key}` for ticket keys when
   tickets live somewhere else, the regular expression for its fix versions in Releases (empty: the
@@ -239,7 +243,9 @@ requests (and so is the update check):
   then longer. A pull request's timeline is one `gh api graphql` call when you select it (after a
   short pause, so arrowing through the list doesn't ask for every row), in the same one-at-a-time
   line; it's kept for five minutes while the pull request is open and for good once it's merged or
-  closed, and after a failure that pull request waits a minute.
+  closed, and after a failure that pull request waits a minute. The repository's default branch
+  (which picks the main branch) is one `gh repo view` call in the same line, at most once a day per
+  repository, an hour after a failure.
 - **Jira**: one request at a time across all profiles and everything below, at most 20 a minute.
   Every ticket comes in one request with everything Vibe GitTree shows about it: status, type,
   assignee, fix versions and its parent (the epic, or for a sub-task its story or task). Tickets
@@ -316,8 +322,9 @@ scripts/gittree      the deep-link command
 - History comes from one `git log --branches --remotes --tags --date-order` plus `git for-each-ref`,
   parsed byte by byte into parallel arrays. On a 15,858-commit Android repository, loading,
   parsing and laying out the graph takes about half a second in a debug build.
-- The lane layout is one top-to-bottom pass: a commit takes
-  the longest-lived lane waiting for it, so mainlines like `develop` keep their column and color.
+- The lane layout is one top-to-bottom pass. The main branch's first parents keep the first lane
+  all the way down (it stays empty above the branch's newest commit); any other commit takes the
+  longest-lived lane waiting for it.
 - The table is an `NSTableView`, which only creates views for visible rows, so very large histories
   scroll as smoothly as small ones. Graph cells draw their segments with Core Graphics.
 - Layouts, search and "contained in" walks run off the main thread.

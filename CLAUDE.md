@@ -80,7 +80,8 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
 - Network integrations must stay gentle (the user asked for this explicitly): one request at a
   time per service, caching, minimum intervals, timeouts and backoff, and never trigger a request
   from a redraw. GitHub goes through `gh` in `Integrations/GitHub.swift` (rate-limited in
-  `RepositoryModel.refreshPullRequests`; pull request timelines on selection, through the same
+  `RepositoryModel.refreshPullRequests`; pull request timelines on selection, and the default
+  branch that picks the graph's main line at most daily in `refreshDefaultBranch`, through the same
   gate); Jira goes through `JiraStore` (every request through its gate and per-minute budget:
   visible rows first, then recent tickets the Epics section hasn't seen, batched bulk fetch; fix
   versions and ticket lists cached; the progress of epics and of fix versions with a Definition of

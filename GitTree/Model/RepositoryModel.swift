@@ -53,6 +53,8 @@ import Observation
     @ObservationIgnored private var pullRequestsFullAt: Date?
     @ObservationIgnored private var pullRequestRetryAt: Date?
     @ObservationIgnored private var pullRequestBackoff: TimeInterval = 5 * 60
+    @ObservationIgnored private var defaultBranchTask: Task<Void, Never>?
+    @ObservationIgnored private var defaultBranchRetryAt: Date?
 
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var reloadDebounce: Task<Void, Never>?
@@ -105,15 +107,26 @@ import Observation
     /// Local repositories with a working tree (not bare ones, nor Vibe GitTree's clones).
     var hasWorkingTree: Bool { repository.kind == .local && !isBare }
 
+    /// The branch the graph draws as its trunk (see `MainBranch`).
+    var mainBranch: String? {
+        graph.flatMap(repository.effectiveMainBranch(in:))
+    }
+
     func update(repository: Repository) {
         let prefixesChanged = repository.customTicketPrefixes != self.repository.customTicketPrefixes
         let ticketsChanged = repository.jiraProfileID != self.repository.jiraProfileID
             || repository.issueURLTemplate != self.repository.issueURLTemplate
+        let mainBranch = self.mainBranch
         self.repository = repository
         // A different Jira: the Ticket column shows or hides and rows redraw.
         if ticketsChanged { annotationVersion += 1 }
         // Ticket keys are found while loading; new prefixes need a reload.
-        if prefixesChanged, status != .idle { reload() }
+        if prefixesChanged, status != .idle {
+            reload()
+        } else if self.mainBranch != mainBranch {
+            // Another main branch, picked or named by GitHub.
+            layOutAgainIfNeeded()
+        }
     }
 
     func loadIfNeeded() {
@@ -141,8 +154,9 @@ import Observation
                 let graph = try await GraphLoader.load(repositoryAt: directory, ticketPrefixes: ticketPrefixes)
                 let workingTree = await loadedStatus
                 let dirty = workingTree?.isClean == false
+                let mainBranch = self?.repository.effectiveMainBranch(in: graph)
                 let layout = await Task.detached(priority: .userInitiated) {
-                    LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty)
+                    LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty, mainBranch: mainBranch)
                 }.value
                 #if DEBUG
                 NSLog("GitTree: loaded %d commits and %d refs in %@", graph.count, graph.refs.count,
@@ -311,6 +325,36 @@ import Observation
         annotationVersion += 1
     }
 
+    /// Asks GitHub for the repository's default branch, which picks the main branch: at most once a
+    /// day (the answer is kept in the library), one `gh` call at a time with the others, only for a
+    /// repository a window shows, and an hour after a failure. Meanwhile the one git noted when
+    /// cloning stands in.
+    func refreshDefaultBranch() {
+        guard let hosting, hosting.provider == .github, defaultBranchTask == nil, WindowState.isShowing(id) else { return }
+        let now = Date()
+        if let checked = repository.defaultBranchCheckedAt, now.timeIntervalSince(checked) < 24 * 60 * 60 { return }
+        if let retry = defaultBranchRetryAt, now < retry { return }
+        let repositoryPath = hosting.path
+        let id = id
+        defaultBranchTask = Task { [weak self] in
+            await GitHubCLI.gate.enter()
+            guard WindowState.isShowing(id) else {
+                GitHubCLI.gate.leave()
+                self?.defaultBranchTask = nil
+                return
+            }
+            let name = try? await GitHubCLI.defaultBranch(repository: repositoryPath)
+            GitHubCLI.gate.leave()
+            guard let self else { return }
+            self.defaultBranchTask = nil
+            if let name {
+                RepositoryLibrary.shared.recordDefaultBranch(name, for: id)
+            } else {
+                self.defaultBranchRetryAt = Date().addingTimeInterval(60 * 60)
+            }
+        }
+    }
+
     private func didLoad() {
         if repository.kind == .local && watcher == nil { startWatching() }
         refreshStashes()
@@ -319,6 +363,7 @@ import Observation
             Task { await detectHosting() }
         } else {
             refreshPullRequests()
+            refreshDefaultBranch()
         }
         if repository.kind == .remote && !didAutoFetch && AppSettings.fetchRemotesOnOpen {
             didAutoFetch = true
@@ -472,31 +517,33 @@ import Observation
                     self.isBare = true
                     self.workingTree = nil
                     self.workingTreeWatcher = nil
-                    self.layOutUncommittedRow()
+                    self.layOutAgainIfNeeded()
                 }
             }
         }
         // A newer answer may have come during a reload, which laid the history out for an older one.
-        layOutUncommittedRow()
+        layOutAgainIfNeeded()
     }
 
-    /// Gives `allLayout` the row for uncommitted changes, or takes it away, to match the working tree.
-    private func layOutUncommittedRow() {
+    /// Lays `allLayout` out again when it no longer matches: the row for uncommitted changes comes or
+    /// goes with the working tree, or the main branch changed.
+    private func layOutAgainIfNeeded() {
         let dirty = workingTree?.isClean == false
-        guard dirty != hasUncommittedChanges else {
-            // A layout for the other answer may still be on its way.
-            relayoutTask?.cancel()
-            relayoutTask = nil
-            return
-        }
+        let mainBranch = mainBranch
         guard let graph else {
             hasUncommittedChanges = dirty
+            return
+        }
+        if dirty == hasUncommittedChanges, allLayout?.mainBranch == mainBranch {
+            // A layout for an older answer may still be on its way.
+            relayoutTask?.cancel()
+            relayoutTask = nil
             return
         }
         relayoutTask?.cancel()
         relayoutTask = Task { [weak self] in
             let layout = await Task.detached(priority: .userInitiated) {
-                LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty)
+                LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty, mainBranch: mainBranch)
             }.value
             guard !Task.isCancelled, let self, self.graph === graph else { return }
             self.allLayout = layout
@@ -623,6 +670,7 @@ import Observation
             RepositoryLibrary.shared.recordOrigin(remote, for: id)
             hosting = HostingService(remoteURL: remote)
             refreshPullRequests()
+            refreshDefaultBranch()
         }
     }
 }

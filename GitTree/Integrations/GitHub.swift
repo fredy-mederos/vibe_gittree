@@ -217,6 +217,20 @@ enum GitHubCLI {
         }.value
     }
 
+    /// The repository's default branch (develop, main…): one `gh` call. `repository` is `owner/name`.
+    static func defaultBranch(repository: String) async throws -> String {
+        guard let gh = executableURL else {
+            throw CommandError(command: "gh", status: 127, output: "Install the GitHub CLI (brew install gh) and run `gh auth login`.")
+        }
+        let output = try await ProcessRunner.run(
+            gh, ["repo", "view", repository, "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"],
+            environment: Git.environment, timeout: 30
+        )
+        let name = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw CommandError(command: "gh repo view", status: 1, output: "GitHub didn't name a default branch.") }
+        return name
+    }
+
     private struct ListedPullRequest: Decodable {
         struct Commit: Decodable { let oid: String }
         struct Author: Decodable { let login: String }

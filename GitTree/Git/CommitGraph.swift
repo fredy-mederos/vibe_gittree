@@ -49,6 +49,9 @@ final class CommitGraph: @unchecked Sendable {
     let indexByID: [ObjectID: Int32]
     let headCommit: Int32
     let headBranch: String?
+    /// The branch each remote's HEAD names (`origin` → `develop`): the remote's default branch, as
+    /// git noted it when cloning.
+    let remoteHeads: [String: String]
     /// Issue-tracker prefixes that show up often in subjects, like `PROJ` in `PROJ-1234`.
     let ticketPrefixes: [String]
     let ticketRegex: NSRegularExpression?
@@ -66,6 +69,7 @@ final class CommitGraph: @unchecked Sendable {
         refs: [GitRef],
         indexByID: [ObjectID: Int32],
         headCommit: Int32,
+        remoteHeads: [String: String] = [:],
         ticketPrefixes: [String]
     ) {
         self.ids = ids
@@ -80,6 +84,7 @@ final class CommitGraph: @unchecked Sendable {
         self.indexByID = indexByID
         self.headCommit = headCommit
         self.headBranch = refs.first { $0.isHead && $0.kind == .local }?.name
+        self.remoteHeads = remoteHeads
         self.ticketPrefixes = ticketPrefixes
 
         let count = ids.count

@@ -143,6 +143,50 @@ struct RepositorySettingsSheet: View {
         return repository.fixVersionRegex == nil ? "This isn't a valid regular expression." : nil
     }
 
+    /// The repository's history, when it's loaded, for the branches it has.
+    private var graph: CommitGraph? {
+        RepositoryModelStore.shared.existingModel(id: repository.id)?.graph
+    }
+
+    private var typedMainBranch: String {
+        (repository.mainBranch ?? "").trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The main branch when none is picked.
+    private var defaultMainBranch: String {
+        var automatic = repository
+        automatic.mainBranch = nil
+        guard let graph, let name = automatic.effectiveMainBranch(in: graph) else { return "The default branch" }
+        return "Default: \(name)"
+    }
+
+    /// Branches matching what's typed, likely trunks (develop, main, release branches) first.
+    private var mainBranchSuggestions: [String] {
+        guard let graph else { return [] }
+        let typed = typedMainBranch
+        var names: Set<String> = []
+        for ref in graph.refs {
+            if ref.kind == .local {
+                names.insert(ref.name)
+            } else if let branch = ref.remoteParts?.branch {
+                names.insert(branch)
+            }
+        }
+        let matching = names.filter { name in
+            typed.isEmpty ? PullRequestIndex.isLongLived(name) : name != typed && name.localizedCaseInsensitiveContains(typed)
+        }
+        return Array(matching.sorted { a, b in
+            let (aLong, bLong) = (PullRequestIndex.isLongLived(a), PullRequestIndex.isLongLived(b))
+            return aLong != bLong ? aLong : a.localizedStandardCompare(b) == .orderedAscending
+        }.prefix(10))
+    }
+
+    private var mainBranchError: String? {
+        let name = typedMainBranch
+        guard !name.isEmpty, let graph, !MainBranch.exists(name, in: graph) else { return nil }
+        return "There's no branch named \(name); the default branch is drawn instead."
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Form {
@@ -158,6 +202,20 @@ struct RepositorySettingsSheet: View {
                         LabeledContent("Cloned from") {
                             Text(remote).textSelection(.enabled)
                         }
+                    }
+                }
+                Section {
+                    TextField("Main branch", text: optional(\.mainBranch), prompt: Text(defaultMainBranch))
+                        .textInputSuggestions {
+                            ForEach(mainBranchSuggestions, id: \.self) { name in
+                                Text(name).textInputCompletion(name)
+                            }
+                        }
+                } footer: {
+                    if let mainBranchError {
+                        Text(mainBranchError).foregroundStyle(.red)
+                    } else {
+                        Text("Drawn as a straight blue line on the left of the graph, down to the first commit; what was merged into it keeps other colors. Leave it empty for the repository's default branch on GitHub (or the one git noted when cloning), else main, master, develop or trunk.")
                     }
                 }
                 Section {
@@ -214,6 +272,7 @@ struct RepositorySettingsSheet: View {
                     latest.issueURLTemplate = repository.issueURLTemplate
                     latest.releaseTagPattern = repository.releaseTagPattern
                     latest.fixVersionPattern = repository.fixVersionPattern
+                    latest.mainBranch = typedMainBranch.isEmpty ? nil : typedMainBranch
                     if repository.jiraProfileID != initialJiraProfileID { latest.jiraProfileID = repository.jiraProfileID }
                     let prefixes = ticketPrefixes.split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init)
                     latest.ticketPrefixes = prefixes.isEmpty ? nil : prefixes
@@ -225,7 +284,7 @@ struct RepositorySettingsSheet: View {
             }
             .padding([.horizontal, .bottom], 20)
         }
-        .frame(width: 560, height: 640)
+        .frame(width: 560, height: 740)
     }
 
     private func optional(_ keyPath: WritableKeyPath<Repository, String?>) -> Binding<String> {

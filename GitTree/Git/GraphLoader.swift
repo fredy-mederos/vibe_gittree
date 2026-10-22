@@ -8,7 +8,7 @@ enum GraphLoader {
     /// `ticketPrefixes` replaces the detected ticket prefixes when it isn't empty.
     static func load(repositoryAt directory: URL, ticketPrefixes: [String] = []) async throws -> CommitGraph {
         async let refsData = Git.run(
-            ["for-each-ref", "--format=%(HEAD)%1f%(refname)%1f%(objectname)%1f%(*objectname)", "refs/heads", "refs/remotes", "refs/tags"],
+            ["for-each-ref", "--format=%(HEAD)%1f%(refname)%1f%(objectname)%1f%(*objectname)%1f%(symref)", "refs/heads", "refs/remotes", "refs/tags"],
             in: directory
         )
         async let headData = Git.run(["rev-parse", "--verify", "--quiet", "HEAD"], in: directory, allowFailure: true)
@@ -113,10 +113,18 @@ enum GraphLoader {
         let parentList = parentIDs.map { indexByID[$0] ?? -1 }
 
         var refs: [GitRef] = []
+        var remoteHeads: [String: String] = [:]
         for line in String(decoding: refData, as: UTF8.self).split(separator: "\n") {
             let parts = line.split(separator: "\u{1F}", omittingEmptySubsequences: false)
             guard parts.count >= 4 else { continue }
             let fullName = String(parts[1])
+            // `refs/remotes/origin/HEAD` → `refs/remotes/origin/develop`: the remote's default branch.
+            if parts.count >= 5, fullName.hasPrefix("refs/remotes/"), fullName.hasSuffix("/HEAD") {
+                let remote = fullName.dropFirst("refs/remotes/".count).dropLast("/HEAD".count)
+                let prefix = "refs/remotes/\(remote)/"
+                if parts[4].hasPrefix(prefix) { remoteHeads[String(remote)] = String(parts[4].dropFirst(prefix.count)) }
+                continue
+            }
             let target = parts[3].isEmpty ? parts[2] : parts[3]
             guard let oid = ObjectID(hex: String(target)), let commit = indexByID[oid] else { continue }
             let kind: GitRef.Kind
@@ -152,6 +160,7 @@ enum GraphLoader {
             refs: refs,
             indexByID: indexByID,
             headCommit: headCommit,
+            remoteHeads: remoteHeads,
             ticketPrefixes: ticketPrefixes.isEmpty ? TicketDetector.prefixes(in: subjects) : ticketPrefixes
         )
     }
