@@ -654,6 +654,16 @@ import Observation
         return await perform(String(localized: "Dropping \(stash.name)…")) { try await WorkingTreeActions.drop(id, in: $0) }
     }
 
+    /// Deletes another worktree (git refuses one with changes); the history reloads without it.
+    func removeWorktree(_ worktree: Worktree) async -> Bool {
+        let path = worktree.path
+        let removed = await perform(String(localized: "Deleting worktree \(worktree.name)…")) {
+            try await WorkingTreeActions.removeWorktree(at: path, in: $0)
+        }
+        if removed { reload() }
+        return removed
+    }
+
     func dismissChangeError() {
         changeError = nil
     }

@@ -171,9 +171,9 @@ struct RepositoryWindow: View {
 /// `-GTDescribeAfter` seconds) writes the working tree's status, the stashes, the worktrees and what
 /// the details show, `-GTPerform <steps>` runs changes one
 /// after another (`stage:<path>`, `unstage:<path>`, `stageAll`, `unstageAll`, `commit:<message>`,
-/// `stash:<message>`, `stashStaged:<message>`, `apply:<n>`, `pop:<n>`, `drop:<n>`, separated by
-/// `;`, with `-GTAllowChanges YES`), `-GTZoom <seconds>` zooms every window in and out a few times
-/// (as double-clicking a title bar does), and `-GTSnapshot <folder>` (after
+/// `stash:<message>`, `stashStaged:<message>`, `apply:<n>`, `pop:<n>`, `drop:<n>`,
+/// `removeWorktree:<name>`, separated by `;`, with `-GTAllowChanges YES`), `-GTZoom <seconds>`
+/// zooms every window in and out a few times (as double-clicking a title bar does), and `-GTSnapshot <folder>` (after
 /// `-GTSnapshotAfter` seconds, 10 by default) has every window draw itself into a PNG there, for
 /// checks where `screencapture` isn't allowed. Elsewhere:
 /// `-GTDataDirectory <folder>` (throwaway library, Jira profiles, test tokens and sidebar folds),
@@ -452,6 +452,10 @@ struct RepositoryWindow: View {
             case "apply": if let stash { _ = await model.applyStash(stash) }
             case "pop": if let stash { _ = await model.popStash(stash) }
             case "drop": if let stash { _ = await model.dropStash(stash) }
+            case "removeWorktree":
+                if let worktree = state.graph?.commitGraph?.worktrees.first(where: { $0.name == value }) {
+                    _ = await model.removeWorktree(worktree)
+                }
             default: NSLog("GitTree: unknown step %@", step)
             }
             if let error = model.changeError { NSLog("GitTree: %@ failed: %@", step, error) }

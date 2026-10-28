@@ -540,6 +540,28 @@
     "current branch": {
       "hi": "वर्तमान ब्रांच"
     },
+    "delete": {
+      "ar": "حذف",
+      "de": "löschen",
+      "es": "eliminar",
+      "fr": "supprimer",
+      "hi": "डिलीट करें",
+      "id": "hapus",
+      "it": "eliminare",
+      "ja": "削除",
+      "ko": "삭제",
+      "ms": "padam",
+      "nl": "verwijderen",
+      "pl": "usunąć",
+      "pt-BR": "excluir",
+      "ru": "удалить",
+      "th": "ลบ",
+      "tr": "sil",
+      "uk": "видалити",
+      "vi": "xóa",
+      "zh-Hans": "删除",
+      "zh-Hant": "刪除"
+    },
     "description": {
       "hi": "वर्णन"
     },

@@ -376,7 +376,7 @@ private struct GeneralSettingsView: View {
             Section {
                 Toggle("Allow commits and stashes", isOn: $allowsChanges)
             } footer: {
-                Text("Uncommitted Changes gets checkboxes to stage files, and a box to commit or stash them; stashes can be applied, popped or dropped. Off, Vibe GitTree never changes a repository (fetching aside).")
+                Text("Uncommitted Changes gets checkboxes to stage files, and a box to commit or stash them; stashes can be applied, popped or dropped, and worktrees deleted. Off, Vibe GitTree never changes a repository (fetching aside).")
             }
             Section("Git") {
                 TextField("Git executable", text: $gitPath, prompt: Text(Git.detectedExecutable.path))

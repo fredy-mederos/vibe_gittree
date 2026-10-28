@@ -1,9 +1,9 @@
 import Foundation
 
-/// The commands that change a repository, besides `fetch`: staging, committing and stashing. Each
-/// one is started by a click, and only with Settings › General › Allow commits and stashes on.
-/// Nothing here discards changes: unstaging keeps them in the working tree, and a stash keeps
-/// what it takes.
+/// The commands that change a repository, besides `fetch`: staging, committing, stashing and
+/// deleting another worktree. Each one is started by a click, and only with Settings › General ›
+/// Allow commits and stashes on. Nothing here discards changes: unstaging keeps them in the working
+/// tree, a stash keeps what it takes, and a worktree with changes or commits of its own is kept.
 enum WorkingTreeActions {
     /// Stages files for the next commit: their changes, their deletion, or the new file.
     static func stage(_ paths: [String], in directory: URL) async throws {
@@ -60,6 +60,34 @@ enum WorkingTreeActions {
     static func drop(_ stash: ObjectID, in directory: URL) async throws {
         let name = try await reference(to: stash, in: directory)
         try await Git.change(["stash", "drop", "--quiet", name], in: directory)
+    }
+
+    /// Deletes another worktree: its folder, with the files git ignores there (build products), and
+    /// git's record of it; its branch stays. Without `--force`, git refuses a worktree with changes
+    /// or new files, a locked one and the main one. Changes are looked for here first, to say so
+    /// in the app's words (git's suggest `--force`); and on a detached HEAD, a commit no branch or
+    /// tag has would be lost with the worktree, so that's refused too.
+    static func removeWorktree(at path: String, in directory: URL) async throws {
+        // Looked up again: it may have committed or switched branches since the history loaded.
+        let listings = Worktree.listings(try await Git.run(["worktree", "list", "--porcelain", "-z"], in: directory))
+        guard let worktree = listings.first(where: { $0.path == path }) else {
+            throw GitError(arguments: ["worktree"], status: 1, output: String(localized: "This worktree isn't there anymore: it was deleted or moved elsewhere."))
+        }
+        // What `git worktree remove` looks at, read-only (`GIT_OPTIONAL_LOCKS=0`).
+        if !worktree.isMissing,
+           try await !Git.run(["status", "--porcelain", "--ignore-submodules=none"], in: URL(fileURLWithPath: path)).isEmpty {
+            throw GitError(arguments: ["worktree"], status: 1,
+                           output: String(localized: "It has uncommitted changes or new files, so it's kept. Commit or stash them first: Open as Repository shows them."))
+        }
+        if worktree.branch == nil, let head = worktree.head {
+            let containing = try await Git.string(["for-each-ref", "--count=1", "--contains", head.hex, "--format=%(refname)",
+                                                   "refs/heads", "refs/remotes", "refs/tags"], in: directory)
+            if containing.isEmpty {
+                throw GitError(arguments: ["worktree"], status: 1,
+                               output: String(localized: "Its commit \(head.short) isn't on any branch or tag, so deleting the worktree would lose it. Create a branch for it first."))
+            }
+        }
+        try await Git.change(["worktree", "remove", path], in: directory)
     }
 
     /// `stash@{n}` for a stash, looked up again just before using it: git takes stashes only by

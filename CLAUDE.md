@@ -30,10 +30,11 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
   constraint passes until it stops the app. `-GTZoom <seconds>` zooms every window in and out, to check.
 - Read-only unless the user allows changes: never run git commands that change a user's repository,
   except `fetch` (on an explicit user action, or for clones Vibe GitTree manages itself) and, with
-  Settings › General › Allow commits and stashes on (off by default), staging, unstaging, committing
-  and stashing through `Git/WorkingTreeActions.swift`, each on an explicit click (dropping a stash
-  after a confirmation). Nothing may discard uncommitted work (no `checkout --`, `reset --hard`,
-  `clean`). Looking stays read-only: `git status` runs with `GIT_OPTIONAL_LOCKS=0` (in
+  Settings › General › Allow commits and stashes on (off by default), staging, unstaging, committing,
+  stashing and deleting other worktrees through `Git/WorkingTreeActions.swift`, each on an explicit
+  click (dropping a stash or deleting a worktree after a confirmation). Nothing may discard
+  uncommitted work (no `checkout --`, `reset --hard`, `clean`, `worktree remove --force`), nor
+  commits only a detached worktree has. Looking stays read-only: `git status` runs with `GIT_OPTIONAL_LOCKS=0` (in
   `Git.environment`), so it never rewrites the index. Paths passed to those commands are marked
   `:(literal)` (`Git.pathspecInput`); `--literal-pathspecs` would also break the `:/` that `git stash`
   uses inside, leaving new files behind.
