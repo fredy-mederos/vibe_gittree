@@ -122,12 +122,15 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
 ## Git
 
 - This repository's remote is `github.com/fredy-mederos/vibe_gittree`, public (or about to be).
-  Commits use the repo-local identity `Fredy Mederos <fmfredd@gmail.com>`; don't change it to the
-  work address.
+  The owner's commits use the repo-local identity `Fredy Mederos <fmfredd@gmail.com>`; don't change
+  it to the work address. Contributors commit under their own name.
 - Nothing about the user's employer goes into the repository: not its name, GitHub org, Jira site,
   ticket keys, feature codenames or real ticket and fix version names, in files, samples, mock data
   or commit messages. Use neutral samples (Acme, `PROJ-123`, `[Search]`, `example.atlassian.net`).
-- Issues are welcome; pull requests aren't accepted (see `CONTRIBUTING.md`).
+- Issues and pull requests are welcome (`CONTRIBUTING.md`). A pull request's description has the
+  prompts that made it, word for word and in order, and screenshots of the change, taken with a
+  public or throwaway repository: `.github/pull_request_template.md` asks for both, and the
+  `pull-request-vibe-gittree` skill in `skills/` gets a pull request ready.
 - The web snapshot generator (`scripts/build.py`, `src/template.html`) was removed; it's still in
   the history. `dist/` may hold pages it built, with real commit history: it stays git-ignored,
   never commit it.

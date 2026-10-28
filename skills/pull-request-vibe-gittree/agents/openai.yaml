@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open a Vibe GitTree Pull Request"
+  short_description: "Prepare and open a pull request with its prompts and screenshots"
+  default_prompt: "Get this change ready for a pull request to Vibe GitTree: check it against CLAUDE.md, check its translations, build it, collect my prompts word for word, take before and after screenshots, write the description from the template, and open it as a draft once I've seen it."

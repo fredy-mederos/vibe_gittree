@@ -15,9 +15,9 @@ stage, commit and stash.
 </p>
 
 Ideas queued for later are in [TODO.md](TODO.md). It's a personal project under the
-[MIT license](LICENSE): clone it and fork it freely, and [open an issue](https://github.com/fredy-mederos/vibe_gittree/issues)
-for bugs or ideas (Help › Report an Issue or Idea…); pull requests aren't accepted (see
-[CONTRIBUTING.md](CONTRIBUTING.md)).
+[MIT license](LICENSE): clone it and fork it freely, [open an issue](https://github.com/fredy-mederos/vibe_gittree/issues)
+for bugs or ideas (Help › Report an Issue or Idea…), or send a pull request with the prompt you gave
+your coding agent and screenshots of the change (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Vibe GitTree for macOS
 
