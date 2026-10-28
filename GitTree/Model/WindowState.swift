@@ -272,6 +272,18 @@ enum SidebarItem: Hashable {
         if let first = library.repositories.first { open(first.id) }
     }
 
+    /// Deletes another worktree of the window's repository, confirmed in the sidebar; when git
+    /// refuses (changes there, a lock), an alert says why.
+    func deleteWorktree(_ worktree: Worktree) async {
+        guard let model = graph?.model else { return }
+        if await model.removeWorktree(worktree) {
+            if case .worktree(_, worktree.path)? = sidebarSelection { sidebarSelection = nil }
+        } else if let error = model.changeError {
+            model.dismissChangeError()
+            showError(String(localized: "Couldn't Delete Worktree"), error)
+        }
+    }
+
     // MARK: Deep links
 
     func handle(_ url: URL) {

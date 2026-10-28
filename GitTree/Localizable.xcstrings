@@ -32780,6 +32780,130 @@
         }
       }
     },
+    "Couldn't Delete Worktree" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر حذف شجرة العمل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree konnte nicht gelöscht werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo eliminar el worktree"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de supprimer le worktree"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वर्कट्री डिलीट नहीं हो सकी"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidak Dapat Menghapus Worktree"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile eliminare il worktree"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリーを削除できませんでした"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워크트리를 삭제할 수 없습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidak Dapat Memadam Worktree"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree kon niet worden verwijderd"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie udało się usunąć worktree"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível excluir a worktree"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось удалить рабочее дерево"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบเวิร์กทรีไม่สำเร็จ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree Silinemedi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не вдалося видалити worktree"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Không thể xóa worktree"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法删除工作树"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法刪除工作樹"
+          }
+        }
+      }
+    },
     "Couldn't Load the Changes" : {
       "localizations" : {
         "ar" : {
@@ -34648,6 +34772,254 @@
         }
       }
     },
+    "Delete Worktree" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف شجرة العمل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree löschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar worktree"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le worktree"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वर्कट्री डिलीट करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hapus Worktree"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina worktree"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリーを削除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워크트리 삭제"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Padam Worktree"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder worktree"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usuń worktree"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluir worktree"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить рабочее дерево"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบเวิร์กทรี"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree’yi Sil"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити worktree"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa worktree"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除工作树"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除工作樹"
+          }
+        }
+      }
+    },
+    "Delete Worktree…" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف شجرة العمل…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree löschen …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar worktree…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le worktree…"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वर्कट्री डिलीट करें…"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hapus Worktree…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina worktree…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリーを削除…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워크트리 삭제…"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Padam Worktree…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verwijder worktree…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usuń worktree…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluir worktree…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить рабочее дерево…"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบเวิร์กทรี…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree’yi Sil…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити worktree…"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa worktree…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除工作树…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除工作樹…"
+          }
+        }
+      }
+    },
     "Delete the stash and its changes" : {
       "localizations" : {
         "ar" : {
@@ -34768,6 +35140,254 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刪除儲藏及其變更"
+          }
+        }
+      }
+    },
+    "Delete the worktree %@?" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هل تريد حذف شجرة العمل %@؟"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree %@ löschen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar el worktree %@?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le worktree %@ ?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "क्या वर्कट्री %@ डिलीट करें?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hapus worktree %@?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuoi eliminare il worktree %@?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリー%@を削除しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워크트리 %@ 삭제하시겠습니까?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Padam worktree %@?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree %@ verwijderen?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usunąć worktree %@?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluir a worktree %@?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить рабочее дерево %@?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบเวิร์กทรี %@ หรือไม่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree %@ silinsin mi?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалити worktree %@?"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xóa worktree %@?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要删除工作树 %@ 吗？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要刪除工作樹 %@ 嗎？"
+          }
+        }
+      }
+    },
+    "Deleting worktree %@…" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ حذف شجرة العمل %@…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree %@ wird gelöscht …"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminando el worktree %@…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suppression du worktree %@…"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वर्कट्री %@ डिलीट किया जा रहा है…"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menghapus worktree %@…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminazione del worktree %@…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリー%@を削除中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워크트리 %@ 삭제 중…"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Memadam worktree %@…"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree %@ verwijderen…"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usuwanie worktree %@…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluindo a worktree %@…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удаление рабочего дерева %@…"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กำลังลบเวิร์กทรี %@…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree %@ siliniyor…"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видалення worktree %@…"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đang xóa worktree %@…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在删除工作树 %@…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在刪除工作樹 %@…"
           }
         }
       }
@@ -46586,6 +47206,130 @@
         }
       }
     },
+    "It has uncommitted changes or new files, so it's kept. Commit or stash them first: Open as Repository shows them." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحتوي شجرة العمل على تغييرات غير مودعة أو ملفات جديدة، لذلك تبقى محفوظة. أودِعها أو خبّئها أولاً: «فتح كمستودع» يعرضها."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Worktree hat nicht committete Änderungen oder neue Dateien und bleibt deshalb erhalten. Committe oder stashe sie zuerst: „Als Repository öffnen“ zeigt sie an."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El worktree tiene cambios sin commit o archivos nuevos, así que se conserva. Primero, haz commit o stash de ellos: «Abrir como repositorio» los muestra."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le worktree contient des modifications non validées ou de nouveaux fichiers, il est donc conservé. Validez-les ou remisez-les d’abord : « Ouvrir comme dépôt » les affiche."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वर्कट्री में कमिट न किए गए बदलाव या नई फ़ाइलें हैं, इसलिए इसे रखा गया है। पहले इन्हें कमिट करें या स्टैश करें: “रिपॉज़िटरी के रूप में खोलें” इन्हें दिखाता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree ini memiliki perubahan yang belum di-commit atau berkas baru, sehingga dipertahankan. Lakukan commit atau stash pada perubahan tersebut terlebih dahulu: “Buka sebagai Repositori” menampilkannya."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il worktree ha modifiche non committate o nuovi file, quindi viene conservato. Prima esegui il commit o metti in stash le modifiche e i nuovi file: “Apri come repository” li mostra."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリーには未コミットの変更や新規ファイルがあるため、保持されます。先にそれらをコミットするかスタッシュしてください。「リポジトリとして開く」で表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "워크트리에 커밋하지 않은 변경 사항이나 새 파일이 있으므로 유지됩니다. 먼저 그것들을 커밋하거나 스태시하세요: “저장소로 열기”가 그것들을 보여 줍니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree ini mempunyai perubahan yang belum di-commit atau fail baharu, jadi ia dikekalkan. Commit atau stash perubahan tersebut terlebih dahulu: “Buka sebagai Repositori” menunjukkannya."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De worktree heeft niet-gecommitte wijzigingen of nieuwe bestanden, dus hij blijft bewaard. Commit of stash ze eerst: “Open als repository” toont ze."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree ma niezatwierdzone zmiany lub nowe pliki, więc zostaje zachowany. Najpierw zatwierdź lub schowaj je: „Otwórz jako repozytorium” je pokazuje."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A worktree tem alterações sem commit ou arquivos novos, por isso ela é mantida. Antes, faça commit ou stash deles: “Abrir como repositório” os mostra."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В рабочем дереве есть незакоммиченные изменения или новые файлы, поэтому оно сохраняется. Сначала закоммитьте их или отложите в стэш: «Открыть как репозиторий» показывает их."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เวิร์กทรีมีการเปลี่ยนแปลงที่ยังไม่ได้คอมมิตหรือไฟล์ใหม่ จึงถูกเก็บไว้ ควรคอมมิตหรือสแตชสิ่งเหล่านั้นก่อน: “เปิดเป็นรีโพซิทอรี” แสดงสิ่งเหล่านั้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree’de commit edilmemiş değişiklikler veya yeni dosyalar var, bu yüzden korunur. Önce bunları commit edin veya stash’e alın: “Depo Olarak Aç” bunları gösterir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree зберігається, бо містить незакомічені зміни або нові файли. Спочатку закомітьте їх або збережіть в stash: «Відкрити як репозиторій» їх показує."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree có thay đổi chưa commit hoặc tệp mới nên được giữ lại. Hãy commit hoặc stash chúng trước: “Mở dưới dạng kho lưu trữ” sẽ hiển thị chúng."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工作树有未提交的更改或新文件，所以会被保留。请先提交或贮藏这些更改：“作为仓库打开”会显示它们。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工作樹有未提交的變更或新檔案，所以會被保留。請先提交或儲藏這些變更：「以儲存庫打開」會顯示它們。"
+          }
+        }
+      }
+    },
     "It was applied or dropped." : {
       "localizations" : {
         "ar" : {
@@ -46834,6 +47578,254 @@
         }
       }
     },
+    "Its commit %@ isn't on any branch or tag, so deleting the worktree would lose it. Create a branch for it first." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإيداع %@ الخاص بشجرة العمل غير موجود على أي فرع أو وسم، لذا سيؤدي حذف شجرة العمل إلى فقدانه. أنشئ له فرعًا أولًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sein Commit %@ liegt auf keinem Branch und keinem Tag, daher ginge er beim Löschen des Worktrees verloren. Lege vorher einen Branch dafür an."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su commit %@ no está en ninguna rama ni etiqueta, así que al eliminar el worktree se perdería. Crea antes una rama para él."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son commit %@ n’est sur aucune branche ni aucun tag : supprimer le worktree le ferait perdre. Créez d’abord une branche pour lui."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस वर्कट्री के %@ कमिट को किसी भी ब्रांच या टैग में नहीं रखा गया है, इसलिए वर्कट्री डिलीट करने पर वह खो जाएगा। पहले उसके लिए एक ब्रांच बनाएँ।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commit %@ tidak berada di branch atau tag mana pun, sehingga menghapus worktree akan menghilangkannya. Buat dulu branch untuk commit tersebut."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il suo commit %@ non si trova su nessun branch né tag, quindi eliminare il worktree lo farebbe perdere. Crea prima un branch per esso."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワークツリーのコミット%@はどのブランチにもタグにもないため、ワークツリーを削除するとこのコミットが失われます。先にこのコミット用のブランチを作成してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 워크트리의 %@ 커밋이 어떤 브랜치나 태그에도 없어서 워크트리를 삭제하면 잃게 됩니다. 먼저 이 커밋용 브랜치를 만드세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commit %@ worktree ini tidak berada pada mana-mana branch atau tag, jadi memadam worktree akan menghilangkannya. Cipta branch untuk commit itu terlebih dahulu."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De commit %@ van deze worktree staat op geen enkele branch of tag, dus door de worktree te verwijderen gaat hij verloren. Maak eerst een branch voor hem aan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jego commit %@ nie znajduje się w żadnej gałęzi ani tagu, więc usunięcie worktree spowodowałoby jego utratę. Najpierw utwórz dla niego gałąź."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O commit %@ não está em nenhum branch nem em nenhuma tag, então excluir a worktree o faria se perder. Crie primeiro um branch para ele."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коммит %@ не находится ни в одной ветке и ни на одном теге, поэтому удаление рабочего дерева приведёт к его потере. Сначала создайте для него ветку."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "คอมมิต %@ ของเวิร์กทรีนี้ไม่อยู่บนแบรนช์หรือแท็กใดเลย การลบเวิร์กทรีจะทำให้คอมมิตนี้หายไป สร้างแบรนช์ให้คอมมิตนี้ก่อน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree’nin commit’i %@ hiçbir dalda veya etikette değil, bu yüzden worktree’yi silmek onu kaybettirir. Önce bu commit için bir dal oluşturun."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коміт %@ не міститься в жодній гілці чи тегу, тож видалення worktree призведе до його втрати. Спочатку створіть для нього гілку."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commit %@ của nó không nằm trên nhánh hay tag nào, nên xóa worktree sẽ làm mất commit đó. Hãy tạo nhánh cho commit này trước."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的提交 %@ 不在任何分支或标签上，删除工作树会使它丢失。请先为它创建一个分支。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的提交 %@ 不在任何分支或標籤上，刪除工作樹會使它遺失。請先為它建立一個分支。"
+          }
+        }
+      }
+    },
+    "Its folder is already gone, so git only forgets the worktree." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجلدها غير موجود أصلًا، لذا لا يفعل git سوى نسيان شجرة العمل."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sein Ordner existiert nicht mehr, daher vergisst git nur den Worktree."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su carpeta ya no existe, así que git solo olvida el worktree."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son dossier a déjà disparu, donc git ne fait qu’oublier le worktree."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इसका फ़ोल्डर पहले ही जा चुका है, इसलिए git केवल वर्कट्री को भुला देगा।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foldernya sudah tidak ada, jadi git hanya melupakan worktree ini."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La sua cartella non esiste più, quindi git dimentica solo il worktree."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダはすでにないため、gitはワークツリーの記録を消すだけです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "폴더가 이미 없으므로 git은 워크트리 정보만 잊습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foldernya sudah tiada, jadi git hanya melupakan worktree ini."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De map is al verdwenen, dus git vergeet alleen de worktree."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jego folder już zniknął, więc git tylko zapomni o worktree."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A pasta dela já não existe, então o git só esquece a worktree."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папки уже нет, поэтому git просто забудет рабочее дерево."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "โฟลเดอร์ของเวิร์กทรีนี้หายไปแล้ว git จึงลืมเวิร์กทรีนี้เท่านั้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klasörü zaten yok, bu yüzden git yalnızca worktree’yi unutur."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Його папки вже немає, тож git лише забуде worktree."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thư mục của nó đã mất, nên git chỉ quên worktree này."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的文件夹已不存在，因此 git 只会移除这个工作树的记录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的檔案夾已經不存在，因此 git 只會移除這個工作樹的紀錄。"
+          }
+        }
+      }
+    },
     "Its folder is gone; git worktree prune would forget it." : {
       "localizations" : {
         "ar" : {
@@ -46954,6 +47946,130 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "它的檔案夾已不存在；git worktree prune 會將它移除。"
+          }
+        }
+      }
+    },
+    "Its folder, %@, is deleted with the files git ignores there (build products, say). Git won't delete a worktree with uncommitted changes or new files." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجلدها %@ سيُحذف مع الملفات التي يتجاهلها git فيه (مثل نواتج البناء). ولن يحذف git شجرة عمل بها تغييرات غير مودعة أو ملفات جديدة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sein Ordner %@ wird samt den Dateien gelöscht, die git dort ignoriert (etwa Build-Produkte). Git löscht keinen Worktree mit nicht committeten Änderungen oder neuen Dateien."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su carpeta, %@, se elimina junto con los archivos que git ignora allí (por ejemplo, productos de compilación). Git no elimina un worktree con cambios sin commit ni archivos nuevos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son dossier %@ est supprimé avec les fichiers que git y ignore (produits de compilation, par exemple). Git ne supprime pas un worktree comportant des modifications non validées ou de nouveaux fichiers."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इसका फ़ोल्डर %@ उन फ़ाइलों समेत डिलीट हो जाएगा जिन्हें git वहाँ अनदेखा करता है (जैसे बिल्ड के उत्पाद)। Git ऐसी वर्कट्री डिलीट नहीं करेगा जिसमें कमिट न किए गए बदलाव या नई फ़ाइलें हों।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foldernya, %@, akan dihapus beserta berkas yang diabaikan git di dalamnya (misalnya hasil build). Git tidak akan menghapus worktree yang memiliki perubahan yang belum di-commit atau berkas baru."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La sua cartella, %@, viene eliminata insieme ai file che git ignora lì (per esempio i prodotti di build). Git non elimina un worktree con modifiche non committate o nuovi file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダ%@は、gitが無視するファイル（ビルド生成物など）とともに削除されます。gitは、未コミットの変更や新しいファイルがあるワークツリーは削除しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 폴더는 git이 그곳에서 무시하는 파일(예: 빌드 산출물)과 함께 삭제됩니다. git은 커밋하지 않은 변경 사항이나 새 파일이 있는 워크트리는 삭제하지 않습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foldernya, %@, dipadam bersama fail yang diabaikan git di situ (contohnya hasil binaan). Git tidak akan memadam worktree yang mempunyai perubahan yang belum di-commit atau fail baharu."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De map %@ wordt samen met de bestanden die git daar negeert (bijvoorbeeld buildproducten) verwijderd. Git verwijdert geen worktree met niet-gecommitte wijzigingen of nieuwe bestanden."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jego folder %@ zostanie usunięty razem z plikami, które git tam ignoruje (np. wynikami kompilacji). Git nie usunie worktree z niezatwierdzonymi zmianami ani nowymi plikami."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A pasta dela, %@, é excluída junto com os arquivos que o git ignora ali (por exemplo, produtos de build). O git não exclui uma worktree com alterações sem commit ou arquivos novos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Папка %@ удаляется вместе с файлами, которые git там игнорирует (например, продукты сборки). Git не удаляет рабочее дерево с незакоммиченными изменениями или новыми файлами."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "โฟลเดอร์ของเวิร์กทรีนี้ %@ จะถูกลบพร้อมไฟล์ที่ git ไม่สนใจในโฟลเดอร์นั้น (เช่น ผลลัพธ์จากการบิลด์) git จะไม่ลบเวิร์กทรีที่มีการเปลี่ยนแปลงที่ยังไม่ได้คอมมิตหรือไฟล์ใหม่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ klasörü, git’in orada yok saydığı dosyalarla birlikte silinir (örneğin derleme ürünleri). Git, commit edilmemiş değişiklikleri veya yeni dosyaları olan bir worktree’yi silmez."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Його папка %@ буде видалена разом із файлами, які git там ігнорує (наприклад, продукти збирання). Git не видалить worktree з незакоміченими змінами чи новими файлами."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thư mục của nó, %@, sẽ bị xóa cùng các tệp mà git bỏ qua ở đó (ví dụ: sản phẩm build). Git không xóa worktree có thay đổi chưa commit hoặc tệp mới."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的文件夹 %@ 会连同 git 在其中忽略的文件（例如构建产物）一并删除。Git 不会删除含有未提交更改或新文件的工作树。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的檔案夾 %@ 會連同 git 在其中忽略的檔案（例如建置產物）一併刪除。Git 不會刪除含有未提交變更或新檔案的工作樹。"
           }
         }
       }
@@ -80649,6 +81765,130 @@
         }
       }
     },
+    "The branch %@ stays." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يبقى الفرع %@ كما هو."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Branch %@ bleibt erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La rama %@ se mantiene."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La branche %@ est conservée."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्रांच %@ बनी रहेगी।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branch %@ tetap ada."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il branch %@ rimane."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブランチ%@は残ります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 브랜치는 그대로 남습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branch %@ kekal."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De branch %@ blijft bestaan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gałąź %@ pozostaje."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O branch %@ permanece."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ветка %@ остаётся."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แบรนช์ %@ ยังคงอยู่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ dalı kalır."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Гілка %@ залишається."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nhánh %@ được giữ lại."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分支 %@ 会保留。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分支 %@ 會保留。"
+          }
+        }
+      }
+    },
     "The branch to compare" : {
       "localizations" : {
         "ar" : {
@@ -83755,6 +84995,130 @@
         }
       }
     },
+    "This worktree isn't there anymore: it was deleted or moved elsewhere." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "شجرة العمل هذه لم تعد موجودة: فقد حُذفت أو نُقلت إلى مكان آخر."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Worktree ist nicht mehr da: Er wurde gelöscht oder woanders hin verschoben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este worktree ya no está: se eliminó o se movió a otro lugar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce worktree n’existe plus : il a été supprimé ou déplacé ailleurs."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह वर्कट्री अब वहाँ नहीं है: इसे डिलीट कर दिया गया या कहीं और ले जाया गया है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree ini sudah tidak ada: ia dihapus atau dipindahkan ke tempat lain."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo worktree non c’è più: è stato eliminato o spostato altrove."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このワークツリーはもうありません。削除されたか、別の場所に移動されています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 워크트리는 더 이상 없습니다. 삭제되었거나 다른 곳으로 옮겨졌습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree ini tiada lagi: ia telah dipadam atau dialihkan ke tempat lain."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deze worktree is er niet meer: hij is verwijderd of ergens anders naartoe verplaatst."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tego worktree już nie ma: został usunięty albo przeniesiony gdzie indziej."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta worktree não está mais aqui: ela foi excluída ou movida para outro lugar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этого рабочего дерева больше нет: оно удалено или перемещено в другое место."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เวิร์กทรีนี้ไม่อยู่ที่เดิมแล้ว: ถูกลบไปหรือถูกย้ายไปที่อื่น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu worktree artık orada değil: silinmiş ya da başka bir yere taşınmış."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цього worktree більше немає: його видалено або переміщено деінде."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree này không còn ở đó nữa: nó đã bị xóa hoặc chuyển đi nơi khác."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个工作树已不存在：它被删除了，或是被移到了别处。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個工作樹已不存在：它被刪除了，或被移到其他地方。"
+          }
+        }
+      }
+    },
     "Ticket" : {
       "localizations" : {
         "ar" : {
@@ -85367,126 +86731,126 @@
         }
       }
     },
-    "Uncommitted Changes gets checkboxes to stage files, and a box to commit or stash them; stashes can be applied, popped or dropped. Off, Vibe GitTree never changes a repository (fetching aside)." : {
+    "Uncommitted Changes gets checkboxes to stage files, and a box to commit or stash them; stashes can be applied, popped or dropped, and worktrees deleted. Off, Vibe GitTree never changes a repository (fetching aside)." : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "تظهر في «التغييرات غير المودعة» خانات اختيار لتجهيز الملفات، ومربع لإيداعها أو تخبئتها؛ ويمكن تطبيق المخابئ أو تطبيقها وحذفها أو حذفها. وعند إيقاف الخيار لا يُجري Vibe GitTree أي تغيير على المستودع (باستثناء الجلب)."
+            "value" : "تظهر في «التغييرات غير المودعة» خانات اختيار لتجهيز الملفات، ومربع لإيداعها أو تخبئتها؛ ويمكن تطبيق المخابئ أو تطبيقها وحذفها أو حذفها، ويمكن حذف شجرات العمل. وعند إيقاف الخيار لا يُجري Vibe GitTree أي تغيير على المستودع (باستثناء الجلب)."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bei „Nicht committete Änderungen“ gibt es Kontrollkästchen zum Vormerken von Dateien und ein Feld zum Committen oder Stashen; Stashes können angewendet, mit Pop zurückgeholt oder verworfen werden. Ausgeschaltet verändert Vibe GitTree nie ein Repository (Abrufen ausgenommen)."
+            "value" : "Bei „Nicht committete Änderungen“ gibt es Kontrollkästchen zum Vormerken von Dateien und ein Feld zum Committen oder Stashen; Stashes können angewendet, mit Pop zurückgeholt oder verworfen werden, und Worktrees können gelöscht werden. Ausgeschaltet verändert Vibe GitTree nie ein Repository (Abrufen ausgenommen)."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "«Cambios sin commit» muestra casillas para preparar archivos y un cuadro para hacer commit o stash; los stashes se pueden aplicar, hacer pop o eliminar. Si está desactivado, Vibe GitTree nunca modifica un repositorio (salvo para hacer fetch)."
+            "value" : "«Cambios sin commit» muestra casillas para preparar archivos y un cuadro para hacer commit o stash; los stashes se pueden aplicar, hacer pop o eliminar, y los worktrees se pueden eliminar. Si está desactivado, Vibe GitTree nunca modifica un repositorio (salvo para hacer fetch)."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "« Modifications non validées » reçoit des cases à cocher pour indexer des fichiers, et une zone pour les valider ou les remiser ; les remisages peuvent être appliqués, dépilés ou supprimés. Si cette option est désactivée, Vibe GitTree ne modifie jamais un dépôt (hors récupération)."
+            "value" : "« Modifications non validées » reçoit des cases à cocher pour indexer des fichiers, et une zone pour les valider ou les remiser ; les remisages peuvent être appliqués, dépilés ou supprimés, et les worktrees peuvent être supprimés. Si cette option est désactivée, Vibe GitTree ne modifie jamais un dépôt (hors récupération)."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कमिट न किए गए बदलाव में फ़ाइलें स्टेज करने के लिए चेकबॉक्स और उन्हें कमिट या स्टैश करने के लिए एक बॉक्स मिलता है; स्टैश को लागू, पॉप या ड्रॉप किया जा सकता है। बंद होने पर Vibe GitTree कभी किसी रिपॉज़िटरी को नहीं बदलता (फ़ेच करने के अलावा)।"
+            "value" : "कमिट न किए गए बदलाव में फ़ाइलें स्टेज करने के लिए चेकबॉक्स और उन्हें कमिट या स्टैश करने के लिए एक बॉक्स मिलता है; स्टैश को लागू, पॉप या ड्रॉप किया जा सकता है, और वर्कट्री को डिलीट किया जा सकता है। बंद होने पर Vibe GitTree कभी किसी रिपॉज़िटरी को नहीं बदलता (फ़ेच करने के अलावा)।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Perubahan Belum Di-commit mendapat kotak centang untuk stage berkas, serta kotak untuk commit atau stash berkas tersebut; stash dapat diterapkan, di-pop, atau di-drop. Saat nonaktif, Vibe GitTree tidak pernah mengubah repositori (selain fetch)."
+            "value" : "Perubahan Belum Di-commit mendapat kotak centang untuk stage berkas, serta kotak untuk commit atau stash berkas tersebut; stash dapat diterapkan, di-pop, atau di-drop, dan worktree dapat dihapus. Saat nonaktif, Vibe GitTree tidak pernah mengubah repositori (selain fetch)."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In “Modifiche non committate” compaiono caselle per mettere in staging i file e un riquadro per eseguire il commit o lo stash; gli stash si possono applicare, fare il pop o eliminare. Se è disattivata, Vibe GitTree non modifica mai un repository (a parte il fetch)."
+            "value" : "In “Modifiche non committate” compaiono caselle per mettere in staging i file e un riquadro per eseguire il commit o lo stash; gli stash si possono applicare, fare il pop o eliminare, e i worktree si possono eliminare. Se è disattivata, Vibe GitTree non modifica mai un repository (a parte il fetch)."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "オンにすると、「未コミットの変更」にファイルをステージするチェックボックスと、コミットまたはスタッシュするための入力欄が表示され、スタッシュを適用、ポップ、破棄できるようになります。オフのときは、（フェッチを除いて）Vibe GitTreeがリポジトリを変更することはありません。"
+            "value" : "オンにすると、「未コミットの変更」にファイルをステージするチェックボックスと、コミットまたはスタッシュするための入力欄が表示され、スタッシュを適用、ポップ、破棄できるほか、ワークツリーを削除できるようになります。オフのときは、（フェッチを除いて）Vibe GitTreeがリポジトリを変更することはありません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“커밋하지 않은 변경 사항”에는 파일을 스테이징하는 체크박스와 커밋 또는 스태시를 위한 입력란이 표시되며, 스태시는 적용, 팝 또는 삭제할 수 있습니다. 끄면 Vibe GitTree는 저장소를 변경하지 않습니다(페치 제외)."
+            "value" : "“커밋하지 않은 변경 사항”에는 파일을 스테이징하는 체크박스와 커밋 또는 스태시를 위한 입력란이 표시되며, 스태시는 적용, 팝 또는 삭제할 수 있고 워크트리도 삭제할 수 있습니다. 끄면 Vibe GitTree는 저장소를 변경하지 않습니다(페치 제외)."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Perubahan yang Belum Di-commit menyediakan kotak semak untuk stage fail, dan kotak untuk commit atau stash fail tersebut; stash boleh digunakan, di-pop atau dibuang. Jika dimatikan, Vibe GitTree tidak pernah mengubah repositori (selain fetch)."
+            "value" : "Perubahan yang Belum Di-commit menyediakan kotak semak untuk stage fail, dan kotak untuk commit atau stash fail tersebut; stash boleh digunakan, di-pop atau dibuang, dan worktree boleh dipadam. Jika dimatikan, Vibe GitTree tidak pernah mengubah repositori (selain fetch)."
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Niet-gecommitte wijzigingen krijgen selectievakjes om bestanden te stagen en een vak om ze te committen of te stashen; stashes kunnen worden toegepast, gepopt of gedropt. Staat dit uit, dan wijzigt Vibe GitTree nooit een repository (fetchen daargelaten)."
+            "value" : "Niet-gecommitte wijzigingen krijgen selectievakjes om bestanden te stagen en een vak om ze te committen of te stashen; stashes kunnen worden toegepast, gepopt of gedropt, en worktrees kunnen worden verwijderd. Staat dit uit, dan wijzigt Vibe GitTree nooit een repository (fetchen daargelaten)."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "W sekcji Niezatwierdzone zmiany pojawiają się pola wyboru do dodawania plików do indeksu oraz pole do zatwierdzania lub chowania zmian; stashe można zastosować, wykonać na nich pop lub usunąć. Gdy opcja jest wyłączona, Vibe GitTree nigdy nie zmienia repozytorium (poza pobieraniem)."
+            "value" : "W sekcji Niezatwierdzone zmiany pojawiają się pola wyboru do dodawania plików do indeksu oraz pole do zatwierdzania lub chowania zmian; stashe można zastosować, wykonać na nich pop lub usunąć, a worktree'y można usunąć. Gdy opcja jest wyłączona, Vibe GitTree nigdy nie zmienia repozytorium (poza pobieraniem)."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Em Alterações sem commit, aparecem caixas de seleção para preparar arquivos e uma caixa para fazer commit ou stash deles; é possível aplicar, fazer pop ou descartar os stashes. Desativado, o Vibe GitTree nunca altera um repositório (exceto pelo fetch)."
+            "value" : "Em Alterações sem commit, aparecem caixas de seleção para preparar arquivos e uma caixa para fazer commit ou stash deles; é possível aplicar, fazer pop ou descartar os stashes, e excluir worktrees. Desativado, o Vibe GitTree nunca altera um repositório (exceto pelo fetch)."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "В разделе «Незакоммиченные изменения» появляются флажки для добавления файлов в индекс и поле, чтобы закоммитить их или отложить в стэш; стэши можно применять, извлекать или удалять. Если выключено, Vibe GitTree никогда не изменяет репозиторий (кроме fetch)."
+            "value" : "В разделе «Незакоммиченные изменения» появляются флажки для добавления файлов в индекс и поле, чтобы закоммитить их или отложить в стэш; стэши можно применять, извлекать или удалять, а рабочие деревья можно удалять. Если выключено, Vibe GitTree никогда не изменяет репозиторий (кроме fetch)."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“การเปลี่ยนแปลงที่ยังไม่ได้คอมมิต” จะมีช่องทำเครื่องหมายสำหรับสเตจไฟล์ และช่องสำหรับคอมมิตหรือสแตช ส่วนสแตชสามารถนำไปใช้ ป็อป หรือดรอปได้ เมื่อปิดไว้ Vibe GitTree จะไม่เปลี่ยนแปลงรีโพซิทอรีเลย (ยกเว้นการเฟตช์)"
+            "value" : "“การเปลี่ยนแปลงที่ยังไม่ได้คอมมิต” จะมีช่องทำเครื่องหมายสำหรับสเตจไฟล์ และช่องสำหรับคอมมิตหรือสแตช ส่วนสแตชสามารถนำไปใช้ ป็อป หรือดรอปได้ และลบเวิร์กทรีได้ เมื่อปิดไว้ Vibe GitTree จะไม่เปลี่ยนแปลงรีโพซิทอรีเลย (ยกเว้นการเฟตช์)"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Commit Edilmemiş Değişiklikler’de dosyaları stage’e almak için onay kutuları, onları commit etmek veya stash’e almak için bir kutu bulunur; stash’ler uygulanabilir, pop edilebilir veya silinebilir. Kapalıyken Vibe GitTree bir depoyu asla değiştirmez (fetch hariç)."
+            "value" : "Commit Edilmemiş Değişiklikler’de dosyaları stage’e almak için onay kutuları, onları commit etmek veya stash’e almak için bir kutu bulunur; stash’ler uygulanabilir, pop edilebilir veya silinebilir, worktree’ler de silinebilir. Kapalıyken Vibe GitTree bir depoyu asla değiştirmez (fetch hariç)."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "У розділі «Незакомічені зміни» з’являються прапорці для додавання файлів до індексу та поле для коміту чи stash; stash можна застосувати, виконати pop або видалити. Якщо вимкнено, Vibe GitTree ніколи не змінює репозиторій (окрім fetch)."
+            "value" : "У розділі «Незакомічені зміни» з’являються прапорці для додавання файлів до індексу та поле для коміту чи stash; stash можна застосувати, виконати pop або видалити, а worktree можна видалити. Якщо вимкнено, Vibe GitTree ніколи не змінює репозиторій (окрім fetch)."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Thay đổi chưa commit sẽ có các hộp kiểm để stage tệp, cùng một khung để commit hoặc stash chúng; các stash có thể được áp dụng, pop hoặc xóa. Khi tắt, Vibe GitTree không bao giờ thay đổi một kho lưu trữ (trừ việc fetch)."
+            "value" : "Thay đổi chưa commit sẽ có các hộp kiểm để stage tệp, cùng một khung để commit hoặc stash chúng; các stash có thể được áp dụng, pop hoặc xóa, và worktree có thể được xóa. Khi tắt, Vibe GitTree không bao giờ thay đổi một kho lưu trữ (trừ việc fetch)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“未提交的更改”中会出现用于暂存文件的复选框，以及用于提交或贮藏它们的输入框；贮藏可以被应用、弹出或丢弃。关闭时，Vibe GitTree 绝不会更改仓库（获取除外）。"
+            "value" : "“未提交的更改”中会出现用于暂存文件的复选框，以及用于提交或贮藏它们的输入框；贮藏可以被应用、弹出或丢弃，工作树也可以被删除。关闭时，Vibe GitTree 绝不会更改仓库（获取除外）。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「未提交的變更」會出現可暫存檔案的核取方塊，以及用來提交或儲藏的區域；儲藏可以套用、取出或捨棄。關閉時，Vibe GitTree 永遠不會變更儲存庫（擷取除外）。"
+            "value" : "「未提交的變更」會出現可暫存檔案的核取方塊，以及用來提交或儲藏的區域；儲藏可以套用、取出或捨棄，工作樹也可以刪除。關閉時，Vibe GitTree 永遠不會變更儲存庫（擷取除外）。"
           }
         }
       }

@@ -73,10 +73,10 @@ enum Git {
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Runs a command that changes the repository (staging, committing, stashing). Only the user's
-    /// own clicks start one, and only with Settings › General › Allow commits and stashes on.
-    /// Commit hooks get five minutes, and a failure reads as git explains it, on standard output
-    /// too (a stash that conflicts, say).
+    /// Runs a command that changes the repository (staging, committing, stashing, deleting a
+    /// worktree). Only the user's own clicks start one, and only with Settings › General › Allow
+    /// commits and stashes on. Commit hooks get five minutes, and a failure reads as git explains
+    /// it, on standard output too (a stash that conflicts, say).
     @discardableResult
     static func change(_ arguments: [String], in directory: URL, input: Data? = nil) async throws -> String {
         let result = try await ProcessRunner.execute(executableURL, baseArguments + arguments, in: directory,

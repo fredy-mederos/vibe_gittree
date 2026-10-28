@@ -22,6 +22,8 @@ struct SidebarView: View {
     @State private var expanded: [String: Bool] = [:]
     /// A stash whose Drop… was picked in its context menu, waiting for confirmation.
     @State private var stashPendingDrop: StashEntry?
+    /// A worktree whose Delete Worktree… was picked in its context menu, waiting for confirmation.
+    @State private var worktreePendingDeletion: Worktree?
 
     /// Repositories listed before "Show All" takes over.
     private static let collapsedLimit = 8
@@ -183,6 +185,27 @@ struct SidebarView: View {
         } message: { stash in
             Text("“\(stash.title)” is deleted with its changes. Vibe GitTree can't bring it back.")
         }
+        .confirmationDialog(
+            "Delete the worktree \(worktreePendingDeletion?.name ?? "")?",
+            isPresented: Binding(get: { worktreePendingDeletion != nil }, set: { if !$0 { worktreePendingDeletion = nil } }),
+            presenting: worktreePendingDeletion
+        ) { worktree in
+            Button("Delete Worktree", role: .destructive) {
+                Task { await state.deleteWorktree(worktree) }
+            }
+        } message: { worktree in
+            Text(deletionMessage(for: worktree))
+        }
+    }
+
+    /// What deleting a worktree takes away, and what it keeps.
+    private func deletionMessage(for worktree: Worktree) -> String {
+        let folder = (worktree.path as NSString).abbreviatingWithTildeInPath
+        var lines = [worktree.isMissing
+            ? String(localized: "Its folder is already gone, so git only forgets the worktree.")
+            : String(localized: "Its folder, \(folder), is deleted with the files git ignores there (build products, say). Git won't delete a worktree with uncommitted changes or new files.")]
+        if let branch = worktree.branchName { lines.append(String(localized: "The branch \(branch) stays.")) }
+        return lines.joined(separator: "\n\n")
     }
 
     // MARK: Refs
@@ -833,6 +856,7 @@ struct SidebarView: View {
     }
 
     /// Open as Repository adds the worktree to the list on its own, where its uncommitted changes show.
+    /// Delete Worktree… is there with Allow commits and stashes on, except for the main worktree.
     @ViewBuilder
     private func worktreeMenu(_ worktree: Worktree) -> some View {
         if let branch = worktree.branch {
@@ -852,6 +876,12 @@ struct SidebarView: View {
         Button("Copy Path") { copy(worktree.path) }
         if let branch = worktree.branchName {
             Button("Copy Branch Name") { copy(branch) }
+        }
+        if let model = state.graph?.model, model.allowsChanges, !worktree.isMain {
+            Divider()
+            // Git won't delete a locked one; the row shows the lock.
+            Button("Delete Worktree…", role: .destructive) { worktreePendingDeletion = worktree }
+                .disabled(worktree.lockReason != nil || model.changeInProgress != nil)
         }
     }
 

@@ -115,6 +115,10 @@ permission to access that folder.
   are grouped; a locked one shows a lock, and one whose folder is gone is dimmed. Click one to go to its commit, double-click
   one on a branch to show only that branch; right-click for Show in Finder, Open in Terminal, Copy
   Path, or Open as Repository, which adds it to the list on its own, with its uncommitted changes.
+  With commits and stashes allowed (below), Delete Worktree… deletes one after you confirm: its
+  folder (files git ignores there too) and git's record of it, keeping its branch. One with
+  uncommitted changes or new files, a locked one, and one on a detached HEAD whose commit no branch
+  or tag has are kept, and an alert says why.
   In the graph, a worktree with a detached HEAD has a label of its own (one for several on the same
   commit), and commits only such a worktree has are in the history too, as are those of HEAD in the
   middle of a rebase.
@@ -122,7 +126,8 @@ permission to access that folder.
   on): in the uncommitted changes, checkboxes stage and unstage files, a summary and description
   commit what's staged (⌘Return), and Stash… puts every change aside, or only the staged files'
   (new files too), with an optional message. A stash can be applied, popped or dropped (after you
-  confirm). Repository hooks run as they would in Terminal; when git refuses (a conflict, nothing
+  confirm), and another worktree deleted from the sidebar (after you confirm, see Worktrees).
+  Repository hooks run as they would in Terminal; when git refuses (a conflict, nothing
   staged), its reason shows under the buttons.
 - **Pull requests** (GitHub, through the `gh` command): an open pull request's number next to its
   branch in the graph and sidebar, with its checks (✓ passed, ✗ failed, clock running). Stacked pull
