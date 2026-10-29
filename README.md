@@ -97,11 +97,13 @@ permission to access that folder.
   YAML, XML/HTML, Markdown and more), a Side by Side toggle that puts the old and new file next to
   each other, a Whole File toggle, a link to the file on GitHub, and Copy Link. The window lists the
   commit's other files on the side, each with the lines it added and removed and a bar as long as
-  its changes, so the biggest stand out (or come first, with Most Changes First); click one, or step
-  through them with Previous and Next File (⌥⌘↑, ⌥⌘↓). All Files shows every file's changes one
-  after another, each under its name; the magnifier by Changed Files opens a commit that way. A
-  comparison's files, a stash's and the uncommitted ones open in the same window, which works the
-  same way for all of them.
+  its changes, so the biggest stand out (or come first, with Most Changes First). Most Modified
+  First lists first the files that were there before, by how many of their lines changed or went
+  away, and new and deleted files last: where existing code was reworked, without new files
+  filling the top. Click one, or step through them with Previous and Next File (⌥⌘↑, ⌥⌘↓). All
+  Files shows every file's changes one after another, each under its name; the magnifier by
+  Changed Files opens a commit that way. A comparison's files, a stash's and the uncommitted ones
+  open in the same window, which works the same way for all of them.
 - **Uncommitted changes**: a row above the history, a dashed ring with a dashed line down to the
   checked-out commit, says what changed (2 staged · 3 changed · 1 new); Local Changes in the sidebar
   has it too. Select it to list the files in the details: Conflicts, Staged, Not Staged and New
@@ -200,9 +202,10 @@ permission to access that folder.
   its tickets (under their epics, with their status, marked when the other side has commits for
   them too), the files changed since the branches diverged, and its authors. Click a commit to
   select it in the graph; Highlight in Graph tints one side's commits there. The Files tab lists
-  files as the diff window does, with their added and removed lines; click one for its changes
-  since the branches diverged, in the diff window listing the side's other files, or Show All
-  Changes for all of them one after another.
+  files as the diff window does, with their added and removed lines and in the same order (by
+  path, Most Changes First or Most Modified First); click one for its changes since the branches
+  diverged, in the diff window listing the side's other files, or Show All Changes for all of them
+  one after another.
   Any two commits compare too: right-click a commit › Compare with the selected one, with HEAD, or
   with a branch picked from a list (which takes a commit's hash as well). Repository › Recent
   Comparisons and the window's clock menu bring back the last ten per repository.

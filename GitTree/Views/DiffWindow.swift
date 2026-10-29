@@ -16,9 +16,42 @@ struct DiffWindow: View {
     }
 }
 
-/// How the diff window lists the other files: as git does (by path), or the biggest changes first.
-private enum DiffFileOrder: String {
-    case path, changes
+/// How the lists of changed files order them: as git does (by path), the biggest changes first, or
+/// the files that changed the most of the code they already had first. Every list shares it.
+enum DiffFileOrder: String {
+    case path, changes, modified
+
+    /// The files in this order, after `group` (uncommitted files by kind); equals keep git's order.
+    func sorted(_ files: [DiffFile], group: (DiffFile) -> Int = { _ in 0 }) -> [DiffFile] {
+        files.enumerated().sorted { a, b in
+            let (x, y) = (a.element, b.element)
+            if group(x) != group(y) { return group(x) < group(y) }
+            switch self {
+            case .path:
+                break
+            case .changes:
+                if x.changes != y.changes { return x.changes > y.changes }
+            case .modified:
+                switch (Self.existingLinesChanged(x), Self.existingLinesChanged(y)) {
+                case (let old?, let other?):
+                    if old != other { return old > other }
+                    if x.changes != y.changes { return x.changes > y.changes }
+                case (.some, nil): return true
+                case (nil, .some): return false
+                case (nil, nil): break
+                }
+            }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+
+    /// How much of the code a file already had changed or went away, which Most Modified First
+    /// goes by: its removed lines, since an edited line counts as one removed and one added, while
+    /// added lines are new code wherever they go. Nil for new (or copied) and deleted files, which
+    /// come last.
+    private static func existingLinesChanged(_ file: DiffFile) -> Int? {
+        ["A", "C", "D"].contains(file.status) ? nil : file.removed ?? 0
+    }
 }
 
 private struct FileDiffView: View {
@@ -71,9 +104,9 @@ private struct FileDiffView: View {
     }
 
     /// The files in the list's order: uncommitted ones by kind (conflicts, staged, not staged,
-    /// new), each kind by path or with the most changed lines first.
+    /// new), each kind in the order picked.
     private var orderedFiles: [DiffFile] {
-        func rank(_ file: DiffFile) -> Int {
+        order.sorted(files) { file in
             if file.status == "!" { return 0 }
             switch file.uncommitted {
             case .staged: return 1
@@ -82,11 +115,6 @@ private struct FileDiffView: View {
             case nil: return 0
             }
         }
-        return files.enumerated().sorted { a, b in
-            if rank(a.element) != rank(b.element) { return rank(a.element) < rank(b.element) }
-            if order == .changes, a.element.changes != b.element.changes { return a.element.changes > b.element.changes }
-            return a.offset < b.offset
-        }.map(\.element)
     }
 
     private var position: Int? {
@@ -537,16 +565,12 @@ private struct DiffFileList: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack {
-                Picker("Order", selection: $order) {
-                    Text("By Path").tag(DiffFileOrder.path)
-                    Text("Most Changes First").tag(DiffFileOrder.changes)
-                }
-                .labelsHidden()
-                .fixedSize()
-                .help("List the files by path, or with the most changed lines first")
+                DiffFileOrderPicker(order: $order)
                 Spacer()
+                // One line whatever the picker's label takes, so the bar's height doesn't follow the width.
                 Text("\(files.count) files")
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .font(.caption)
             .controlSize(.small)
@@ -571,6 +595,23 @@ private struct DiffFileList: View {
             (String(localized: "New Files"), { $0.uncommitted == .untracked }),
         ]
         return kinds.map { kind in (kind.0, files.filter(kind.1)) }.filter { !$0.files.isEmpty }
+    }
+}
+
+/// Picks how a list of changed files is ordered, for the diff window and a comparison's Files tab.
+struct DiffFileOrderPicker: View {
+    @Binding var order: DiffFileOrder
+
+    var body: some View {
+        Picker("Order", selection: $order) {
+            Text("By Path").tag(DiffFileOrder.path)
+            Text("Most Changes First").tag(DiffFileOrder.changes)
+            Text("Most Modified First", comment: "Orders changed files by how many lines they changed or removed of the code they already had, new and deleted files last; unlike Most Changes First, which counts every added and removed line")
+                .tag(DiffFileOrder.modified)
+        }
+        .labelsHidden()
+        .fixedSize()
+        .help("List the files by path, with the most changed lines first, or with the most existing lines changed or removed first (new and deleted files last)")
     }
 }
 

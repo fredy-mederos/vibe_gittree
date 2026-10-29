@@ -49914,126 +49914,126 @@
         }
       }
     },
-    "List the files by path, or with the most changed lines first" : {
+    "List the files by path, with the most changed lines first, or with the most existing lines changed or removed first (new and deleted files last)" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ترتيب الملفات حسب المسار، أو بحيث تظهر الأكثر تغييرًا في الأسطر أولًا"
+            "value" : "عرض الملفات حسب المسار، مع ترتيب الأكثر تغييرًا أولًا، أو الأكثر تعديلًا أو حذفًا للأسطر الموجودة أولًا (الملفات الجديدة والمحذوفة في الأخير)"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Dateien nach Pfad auflisten oder mit den meisten geänderten Zeilen zuerst"
+            "value" : "Dateien nach Pfad auflisten, mit den meisten geänderten Zeilen zuerst oder mit den meisten bestehenden, geänderten oder entfernten Zeilen zuerst (neue und gelöschte Dateien zuletzt)"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ordenar los archivos por ruta o poniendo primero los que tienen más líneas modificadas"
+            "value" : "Listar los archivos por ruta: primero los que tienen más líneas cambiadas, o primero los que tienen más líneas existentes modificadas o eliminadas (los archivos nuevos y eliminados, al final)"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lister les fichiers par chemin, ou avec le plus de lignes modifiées en premier"
+            "value" : "Lister les fichiers par chemin, avec d’abord ceux qui ont le plus de lignes modifiées, ou d’abord ceux qui ont le plus de lignes existantes modifiées ou supprimées (fichiers nouveaux et supprimés en dernier)"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "फ़ाइलों को पथ के अनुसार, या सबसे ज़्यादा बदली पंक्तियों वाली पहले, सूचीबद्ध करें"
+            "value" : "फ़ाइलों को पथ के अनुसार सूचीबद्ध करें: पहले वे जिनमें सबसे ज़्यादा पंक्तियाँ बदली गई हैं, या पहले वे जिनमें सबसे ज़्यादा मौजूदा पंक्तियाँ बदली या हटाई गई हैं (नई और डिलीट की गई फ़ाइलें आख़िर में)"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Urutkan berkas menurut path, atau mulai dari yang paling banyak baris berubah"
+            "value" : "Tampilkan berkas menurut path, dengan jumlah baris yang berubah terbanyak dahulu, atau jumlah baris yang sudah ada dan diubah atau dihapus terbanyak dahulu (berkas baru dan berkas yang dihapus di akhir)"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elenca i file per percorso oppure partendo da quelli con più righe modificate"
+            "value" : "Elenca i file per percorso, con prima quelli con più righe modificate, oppure prima quelli con più righe esistenti modificate o rimosse (file nuovi ed eliminati per ultimi)"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ファイルをパス順、または変更行数の多い順に並べる"
+            "value" : "ファイルをパス順、変更行の多い順、または既存行の変更・削除の多い順に並べ替えます（新規ファイルと削除されたファイルは最後）"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "파일을 경로순 또는 변경된 줄이 많은 순으로 나열"
+            "value" : "파일을 경로순, 변경된 줄이 많은 순, 또는 기존 줄 중 수정되거나 삭제된 줄이 많은 순으로 나열합니다 (새 파일과 삭제된 파일은 마지막)"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Senaraikan fail mengikut laluan, atau dengan baris yang paling banyak diubah dahulu"
+            "value" : "Senaraikan fail mengikut laluan, dengan bilangan baris yang berubah paling banyak dahulu, atau bilangan baris sedia ada yang diubah suai atau dipadam paling banyak dahulu (fail baharu dan fail yang dipadam di hujung)"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sorteer de bestanden op bestandspad, of met de meeste gewijzigde regels eerst"
+            "value" : "Bestanden op pad tonen, met eerst de bestanden met de meeste gewijzigde regels, of eerst de bestanden met de meeste bestaande regels die gewijzigd of verwijderd zijn (nieuwe en verwijderde bestanden als laatste)"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wyświetlaj pliki według ścieżki lub najpierw te z największą liczbą zmian"
+            "value" : "Wyświetl pliki według ścieżki: najpierw te z największą liczbą zmienionych wierszy albo najpierw te z największą liczbą istniejących wierszy zmienionych lub usuniętych (nowe i usunięte pliki na końcu)"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Listar os arquivos por caminho ou com mais linhas alteradas primeiro"
+            "value" : "Listar os arquivos por caminho: primeiro os que têm mais linhas alteradas, ou primeiro os que têm mais linhas existentes alteradas ou removidas (arquivos novos e excluídos por último)"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Список файлов по пути или с наибольшим числом изменённых строк в начале"
+            "value" : "Перечислить файлы по пути: сначала с наибольшим числом изменённых строк или сначала с наибольшим числом изменённых или удалённых существующих строк (новые и удалённые файлы — в конце)"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เรียงไฟล์ตามพาธ หรือให้ไฟล์ที่มีบรรทัดเปลี่ยนแปลงมากที่สุดขึ้นก่อน"
+            "value" : "แสดงไฟล์ตามพาธ โดยเรียงไฟล์ที่มีบรรทัดเปลี่ยนแปลงมากที่สุดก่อน หรือเรียงไฟล์ที่มีบรรทัดเดิมถูกแก้ไขหรือลบมากที่สุดก่อน (ไฟล์ใหม่และไฟล์ที่ถูกลบอยู่ท้ายสุด)"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dosyaları yola göre veya en çok değişen satırı olanlar başta olacak şekilde listele"
+            "value" : "Dosyaları yola göre listele: önce en çok satırı değişenler ya da önce en çok mevcut satırı değiştirilen veya silinen olanlar (yeni ve silinen dosyalar en sonda)"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перелічити файли за шляхом або спочатку ті, де найбільше змінених рядків"
+            "value" : "Перелічити файли за шляхом: спершу ті, де найбільше змінених рядків, або спершу ті, де найбільше змінених чи видалених наявних рядків (нові та видалені файли — наостанок)"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Liệt kê các tệp theo đường dẫn, hoặc theo số dòng thay đổi nhiều nhất trước"
+            "value" : "Liệt kê các tệp theo đường dẫn, với các tệp có nhiều dòng thay đổi nhất lên trước, hoặc các tệp có nhiều dòng có sẵn bị sửa đổi hoặc xóa nhất lên trước (tệp mới và tệp đã xóa xếp cuối)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按路径列出文件，或将更改行数最多的文件排在前面"
+            "value" : "按路径列出文件：先列出更改行最多的文件，或先列出原有行中被修改或删除最多的文件（新文件和已删除的文件排在最后）"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "依路徑列出檔案，或將變更行數最多的排在前面"
+            "value" : "依路徑列出檔案：先列出變更行最多的檔案，或先列出原有行中被修改或刪除最多的檔案（新檔案和已刪除的檔案排在最後）"
           }
         }
       }
@@ -53673,6 +53673,131 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "變更最多者優先"
+          }
+        }
+      }
+    },
+    "Most Modified First" : {
+      "comment" : "Orders changed files by how many lines they changed or removed of the code they already had, new and deleted files last; unlike Most Changes First, which counts every added and removed line",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأكثر تعديلًا أولًا"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meistbearbeitete zuerst"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más modificados primero"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus remaniés d’abord"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबसे ज़्यादा संशोधित पहले"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paling Banyak Diubah Dulu"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prima i più rielaborati"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編集の多い順"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "수정이 많은 순"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paling Banyak Diubah Suai Dahulu"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meest bewerkt eerst"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Najwięcej edycji na początku"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mais modificados primeiro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала самые модифицированные"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ถูกแก้ไขมากที่สุดก่อน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Önce En Çok Düzenlenen"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спершу найбільш модифіковані"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Được sửa đổi nhiều nhất trước"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改最多的优先"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修改最多者優先"
           }
         }
       }

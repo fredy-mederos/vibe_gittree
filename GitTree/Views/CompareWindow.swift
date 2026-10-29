@@ -276,6 +276,8 @@ private struct SideColumn: View {
     let repositoryID: UUID
 
     @Environment(\.openWindow) private var openWindow
+    /// The Files tab's order, the diff window's too.
+    @AppStorage("diff.fileOrder") private var order = DiffFileOrder.path
 
     /// Lists stop here; the header still counts everything.
     private static let rowLimit = 2_000
@@ -438,7 +440,8 @@ private struct SideColumn: View {
     }
 
     @ViewBuilder private var changedFiles: some View {
-        if let files {
+        if let listed = files {
+            let files = order.sorted(listed)
             let most = DiffFileRow.most(of: files)
             List {
                 ForEach(files) { file in
@@ -461,6 +464,9 @@ private struct SideColumn: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
+                    DiffFileOrderPicker(order: $order)
+                        .font(.caption)
+                        .controlSize(.small)
                     if let first = files.first {
                         Button("Show All Changes") { openDiff(of: first, allFiles: true) }
                             .buttonStyle(.link)
