@@ -1522,6 +1522,28 @@
       "zh-Hans": "未提交的更改",
       "zh-Hant": "未提交的變更"
     },
+    "unmerged": {
+      "ar": "غير مدمج",
+      "de": "nicht zusammengeführt",
+      "es": "no fusionado",
+      "fr": "non fusionné",
+      "hi": "अनमर्ज्ड",
+      "id": "belum di-merge",
+      "it": "non unito",
+      "ja": "未マージ",
+      "ko": "병합되지 않음",
+      "ms": "belum di-merge",
+      "nl": "niet gemerged",
+      "pl": "niescalony",
+      "pt-BR": "não mesclado",
+      "ru": "неслитый",
+      "th": "ยังไม่เมิร์จ",
+      "tr": "birleştirilmemiş",
+      "uk": "незлитий",
+      "vi": "chưa merge",
+      "zh-Hans": "未合并",
+      "zh-Hant": "未合併"
+    },
     "unstage": {
       "ar": "إلغاء التجهيز",
       "de": "Vormerkung aufheben",

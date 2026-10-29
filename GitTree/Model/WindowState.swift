@@ -22,6 +22,8 @@ enum SidebarItem: Hashable {
     case stash(UUID, String)
     /// Another worktree of the window's repository, by its folder.
     case worktree(UUID, String)
+    /// The newest commit of work nothing builds on, from the Unmerged section, by its hash.
+    case unmerged(UUID, String)
 }
 
 /// Per-window state: which repository it shows, what's selected in the sidebar, and the window's sheets.
@@ -160,6 +162,10 @@ enum SidebarItem: Hashable {
             if id != repositoryID { open(id) }
             graph?.clearSidebarHighlight()
             graph?.reveal(worktreeAt: path)
+        case .unmerged(let id, let hash):
+            if id != repositoryID { open(id) }
+            graph?.clearSidebarHighlight()
+            if let tip = ObjectID(hex: hash), let commit = graph?.commitGraph?.indexByID[tip] { graph?.select(commit) }
         case .pullRequest(let id, let number):
             if id != repositoryID { open(id) }
             graph?.clearSidebarHighlight()

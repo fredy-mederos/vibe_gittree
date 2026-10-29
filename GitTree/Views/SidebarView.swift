@@ -17,6 +17,7 @@ struct SidebarView: View {
     @AppStorage("sidebar.releasesExpanded") private var releasesExpanded = true
     @AppStorage("sidebar.localChangesExpanded") private var localChangesExpanded = true
     @AppStorage("sidebar.worktreesExpanded") private var worktreesExpanded = true
+    @AppStorage("sidebar.unmergedExpanded") private var unmergedExpanded = true
     /// Settings › General: the Features section, off unless turned on there.
     @AppStorage(AppSettings.groupsFeaturesKey) private var groupsFeatures = false
     @State private var expanded: [String: Bool] = [:]
@@ -24,8 +25,10 @@ struct SidebarView: View {
     @State private var stashPendingDrop: StashEntry?
     /// A worktree whose Delete Worktree… was picked in its context menu, waiting for confirmation.
     @State private var worktreePendingDeletion: Worktree?
+    /// Shows every unmerged tip instead of the newest few.
+    @State private var showsAllUnmerged = false
 
-    /// Repositories listed before "Show All" takes over.
+    /// Repositories (and unmerged tips) listed before "Show All" takes over.
     private static let collapsedLimit = 8
 
     private var filterText: String {
@@ -144,6 +147,10 @@ struct SidebarView: View {
                    let ref = pullRequest.ref(in: commitGraph) {
                     graph.showOnly(refNamed: ref.fullName)
                 }
+            case .unmerged(_, let hash)?:
+                if let (commitGraph, commit) = unmergedCommit(hash), let ref = commitGraph.refs(at: commit).first {
+                    state.graph?.showOnly(refNamed: ref.fullName)
+                }
             default:
                 break
             }
@@ -216,6 +223,9 @@ struct SidebarView: View {
             localChangesSection(graph, repositoryID: repositoryID)
         }
         worktreesSection(tree.worktrees, commitGraph: commitGraph, repositoryID: repositoryID)
+        if let model = state.graph?.model {
+            unmergedSection(model, repositoryID: repositoryID)
+        }
         if let graph = state.graph, !isFiltering {
             epicsSection(graph, repositoryID: repositoryID)
             releasesSection(graph, repositoryID: repositoryID)
@@ -518,6 +528,73 @@ struct SidebarView: View {
         guard let worktree = state.graph?.commitGraph?.worktree(at: path) else { return }
         worktreesExpanded = true
         expanded[scopedKey("worktrees/\(worktree.location)")] = true
+    }
+
+    // MARK: Unmerged
+
+    /// The newest commits of work nothing builds on, the big dots in the graph, newest first: the
+    /// branches nothing has merged, and tags and worktrees with commits of their own. Selecting one
+    /// goes to its commit; double-clicking one shows only its branch.
+    @ViewBuilder
+    private func unmergedSection(_ model: RepositoryModel, repositoryID: UUID) -> some View {
+        if let all = model.allLayout {
+            let tips = model.unmergedTips.filter { tip in
+                !isFiltering || unmergedNames(of: tip.commit, in: all.graph).contains { $0.localizedCaseInsensitiveContains(filterText) }
+            }
+            let collapses = !isFiltering && !showsAllUnmerged && tips.count > Self.collapsedLimit + 1
+            if !tips.isEmpty {
+                FoldingSection(isExpanded: isFiltering ? .constant(true) : $unmergedExpanded) {
+                    ForEach(collapses ? Array(tips.prefix(Self.collapsedLimit)) : tips, id: \.commit) { tip in
+                        unmergedRow(tip, all: all, repositoryID: repositoryID)
+                    }
+                    if collapses {
+                        Button {
+                            showsAllUnmerged = true
+                        } label: {
+                            Label("Show All \(tips.count)", systemImage: "chevron.down")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    } else if showsAllUnmerged, !isFiltering, tips.count > Self.collapsedLimit + 1 {
+                        Button {
+                            showsAllUnmerged = false
+                        } label: {
+                            Label("Show Fewer", systemImage: "chevron.up")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    SectionHeader(title: "Unmerged", count: tips.count)
+                }
+            }
+        }
+    }
+
+    private func unmergedRow(_ tip: UnmergedTip, all: GraphLayout, repositoryID: UUID) -> some View {
+        let graph = all.graph
+        // The lane's color in the window's graph, or in the whole history's when the window shows less.
+        let shown = state.graph?.layout.flatMap { $0.graph === graph && $0.rowOfCommit[Int(tip.commit)] >= 0 ? $0 : nil } ?? all
+        // Where the main line starts: `main`, or `origin/main` when the local branch is behind or apart.
+        let main = graph.refs(at: all.mainTip).first { $0.kind != .tag && ($0.remoteParts?.branch ?? $0.name) == all.mainBranch }
+        return UnmergedRow(names: unmergedNames(of: tip.commit, in: graph), subject: graph.subjects[Int(tip.commit)],
+                           date: graph.date(of: tip.commit), count: tip.count, mainName: main?.name ?? all.mainBranch,
+                           color: LanePalette.color(shown.color[Int(shown.rowOfCommit[Int(tip.commit)])]),
+                           isHead: tip.commit == graph.headCommit)
+            .tag(SidebarItem.unmerged(repositoryID, graph.ids[Int(tip.commit)].hex))
+    }
+
+    /// What points at a commit: its branches (the checked-out one first, then local and remote
+    /// ones), tags and the worktrees detached there; its hash when only HEAD does.
+    private func unmergedNames(of commit: Int32, in graph: CommitGraph) -> [String] {
+        let names = graph.refs(at: commit).map(\.name) + graph.detachedWorktrees(at: commit).map(\.name)
+        return names.isEmpty ? [graph.ids[Int(commit)].short] : names
+    }
+
+    /// The commit an Unmerged row stands for, in the window's history.
+    private func unmergedCommit(_ hash: String) -> (CommitGraph, Int32)? {
+        guard let graph = state.graph?.commitGraph, let id = ObjectID(hex: hash), let commit = graph.indexByID[id] else { return nil }
+        return (graph, commit)
     }
 
     // MARK: Epics and releases
@@ -827,6 +904,17 @@ struct SidebarView: View {
             }
         case .worktree(_, let path):
             if let worktree = state.graph?.commitGraph?.worktree(at: path) { worktreeMenu(worktree) }
+        case .unmerged(_, let hash):
+            // What points at it: its branch's or tag's menu, else its worktree's.
+            if let (commitGraph, commit) = unmergedCommit(hash) {
+                if let ref = commitGraph.refs(at: commit).first {
+                    refMenu(ref)
+                } else if let worktree = commitGraph.detachedWorktrees(at: commit).first {
+                    worktreeMenu(worktree)
+                } else {
+                    Button("Reveal in Graph") { state.graph?.select(commit) }
+                }
+            }
         case .pullRequest(_, let number):
             if let pullRequest = state.graph?.model.pullRequests?.byNumber[number] {
                 Button("Open on GitHub") { NSWorkspace.shared.open(pullRequest.url) }
@@ -1153,6 +1241,61 @@ private struct WorktreeRow: View {
         var lines = [(worktree.path as NSString).abbreviatingWithTildeInPath, checkout]
         if let reason = worktree.lockReason { lines.append(reason.isEmpty ? String(localized: "Locked") : String(localized: "Locked: \(reason)")) }
         if worktree.isMissing { lines.append(String(localized: "Its folder is gone; git worktree prune would forget it.")) }
+        return lines.joined(separator: "\n")
+    }
+}
+
+/// The newest commit of work nothing builds on: what points at it and how old it is, then how many
+/// commits the main branch doesn't have and its subject. Its dot has its lane's color, like the big
+/// dot in the graph.
+private struct UnmergedRow: View {
+    /// Its branches, tags and worktrees, the one to show first.
+    let names: [String]
+    let subject: String
+    let date: Date
+    let count: Int?
+    /// The branch the count is against: `main`, or `origin/main` when the main line starts there.
+    let mainName: String?
+    let color: NSColor
+    /// The checked-out commit.
+    let isHead: Bool
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(verbatim: names.first ?? "")
+                        .fontWeight(isHead ? .semibold : .regular)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Text(RelativeAge.short(date))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.tertiary, selected: .secondary)
+                }
+                Text(verbatim: detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: "circle.fill")
+                .foregroundStyle(Color(nsColor: color), selected: .primary)
+        }
+        .help(Text(verbatim: help))
+    }
+
+    private var detail: String {
+        guard let count else { return subject }
+        return String(localized: "\(count) commits") + " · " + subject
+    }
+
+    private var help: String {
+        var lines = [names.joined(separator: ", "), subject]
+        if let count, let mainName {
+            lines.append(String(localized: "\(count) commits not in \(mainName)", comment: "How many commits of an unmerged branch the main branch (named after it) doesn't have"))
+        }
         return lines.joined(separator: "\n")
     }
 }

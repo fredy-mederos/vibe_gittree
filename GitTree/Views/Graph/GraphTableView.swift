@@ -269,7 +269,8 @@ final class GraphNSTableView: NSTableView {
 
     private func sizeGraphColumn(for layout: GraphLayout) {
         guard let column = tableView?.tableColumn(withIdentifier: ColumnID.graph) else { return }
-        let lanes = min(max(layout.suggestedLaneCount, 2), 24)
+        // A lane more than most rows need, so a busier row's dot still shows.
+        let lanes = min(max(layout.suggestedLaneCount, 2), 24) + 1
         isFittingColumns = true
         column.width = GraphMetrics.width(forLanes: lanes)
         isFittingColumns = false
@@ -432,7 +433,8 @@ final class GraphNSTableView: NSTableView {
         switch tableColumn.identifier {
         case ColumnID.graph:
             let cell = tableView.makeView(withIdentifier: GraphCellView.identifier, owner: nil) as? GraphCellView ?? GraphCellView()
-            cell.configure(layout: layout, row: row, isHead: commit == commitGraph.headCommit, isMerge: commitGraph.isMerge(commit))
+            cell.configure(layout: layout, row: row, isHead: commit == commitGraph.headCommit, isMerge: commitGraph.isMerge(commit),
+                           isTip: layout.isUnmergedTip(commit))
             return cell
 
         case ColumnID.description:

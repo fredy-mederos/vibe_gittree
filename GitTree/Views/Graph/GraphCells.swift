@@ -2,10 +2,14 @@ import AppKit
 
 enum GraphMetrics {
     static let rowHeight: CGFloat = 24
-    static let laneWidth: CGFloat = 12
+    /// Wide enough for a big dot (`tipRadius`) to keep clear of the next lane's line.
+    static let laneWidth: CGFloat = 14
     static let lanePadding: CGFloat = 8
     static let lineWidth: CGFloat = 1.6
     static let dotRadius: CGFloat = 3.8
+    /// The newest commit of work nothing builds on (`GraphLayout.isUnmergedTip`): big, so branches
+    /// that aren't merged stand out.
+    static let tipRadius: CGFloat = 6.2
 
     static func x(forLane lane: Int) -> CGFloat {
         lanePadding + CGFloat(lane) * laneWidth + laneWidth / 2
@@ -56,6 +60,8 @@ final class GraphCellView: NSTableCellView {
     private var row = 0
     private var isHead = false
     private var isMerge = false
+    /// Nothing builds on the commit: its branch isn't merged anywhere.
+    private var isTip = false
     /// The row above the history for uncommitted changes.
     private var isWorkingRow = false
 
@@ -85,12 +91,17 @@ final class GraphCellView: NSTableCellView {
         needsDisplay = true
     }
 
-    func configure(layout: GraphLayout, row: Int, isHead: Bool, isMerge: Bool) {
+    func configure(layout: GraphLayout, row: Int, isHead: Bool, isMerge: Bool, isTip: Bool) {
         self.layout = layout
         self.row = row
         self.isHead = isHead
         self.isMerge = isMerge
+        self.isTip = isTip
         isWorkingRow = false
+        let description = isTip ? String(localized: "Not merged: no branch has merged or built on this commit",
+                                         comment: "Tooltip of the big dot the commit graph draws for the newest commit of work that isn't merged anywhere: no merge brings the commit in, and nobody made new commits on top of it") : nil
+        toolTip = description
+        setAccessibilityLabel(description)
         needsDisplay = true
     }
 
@@ -100,7 +111,10 @@ final class GraphCellView: NSTableCellView {
         row = 0
         isHead = false
         isMerge = false
+        isTip = false
         isWorkingRow = true
+        toolTip = nil
+        setAccessibilityLabel(nil)
         needsDisplay = true
     }
 
@@ -152,28 +166,34 @@ final class GraphCellView: NSTableCellView {
             CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
         }
 
+        // A commit nothing builds on is drawn bigger, whatever its shape.
+        let radius: CGFloat
         if isHead {
             // The checked-out commit: an accent ring around a dot.
+            let scale: CGFloat = isTip ? 1.3 : 1
+            radius = 6.2 * scale
             context.setFillColor(NSColor.controlAccentColor.cgColor)
-            context.fillEllipse(in: circle(6.2))
+            context.fillEllipse(in: circle(radius))
             context.setBlendMode(.clear)
-            context.fillEllipse(in: circle(4.2))
+            context.fillEllipse(in: circle(4.2 * scale))
             context.setBlendMode(.normal)
-            context.fillEllipse(in: circle(2.6))
+            context.fillEllipse(in: circle(2.6 * scale))
         } else if isMerge {
+            radius = isTip ? GraphMetrics.tipRadius : GraphMetrics.dotRadius + 0.6
             context.setFillColor(laneColor)
-            context.fillEllipse(in: circle(GraphMetrics.dotRadius + 0.6))
+            context.fillEllipse(in: circle(radius))
             context.setBlendMode(.clear)
-            context.fillEllipse(in: circle(GraphMetrics.dotRadius - 1.4))
+            context.fillEllipse(in: circle(radius - (isTip ? 2.6 : 2)))
             context.setBlendMode(.normal)
         } else {
+            radius = isTip ? GraphMetrics.tipRadius : GraphMetrics.dotRadius
             context.setFillColor(laneColor)
-            context.fillEllipse(in: circle(GraphMetrics.dotRadius))
+            context.fillEllipse(in: circle(radius))
         }
         if emphasized {
             context.setStrokeColor(NSColor.white.withAlphaComponent(0.9).cgColor)
             context.setLineWidth(1.2)
-            context.strokeEllipse(in: circle(isHead ? 6.8 : GraphMetrics.dotRadius + 1.2))
+            context.strokeEllipse(in: circle(max(radius + 0.6, GraphMetrics.dotRadius + 1.2)))
         }
     }
 

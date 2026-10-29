@@ -160,7 +160,7 @@ struct RepositoryWindow: View {
 /// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` shows
 /// the Features section and groups features, `-GTHighlightFixVersion <version>` highlights one,
 /// `-GTShowActivity YES` opens the calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES`
-/// (with `-settingsTab jira`) open the settings, `-GTSelect epic:<key>|release:<name>|pr:<number>|ticket:<key>|ref:<name>`
+/// (with `-settingsTab jira`) open the settings, `-GTSelect epic:<key>|release:<name>|pr:<number>|ticket:<key>|ref:<name>|unmerged:<name>`
 /// selects that row in the sidebar once it's there (`first` for the first one, `open` for the newest
 /// open pull request; several, comma-separated, one after another, with `-GTSelectMarkers <folder>`
 /// for a script to capture each), `-GTRefresh releases|release|epics` refreshes those sections or the
@@ -197,7 +197,7 @@ struct RepositoryWindow: View {
     }()
 
     /// `-GTDescribeChanges <file>`: the working tree's status, the stashes, the worktrees, the
-    /// graph's row for uncommitted changes and what the details show, as text.
+    /// graph's row for uncommitted changes and its unmerged tips, and what the details show, as text.
     static func describeChanges(_ state: WindowState, to path: String) {
         guard let graph = state.graph else { return }
         let model = graph.model
@@ -216,6 +216,16 @@ struct RepositoryWindow: View {
         }
         if let layout = graph.layout {
             lines.append("Graph: \(layout.rowCount) rows, uncommitted row: \(layout.workingRow.map { "lane \($0.column)" } ?? "none"), main branch: \(layout.mainBranch ?? "none")")
+            let tips = layout.rows.filter(layout.isUnmergedTip)
+            lines.append("Unmerged tips: \(tips.count) " + tips.prefix(30).map { tip in
+                let names = layout.graph.refs(at: tip).map(\.name) + layout.graph.detachedWorktrees(at: tip).map { "\($0.name) (worktree)" }
+                return "\(layout.graph.ids[Int(tip)].short) (\(names.joined(separator: ", ")))"
+            }.joined(separator: ", "))
+        }
+        if let all = model.allLayout {
+            lines.append("Unmerged section: " + model.unmergedTips.prefix(30).map { tip in
+                "\(all.graph.ids[Int(tip.commit)].short) ×\(tip.count.map(String.init) ?? "-")"
+            }.joined(separator: ", "))
         }
         lines.append("Stashes: \(model.stashes.count)")
         for stash in model.stashes {
@@ -318,6 +328,13 @@ struct RepositoryWindow: View {
         case "worktree":
             let worktree = graph.commitGraph?.worktrees.first { !$0.isCurrent && ($0.name == value || $0.path == value) }
             return worktree.map { .worktree(id, $0.path) }
+        case "unmerged":
+            guard let all = graph.model.allLayout else { return nil }
+            let tip = graph.model.unmergedTips.first { tip in
+                value == "first" || all.graph.refs(at: tip.commit).contains { $0.name == value }
+                    || all.graph.detachedWorktrees(at: tip.commit).contains { $0.name == value }
+            }
+            return tip.map { .unmerged(id, all.graph.ids[Int($0.commit)].hex) }
         case "pr":
             guard let pullRequests = graph.model.pullRequests else { return nil }
             let stacked = Set(pullRequests.stacks.flatMap { $0.map(\.number) })

@@ -68,17 +68,19 @@ final class GraphLayout: @unchecked Sendable {
     /// Whether it was laid out with a row for uncommitted changes, and that row when it has one.
     let includesWorkingTree: Bool
     let workingRow: WorkingRow?
-    /// The branch it drew as the trunk (see `MainBranch`).
+    /// The branch it drew as the trunk (see `MainBranch`), and that branch's newest commit (-1 without one).
     let mainBranch: String?
+    let mainTip: Int32
 
     init(graph: CommitGraph, scope: GraphScope, rows: [Int32], rowOfCommit: [Int32], column: [UInt16], color: [UInt8],
          segmentStart: [Int32], segments: [LaneSegment], laneCount: [UInt16], includesWorkingTree: Bool = false,
-         workingRow: WorkingRow? = nil, mainBranch: String? = nil) {
+         workingRow: WorkingRow? = nil, mainBranch: String? = nil, mainTip: Int32 = -1) {
         self.graph = graph
         self.scope = scope
         self.includesWorkingTree = includesWorkingTree
         self.workingRow = workingRow
         self.mainBranch = mainBranch
+        self.mainTip = mainTip
         self.rows = rows
         self.rowOfCommit = rowOfCommit
         self.column = column
@@ -105,6 +107,13 @@ final class GraphLayout: @unchecked Sendable {
     func segments(inRow row: Int) -> ArraySlice<LaneSegment> {
         segments[Int(segmentStart[row])..<Int(segmentStart[row + 1])]
     }
+
+    /// Whether a commit is the newest of work nothing builds on: no commit on any branch, remote
+    /// branch or tag has it as a parent, whatever the scope shows, so its branch isn't merged
+    /// anywhere. The main line's newest commit, where work gets merged, isn't one.
+    func isUnmergedTip(_ commit: Int32) -> Bool {
+        commit != mainTip && graph.children(commit).isEmpty
+    }
 }
 
 enum LaneLayoutEngine {
@@ -128,7 +137,8 @@ enum LaneLayoutEngine {
         // The main line, from the newest of its commits the scope shows.
         var onMain = [Bool](repeating: false, count: graph.count)
         var mainStart: Int32 = -1
-        var mainCommit = mainBranch.map { MainBranch.tip(of: $0, in: graph) } ?? -1
+        let mainTip = mainBranch.map { MainBranch.tip(of: $0, in: graph) } ?? -1
+        var mainCommit = mainTip
         while mainCommit >= 0 {
             if rowOfCommit[Int(mainCommit)] >= 0 {
                 onMain[Int(mainCommit)] = true
@@ -287,7 +297,7 @@ enum LaneLayoutEngine {
 
         return GraphLayout(graph: graph, scope: scope, rows: rows, rowOfCommit: rowOfCommit, column: column, color: color,
                            segmentStart: segmentStart, segments: segments, laneCount: laneCount, includesWorkingTree: workingTree,
-                           workingRow: workingRow, mainBranch: mainBranch)
+                           workingRow: workingRow, mainBranch: mainBranch, mainTip: mainTip)
     }
 
     /// Commits reachable from the scope's refs, in history order.

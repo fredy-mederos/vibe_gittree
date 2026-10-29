@@ -71,7 +71,10 @@ permission to access that folder.
   fetch was over 10 minutes ago) and on Fetch (⇧⌘F).
 - **Commit graph** of every branch, remote branch and tag, and of what each worktree has checked out,
   newest first, with colored lanes, branch and tag labels (a cloud marks a local branch in sync with
-  its remote, a folder one checked out in another worktree), and the checked-out commit ringed. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
+  its remote, a folder one checked out in another worktree), and the checked-out commit ringed.
+  The newest commit of work that isn't merged anywhere (no commit on any branch, remote branch or
+  tag builds on it: a branch nobody has merged yet, say) is a big dot, so unmerged branches stand
+  out; the main branch's newest commit, where work gets merged, isn't. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
   line on the left from its newest commit down to the first one, and no other lane is blue; work
   merged into it keeps a lane and color of its own, even once its branch is deleted. Narrow it to
   local branches (⌘2), the current branch (⌘3) or a single branch (right-click › Show Only).
@@ -122,6 +125,12 @@ permission to access that folder.
   In the graph, a worktree with a detached HEAD has a label of its own (one for several on the same
   commit), and commits only such a worktree has are in the history too, as are those of HEAD in the
   middle of a rebase.
+- **Unmerged**: the sidebar lists the graph's big dots, newest first: the branch at each (or the
+  tag, or the worktree), how many of its commits the main branch doesn't have (as
+  `git rev-list --count main..<branch>` counts them) and how old it is, with a dot in its lane's
+  color. Click one to go to its commit, double-click one to show only its branch; right-click for
+  the branch's menu. A branch squash-merged or rebased on GitHub stays here until it's deleted:
+  its own commits never reach the main branch.
 - **Commits and stashes** (Settings › General › Allow commits and stashes, off until you turn it
   on): in the uncommitted changes, checkboxes stage and unstage files, a summary and description
   commit what's staged (⌘Return), and Stash… puts every change aside, or only the staged files'
@@ -368,7 +377,7 @@ Arguments: `-GTOpenRepository <path>`, `-GTCloneURL <url>`, `-GTAddFolder <path>
 `-GTOpenLink <gittree://…>` (opens a deep link without it reaching the installed Vibe GitTree), `-GTSearch <text>`,
 `-GTScope local|head|refs/heads/<branch>`, `-GTAppearance dark|light` (whatever the Appearance
 setting says), `-GTShowSwitcher YES`, `-GTGroupFeatures YES` (shows the Features section and groups),
-`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>|changes|stash:<n>|worktree:<name>` (selects
+`-GTSelect epic:<key>|release:<name>|ticket:<key>|pr:<number>|ref:<name>|changes|stash:<n>|worktree:<name>|unmerged:<name>` (selects
 that sidebar row once it's there; `first` for the first epic or release, `open` for the newest open
 pull request; several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
 (refreshes the Releases or Epics section, or the selected fix version, after `-GTRefreshAfter`
