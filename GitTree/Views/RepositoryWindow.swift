@@ -230,9 +230,11 @@ struct RepositoryWindow: View {
             }.joined(separator: ", "))
         }
         if let all = model.allLayout {
-            lines.append("Unmerged section: " + model.unmergedTips.prefix(30).map { tip in
-                "\(all.graph.ids[Int(tip.commit)].short) ×\(tip.count.map(String.init) ?? "-")"
-            }.joined(separator: ", "))
+            func list(_ tips: [BranchTip]) -> String {
+                tips.prefix(30).map { "\(all.graph.ids[Int($0.commit)].short) ×\($0.unmergedCount.map(String.init) ?? "-")" }.joined(separator: ", ")
+            }
+            lines.append("Unmerged section: " + list(all.tips.filter(\.isUnmerged)))
+            lines.append("Already in main: " + list(all.tips.filter { !$0.isUnmerged }))
         }
         lines.append("Stashes: \(model.stashes.count)")
         for stash in model.stashes {
@@ -337,7 +339,7 @@ struct RepositoryWindow: View {
             return worktree.map { .worktree(id, $0.path) }
         case "unmerged":
             guard let all = graph.model.allLayout else { return nil }
-            let tip = graph.model.unmergedTips.first { tip in
+            let tip = all.tips.first { tip in
                 value == "first" || all.graph.refs(at: tip.commit).contains { $0.name == value }
                     || all.graph.detachedWorktrees(at: tip.commit).contains { $0.name == value }
             }

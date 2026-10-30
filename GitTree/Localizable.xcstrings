@@ -18831,6 +18831,256 @@
         }
       }
     },
+    "Already in %@" : {
+      "comment" : "Branches whose commits a rebase or cherry-pick copied into the main branch, named after it",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موجودة بالفعل في %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereits in %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya en %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjà dans %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ में पहले से"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sudah Ada di %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Già in %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@に取り込み済み"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@에 이미 포함됨"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sudah dalam %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al in %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Już w %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Já em %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уже в %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มีอยู่แล้วใน %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaten %@ İçinde"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вже в %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã có trong %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在 %@ 中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在 %@ 中"
+          }
+        }
+      }
+    },
+    "Already merged: its commits were rebased or cherry-picked into the main branch" : {
+      "comment" : "Tooltip of the newest commit of a branch no merge brings in, but whose every commit the main branch has a copy of (same subject, author and date), made by a rebase or cherry-pick",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مدمج بالفعل: نُسخت إيداعاته إلى الفرع الرئيسي عبر rebase أو cherry-pick"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereits zusammengeführt: Die Commits wurden per Rebase oder Cherry-Pick in den Main-Branch übernommen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya fusionada: sus commits se copiaron en la rama principal con rebase o cherry-pick"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déjà fusionnée : ses commits ont été copiés dans la branche principale par rebase ou cherry-pick"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पहले से मर्ज हुआ: इस ब्रांच के कमिट रीबेस या चेरी-पिक के ज़रिए मुख्य ब्रांच में कॉपी किए गए हैं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sudah di-merge: commit-nya di-rebase atau di-cherry-pick ke branch utama"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Già unito: i suoi commit sono stati copiati nel branch principale tramite rebase o cherry-pick"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "マージ済み: そのコミットはリベースまたはチェリーピックによってメインブランチに取り込まれています"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미 병합됨: 커밋이 리베이스 또는 체리픽으로 메인 브랜치에 반영되었습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sudah di-merge: commit-nya di-rebase atau di-cherry-pick ke branch utama"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al gemerged: de commits zijn via rebase of cherry-pick naar de main branch gekopieerd"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Już scalona: jej commity zostały skopiowane do głównej gałęzi przez rebase lub cherry-pick"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Já mesclado: seus commits foram copiados para o branch principal com rebase ou cherry-pick"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уже слита: её коммиты были скопированы в основную ветку перебазированием или cherry-pick"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เมิร์จแล้ว: คอมมิตของแบรนช์นี้ถูกรีเบสหรือเชอร์รีพิกเข้าสู่แบรนช์หลัก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zaten birleştirilmiş: commit’leri ana dala rebase veya cherry-pick ile aktarıldı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вже злито: її коміти були скопійовані в основну гілку перебазуванням або cherry-pick"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã merge: các commit của nhánh này đã được rebase hoặc cherry-pick vào nhánh chính"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已合并：其提交已通过变基或拣选（cherry-pick）合入主分支"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已合併：其提交已透過重定基底或揀選併入主分支"
+          }
+        }
+      }
+    },
     "An optimized build, as installed by scripts/install.sh or downloaded from GitHub." : {
       "localizations" : {
         "ar" : {

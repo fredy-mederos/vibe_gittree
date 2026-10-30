@@ -441,7 +441,7 @@ final class GraphNSTableView: NSTableView {
         case ColumnID.graph:
             let cell = tableView.makeView(withIdentifier: GraphCellView.identifier, owner: nil) as? GraphCellView ?? GraphCellView()
             cell.configure(layout: layout, row: row, isHead: commit == commitGraph.headCommit, isMerge: commitGraph.isMerge(commit),
-                           isTip: layout.isUnmergedTip(commit))
+                           tip: layout.tip(at: commit))
             return cell
 
         case ColumnID.description:

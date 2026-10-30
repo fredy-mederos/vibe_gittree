@@ -74,7 +74,10 @@ permission to access that folder.
   its remote, a folder one checked out in another worktree), and the checked-out commit ringed.
   The newest commit of work that isn't merged anywhere (no commit on any branch, remote branch or
   tag builds on it: a branch nobody has merged yet, say) is a big dot, so unmerged branches stand
-  out; the main branch's newest commit, where work gets merged, isn't. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
+  out; the main branch's newest commit, where work gets merged, isn't. A branch rebased or
+  cherry-picked into the main branch counts as merged: when the main branch has a copy of each of
+  its commits (the same subject, author and author date, which a rebase or cherry-pick keeps), its
+  dot stays small. The main branch (the repository's default branch: `main`, `develop`…) is a straight blue
   line on the left from its newest commit down to the first one, and no other lane is blue; work
   merged into it keeps a lane and color of its own, even once its branch is deleted. Narrow it to
   local branches (⌘2), the current branch (⌘3) or a single branch (right-click › Show Only).
@@ -129,11 +132,12 @@ permission to access that folder.
   commit), and commits only such a worktree has are in the history too, as are those of HEAD in the
   middle of a rebase.
 - **Unmerged**: the sidebar lists the graph's big dots, newest first: the branch at each (or the
-  tag, or the worktree), how many of its commits the main branch doesn't have (as
-  `git rev-list --count main..<branch>` counts them) and how old it is, with a dot in its lane's
-  color. Click one to go to its commit, double-click one to show only its branch; right-click for
-  the branch's menu. A branch squash-merged or rebased on GitHub stays here until it's deleted:
-  its own commits never reach the main branch.
+  tag, or the worktree), how many of its commits the main branch has no copy of (merges left out)
+  and how old it is, with a dot in its lane's color. Click one to go to its commit, double-click
+  one to show only its branch; right-click for the branch's menu. Branches rebased or cherry-picked
+  into the main branch are under Already in main, folded, until they're deleted. A branch
+  squash-merged on GitHub stays with the unmerged ones: no commit of the main branch is a copy of
+  one of its own.
 - **Commits and stashes** (Settings › General › Allow commits and stashes, off until you turn it
   on): in the uncommitted changes, checkboxes stage and unstage files, a summary and description
   commit what's staged (⌘Return), and Stash… puts every change aside, or only the staged files'

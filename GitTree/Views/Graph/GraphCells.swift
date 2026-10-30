@@ -7,8 +7,8 @@ enum GraphMetrics {
     static let lanePadding: CGFloat = 8
     static let lineWidth: CGFloat = 1.6
     static let dotRadius: CGFloat = 3.8
-    /// The newest commit of work nothing builds on (`GraphLayout.isUnmergedTip`): big, so branches
-    /// that aren't merged stand out.
+    /// The newest commit of work that isn't merged (`BranchTip`): big, so branches that aren't
+    /// merged stand out.
     static let tipRadius: CGFloat = 6.2
 
     static func x(forLane lane: Int) -> CGFloat {
@@ -17,6 +17,14 @@ enum GraphMetrics {
 
     static func width(forLanes lanes: Int) -> CGFloat {
         lanePadding * 2 + CGFloat(lanes) * laneWidth
+    }
+}
+
+extension BranchTip {
+    /// What the graph's dot and the sidebar's row say of a tip whose work is in the main branch.
+    static var rebasedDescription: String {
+        String(localized: "Already merged: its commits were rebased or cherry-picked into the main branch",
+               comment: "Tooltip of the newest commit of a branch no merge brings in, but whose every commit the main branch has a copy of (same subject, author and date), made by a rebase or cherry-pick")
     }
 }
 
@@ -60,7 +68,7 @@ final class GraphCellView: NSTableCellView {
     private var row = 0
     private var isHead = false
     private var isMerge = false
-    /// Nothing builds on the commit: its branch isn't merged anywhere.
+    /// The newest commit of work that isn't merged: a big dot.
     private var isTip = false
     /// The row above the history for uncommitted changes.
     private var isWorkingRow = false
@@ -91,15 +99,20 @@ final class GraphCellView: NSTableCellView {
         needsDisplay = true
     }
 
-    func configure(layout: GraphLayout, row: Int, isHead: Bool, isMerge: Bool, isTip: Bool) {
+    /// `tip`: nothing builds on the commit (`BranchTip`); a big dot when its work isn't merged.
+    func configure(layout: GraphLayout, row: Int, isHead: Bool, isMerge: Bool, tip: BranchTip?) {
         self.layout = layout
         self.row = row
         self.isHead = isHead
         self.isMerge = isMerge
-        self.isTip = isTip
+        isTip = tip?.isUnmerged == true
         isWorkingRow = false
-        let description = isTip ? String(localized: "Not merged: no branch has merged or built on this commit",
-                                         comment: "Tooltip of the big dot the commit graph draws for the newest commit of work that isn't merged anywhere: no merge brings the commit in, and nobody made new commits on top of it") : nil
+        let description: String? = switch tip?.isUnmerged {
+        case true?: String(localized: "Not merged: no branch has merged or built on this commit",
+                           comment: "Tooltip of the big dot the commit graph draws for the newest commit of work that isn't merged anywhere: no merge brings the commit in, and nobody made new commits on top of it")
+        case false?: BranchTip.rebasedDescription
+        case nil: nil
+        }
         toolTip = description
         setAccessibilityLabel(description)
         needsDisplay = true

@@ -167,6 +167,7 @@ struct SidebarView: View {
             case .release(_, let id)?: expanded[scopedKey("release:\(id)")] = true
             case .pullRequest(_, let number)?: revealPullRequest(number)
             case .worktree(_, let path)?: revealWorktree(path)
+            case .unmerged(_, let hash)?: revealUnmerged(hash)
             default: break
             }
         }
@@ -532,30 +533,33 @@ struct SidebarView: View {
 
     // MARK: Unmerged
 
-    /// The newest commits of work nothing builds on, the big dots in the graph, newest first: the
-    /// branches nothing has merged, and tags and worktrees with commits of their own. Selecting one
-    /// goes to its commit; double-clicking one shows only its branch.
+    /// The newest commits of work that isn't merged, the big dots in the graph, newest first: the
+    /// branches nothing has merged, and tags and worktrees with commits of their own. Below them,
+    /// folded, those a rebase or cherry-pick copied into the main branch. Selecting one goes to its
+    /// commit; double-clicking one shows only its branch.
     @ViewBuilder
     private func unmergedSection(_ model: RepositoryModel, repositoryID: UUID) -> some View {
         if let all = model.allLayout {
-            let tips = model.unmergedTips.filter { tip in
+            let tips = all.tips.filter { tip in
                 !isFiltering || unmergedNames(of: tip.commit, in: all.graph).contains { $0.localizedCaseInsensitiveContains(filterText) }
             }
-            let collapses = !isFiltering && !showsAllUnmerged && tips.count > Self.collapsedLimit + 1
+            let unmerged = tips.filter(\.isUnmerged)
+            let inMain = tips.filter { !$0.isUnmerged }
+            let collapses = !isFiltering && !showsAllUnmerged && unmerged.count > Self.collapsedLimit + 1
             if !tips.isEmpty {
                 FoldingSection(isExpanded: isFiltering ? .constant(true) : $unmergedExpanded) {
-                    ForEach(collapses ? Array(tips.prefix(Self.collapsedLimit)) : tips, id: \.commit) { tip in
+                    ForEach(collapses ? Array(unmerged.prefix(Self.collapsedLimit)) : unmerged, id: \.commit) { tip in
                         unmergedRow(tip, all: all, repositoryID: repositoryID)
                     }
                     if collapses {
                         Button {
                             showsAllUnmerged = true
                         } label: {
-                            Label("Show All \(tips.count)", systemImage: "chevron.down")
+                            Label("Show All \(unmerged.count)", systemImage: "chevron.down")
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                    } else if showsAllUnmerged, !isFiltering, tips.count > Self.collapsedLimit + 1 {
+                    } else if showsAllUnmerged, !isFiltering, unmerged.count > Self.collapsedLimit + 1 {
                         Button {
                             showsAllUnmerged = false
                         } label: {
@@ -564,24 +568,49 @@ struct SidebarView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    if !inMain.isEmpty {
+                        let isExpanded = isFiltering ? .constant(true) : expansion("unmerged:in-main")
+                        DisclosureGroup(isExpanded: isExpanded) {
+                            ForEach(inMain, id: \.commit) { tip in
+                                unmergedRow(tip, all: all, repositoryID: repositoryID)
+                            }
+                        } label: {
+                            CountedLabel(title: String(localized: "Already in \(mainName(all) ?? "")",
+                                                       comment: "Branches whose commits a rebase or cherry-pick copied into the main branch, named after it"),
+                                         systemImage: "checkmark.circle", count: inMain.count)
+                                .togglesDisclosure(isExpanded)
+                        }
+                    }
                 } header: {
-                    SectionHeader(title: "Unmerged", count: tips.count)
+                    SectionHeader(title: "Unmerged", count: unmerged.count)
                 }
             }
         }
     }
 
-    private func unmergedRow(_ tip: UnmergedTip, all: GraphLayout, repositoryID: UUID) -> some View {
+    private func unmergedRow(_ tip: BranchTip, all: GraphLayout, repositoryID: UUID) -> some View {
         let graph = all.graph
         // The lane's color in the window's graph, or in the whole history's when the window shows less.
         let shown = state.graph?.layout.flatMap { $0.graph === graph && $0.rowOfCommit[Int(tip.commit)] >= 0 ? $0 : nil } ?? all
-        // Where the main line starts: `main`, or `origin/main` when the local branch is behind or apart.
-        let main = graph.refs(at: all.mainTip).first { $0.kind != .tag && ($0.remoteParts?.branch ?? $0.name) == all.mainBranch }
         return UnmergedRow(names: unmergedNames(of: tip.commit, in: graph), subject: graph.subjects[Int(tip.commit)],
-                           date: graph.date(of: tip.commit), count: tip.count, mainName: main?.name ?? all.mainBranch,
+                           date: graph.date(of: tip.commit), count: tip.unmergedCount, mainName: mainName(all),
                            color: LanePalette.color(shown.color[Int(shown.rowOfCommit[Int(tip.commit)])]),
                            isHead: tip.commit == graph.headCommit)
             .tag(SidebarItem.unmerged(repositoryID, graph.ids[Int(tip.commit)].hex))
+    }
+
+    /// Opens the section, and its Already in main group for a tip listed there (selected from elsewhere).
+    private func revealUnmerged(_ hash: String) {
+        guard let all = state.graph?.model.allLayout, let id = ObjectID(hex: hash), let commit = all.graph.indexByID[id],
+              let tip = all.tip(at: commit) else { return }
+        unmergedExpanded = true
+        if !tip.isUnmerged { expanded[scopedKey("unmerged:in-main")] = true }
+    }
+
+    /// Where the main line starts: `main`, or `origin/main` when the local branch is behind or apart.
+    private func mainName(_ layout: GraphLayout) -> String? {
+        let main = layout.graph.refs(at: layout.mainTip).first { $0.kind != .tag && ($0.remoteParts?.branch ?? $0.name) == layout.mainBranch }
+        return main?.name ?? layout.mainBranch
     }
 
     /// What points at a commit: its branches (the checked-out one first, then local and remote
@@ -1246,13 +1275,14 @@ private struct WorktreeRow: View {
 }
 
 /// The newest commit of work nothing builds on: what points at it and how old it is, then how many
-/// commits the main branch doesn't have and its subject. Its dot has its lane's color, like the big
+/// commits the main branch has no copy of and its subject. Its dot has its lane's color, like its
 /// dot in the graph.
 private struct UnmergedRow: View {
     /// Its branches, tags and worktrees, the one to show first.
     let names: [String]
     let subject: String
     let date: Date
+    /// 0 when a rebase or cherry-pick copied all its work into the main branch (`BranchTip`).
     let count: Int?
     /// The branch the count is against: `main`, or `origin/main` when the main line starts there.
     let mainName: String?
@@ -1287,13 +1317,15 @@ private struct UnmergedRow: View {
     }
 
     private var detail: String {
-        guard let count else { return subject }
+        guard let count, count > 0 else { return subject }
         return String(localized: "\(count) commits") + " · " + subject
     }
 
     private var help: String {
         var lines = [names.joined(separator: ", "), subject]
-        if let count, let mainName {
+        if count == 0 {
+            lines.append(BranchTip.rebasedDescription)
+        } else if let count, let mainName {
             lines.append(String(localized: "\(count) commits not in \(mainName)", comment: "How many commits of an unmerged branch the main branch (named after it) doesn't have"))
         }
         return lines.joined(separator: "\n")

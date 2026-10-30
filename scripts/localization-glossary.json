@@ -254,6 +254,28 @@
       "zh-Hans": "领先",
       "zh-Hant": "領先"
     },
+    "already merged": {
+      "ar": "مدمج بالفعل",
+      "de": "bereits zusammengeführt",
+      "es": "ya fusionada",
+      "fr": "déjà fusionnée",
+      "hi": "पहले से मर्ज हुआ",
+      "id": "sudah di-merge",
+      "it": "già unito",
+      "ja": "マージ済み",
+      "ko": "이미 병합됨",
+      "ms": "sudah di-merge",
+      "nl": "al gemerged",
+      "pl": "już scalona",
+      "pt-BR": "já mesclado",
+      "ru": "уже слита",
+      "th": "เมิร์จแล้ว",
+      "tr": "zaten birleştirilmiş",
+      "uk": "вже злито",
+      "vi": "đã merge",
+      "zh-Hans": "已合并",
+      "zh-Hant": "已合併"
+    },
     "apply": {
       "ar": "تطبيق",
       "de": "anwenden",
@@ -933,7 +955,26 @@
       "vi": "cục bộ"
     },
     "main branch": {
-      "hi": "मुख्य ब्रांच"
+      "ar": "الفرع الرئيسي",
+      "de": "Main-Branch",
+      "es": "rama principal",
+      "fr": "branche principale",
+      "hi": "मुख्य ब्रांच",
+      "id": "branch utama",
+      "it": "branch principale",
+      "ja": "メインブランチ",
+      "ko": "메인 브랜치",
+      "ms": "branch utama",
+      "nl": "main branch",
+      "pl": "główna gałąź",
+      "pt-BR": "branch principal",
+      "ru": "основная ветка",
+      "th": "แบรนช์หลัก",
+      "tr": "ana dal",
+      "uk": "основна гілка",
+      "vi": "nhánh chính",
+      "zh-Hans": "主分支",
+      "zh-Hant": "主分支"
     },
     "merge (noun)": {
       "ar": "دمج",

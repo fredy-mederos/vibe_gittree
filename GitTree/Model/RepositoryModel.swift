@@ -13,8 +13,6 @@ import Observation
     private(set) var graph: CommitGraph?
     /// The unscoped layout, kept so switching between repositories and back is instant.
     private(set) var allLayout: GraphLayout?
-    /// Its commits nothing builds on, newest first: the sidebar's Unmerged section.
-    private(set) var unmergedTips: [UnmergedTip] = []
     private(set) var status: LoadStatus = .idle
     private(set) var isFetching = false
     private(set) var fetchError: String?
@@ -157,9 +155,8 @@ import Observation
                 let workingTree = await loadedStatus
                 let dirty = workingTree?.isClean == false
                 let mainBranch = self?.repository.effectiveMainBranch(in: graph)
-                let (layout, unmergedTips) = await Task.detached(priority: .userInitiated) {
-                    let layout = LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty, mainBranch: mainBranch)
-                    return (layout, UnmergedTip.all(in: layout))
+                let layout = await Task.detached(priority: .userInitiated) {
+                    LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty, mainBranch: mainBranch)
                 }.value
                 #if DEBUG
                 NSLog("GitTree: loaded %d commits and %d refs in %@", graph.count, graph.refs.count,
@@ -168,7 +165,6 @@ import Observation
                 guard !Task.isCancelled, let self else { return }
                 self.graph = graph
                 self.allLayout = layout
-                self.unmergedTips = unmergedTips
                 self.hasUncommittedChanges = dirty
                 self.status = .loaded
                 if looksAtWorkingTree { self.apply(workingTree, sequence: sequence, directory: directory) }
@@ -546,13 +542,11 @@ import Observation
         }
         relayoutTask?.cancel()
         relayoutTask = Task { [weak self] in
-            let (layout, unmergedTips) = await Task.detached(priority: .userInitiated) {
-                let layout = LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty, mainBranch: mainBranch)
-                return (layout, UnmergedTip.all(in: layout))
+            let layout = await Task.detached(priority: .userInitiated) {
+                LaneLayoutEngine.layout(graph: graph, scope: .all, workingTree: dirty, mainBranch: mainBranch)
             }.value
             guard !Task.isCancelled, let self, self.graph === graph else { return }
             self.allLayout = layout
-            self.unmergedTips = unmergedTips
             self.hasUncommittedChanges = dirty
         }
     }
