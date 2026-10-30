@@ -10,7 +10,8 @@
     scripts/localization.py import FILE…       merge translated files into the catalog, checking every string
                                                (--dry-run only checks them: what a translator runs)
     scripts/localization.py check              fails when a language misses a string or a translation is broken
-    scripts/localization.py glossary FILE…     add translators' <language>.glossary.json files to the shared glossary
+    scripts/localization.py glossary FILE…     add translators' <language>.glossary.json files to the shared glossary,
+                                               keeping what it has (--replace revises it; --dry-run changes nothing)
 
 export, status and check take --lang de,fr to look at some languages only; export --all lists every
 string (to review translations), with the current one. The workflow is in
@@ -421,22 +422,92 @@ def import_(arguments):
 
 
 def glossary(arguments):
-    """Each language's words for the app's terms, which export hands the next translator."""
+    """Each language's words for the app's terms, and notes on its style, which export hands the next
+    translator. A file adds terms, and languages a term doesn't have yet. The words and notes the
+    glossary has stay as they are, since a translator's copy of them tends to lose details (which word
+    on a button, which for a Jira status). To revise them on purpose, --replace takes the file's words
+    and adds what its notes say that the glossary's don't; rewording the notes is done by hand."""
     shared = json.loads(GLOSSARY.read_text(encoding="utf-8")) if GLOSSARY.exists() else {}
     terms = shared.setdefault("terms", {})
     notes = shared.setdefault("notes", {})
+    before = json.dumps(shared, sort_keys=True)
+    existing = set(terms)
+    documents = []
     for path in arguments.files:
         document = json.loads(Path(path).read_text(encoding="utf-8"))
-        language = document.get("language")
-        if language not in LANGUAGES:
-            sys.exit(f"{path}: unknown language {language!r}")
-        if document.get("notes"):
-            notes[language] = document["notes"]
-        for term, value in document.get("terms", {}).items():
-            if isinstance(value, str) and value.strip():
-                terms.setdefault(term, {})[language] = value.strip()
-        print(f"{path}: {len(document.get('terms', {}))} {LANGUAGES[language]} terms")
-    GLOSSARY.write_text(json.dumps(shared, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+        if document.get("language") not in LANGUAGES:
+            sys.exit(f"{path}: unknown language {document.get('language')!r}")
+        if not isinstance(document.get("terms") or {}, dict) or not isinstance(document.get("notes") or "", str):
+            sys.exit(f"{path}: terms should be an object of words, and notes a text")
+        documents.append((path, document))
+    kept = False
+    for path, document in documents:
+        language = document["language"]
+        lines = []
+        counts = {"the same": 0, "added": 0, "replaced": 0, "kept": 0}
+        text, ours = (document.get("notes") or "").strip(), notes.get(language, "")
+        new = unlike(text, ours)
+        if new and not ours:
+            lines.append(f"  + notes: {preview(text)!r}")
+            notes[language] = text
+        elif new and arguments.replace:
+            lines.append(f"  added to the notes: {preview(new)!r}")
+            notes[language] = f"{ours} {new}"
+        elif text and normalized(text) != normalized(ours):
+            lines.append("  kept the notes; " + (f"only the file's say: {preview(new)!r}" if new
+                                                 else "the file's only leave parts of them out"))
+            kept = True
+        for term, given in (document.get("terms") or {}).items():
+            value = given.strip() if isinstance(given, str) else ""
+            current = terms.get(term, {}).get(language)
+            if not value:
+                lines.append(f"  skipped {term!r}: {given!r} isn't a word")
+            elif value == current:
+                counts["the same"] += 1
+            elif current is None:
+                lines.append(f"  + {term!r}: {value!r}" + ("" if term in existing else " (new term)"))
+                terms.setdefault(term, {})[language] = value
+                counts["added"] += 1
+            elif arguments.replace:
+                lines.append(f"  replaced {term!r}: {current!r} with {value!r}")
+                terms[term][language] = value
+                counts["replaced"] += 1
+            else:
+                shorter = len(value) < len(current) and normalized(value) in normalized(current)
+                how = "shortens it to" if shorter else "has"
+                lines.append(f"  kept {term!r}: {current!r}; the file {how} {value!r}")
+                counts["kept"] += 1
+                kept = True
+        summary = ", ".join(f"{count} {label}" for label, count in counts.items() if count)
+        print(f"{path}: {len(document.get('terms') or {})} {LANGUAGES[language]} terms" + (f": {summary}" if summary else ""))
+        for line in lines:
+            print(line)
+    if kept and not arguments.replace:
+        print("Where a file differs, the glossary keeps its own words and notes. To revise them on purpose, run "
+              "glossary --replace on a file with only the corrections (--dry-run first shows what it changes).")
+    if arguments.dry_run:
+        print("Dry run: the glossary is unchanged.")
+    elif json.dumps(shared, sort_keys=True) != before:
+        GLOSSARY.write_text(json.dumps(shared, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def normalized(text):
+    return " ".join(text.casefold().split()).rstrip(".;!? ")
+
+
+def sentences(notes):
+    """Notes in sentences, and the parts of a sentence between semicolons."""
+    return [part for part in re.split(r"(?<=[.;!?])\s+", notes) if part.strip()]
+
+
+def unlike(notes, other):
+    """What notes say that other doesn't, in their own words."""
+    known = {normalized(part) for part in sentences(other)}
+    return " ".join(part for part in sentences(notes) if normalized(part) not in known)
+
+
+def preview(text, limit=400):
+    return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
 def check(arguments):
@@ -512,8 +583,12 @@ def main():
     command.add_argument("files", nargs="+")
     command.add_argument("--dry-run", action="store_true", help="only check the files")
     command.set_defaults(run=import_)
-    command = commands.add_parser("glossary", help="add translators' glossaries to the shared one")
+    command = commands.add_parser("glossary", help="add translators' new terms to the shared glossary")
     command.add_argument("files", nargs="+")
+    command.add_argument("--replace", action="store_true",
+                         help="take the files' words where they differ from the glossary's, and add what their notes "
+                              "say that its don't (a revision on purpose)")
+    command.add_argument("--dry-run", action="store_true", help="only show what would change")
     command.set_defaults(run=glossary)
     command = commands.add_parser("check", help="fail when a translation is missing or broken")
     command.add_argument("--lang")

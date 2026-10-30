@@ -75,18 +75,28 @@ A change that adds or changes text the app shows ships with its translations, in
    > 1. Read the brief first and follow it exactly: <repository>/skills/localize-vibe-gittree/translator-brief.md
    > 2. Input: <folder>/<code>.json (read it in chunks if it's long).
    > 3. Write your translations to <folder>/out/<code>.json (parts `.part1.json`, `.part2.json`…
-   >    of about 225 strings when there are many), and your glossary to <folder>/out/<code>.glossary.json.
+   >    of about 225 strings when there are many), and your glossary (only new or corrected terms,
+   >    as the brief says) to <folder>/out/<code>.glossary.json.
    > 4. From <repository> run `python3 scripts/localization.py import --dry-run <your files>`; fix
    >    what it reports and repeat until it reports no problems and nothing missing. Never run
    >    import without --dry-run, and change no other file: other translators work at the same time.
    >
    > Reply in under 120 words: the dry run's final line, then any strings whose meaning was unclear
-   > or where you made a judgment call worth a second look (key and your choice).
+   > or where you made a judgment call worth a second look (key and your choice), and any glossary
+   > term you corrected (term, old and new word, why).
 
 5. When every agent is done: `scripts/localization.py import <folder>/out/*.part*.json` (or
    `<folder>/out/<code>.json`), then `scripts/localization.py glossary <folder>/out/*.glossary.json`.
    Read the judgment calls the agents reported and fix any that are wrong (edit their file, import it
    again).
+
+   `glossary` adds new terms, and languages a term doesn't have yet. The words and notes the
+   glossary has stay as they are; it lists where a file differs (`kept …`), mostly shorter copies
+   that would lose details. What an agent corrected or added on purpose, and you agree with, goes in
+   with `glossary --replace` on a file that has only that
+   (`{"language": "it", "terms": {"Done": "…"}, "notes": "…"}`): its words replace the glossary's,
+   and what its notes say that the glossary's don't is added to them. `--dry-run` first shows what
+   it changes. Rewording or removing notes is done by hand, in `scripts/localization-glossary.json`.
 6. `scripts/localization.py check` must pass. Build with the usual command, and look at the new UI in
    one or two languages: debug launch arguments take `-AppleLanguages "(de)"` (Arabic, `ar`, for
    right-to-left; German for long words). Commit the catalog, the glossary and the code together.
@@ -101,4 +111,6 @@ translations to redo, and export lists them again (with the current one and the 
 usual translate, import and check.
 
 Reviewing a language: `export --all --lang <code>` lists every string with its current translation;
-a reviewer agent corrects what's wrong and writes only those to its output file.
+a reviewer agent corrects what's wrong and writes only those to its output file, and only the
+glossary terms it corrects to its glossary file, which `glossary --replace` applies once you've
+read it.

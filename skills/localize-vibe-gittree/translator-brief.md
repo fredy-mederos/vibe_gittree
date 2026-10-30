@@ -103,17 +103,31 @@ must be plain strings.
 
 ## Your glossary
 
-Also write, next to your translations, `<language>.glossary.json`:
+The glossary keeps the app's words the same from one feature to the next. It only grows: what it
+has stays, with details a copy would lose (which word on a button, which for a Jira status, as in
+`"Done": "Completato (Jira status); Fine (button)"`). So also write, next to your translations,
+`<language>.glossary.json` with only what's new:
 
 ```json
-{"language": "de", "notes": "Sie-form; git terms stay English nouns with German articles (der Commit, der Branch).",
- "terms": {"commit (noun)": "Commit", "commit (verb)": "committen", "branch": "Branch", "...": "..."}}
+{"language": "it", "terms": {"unmerged": "non unito"}}
 ```
 
-with the words you chose for: repository, commit (noun), commit (verb), branch, remote branch,
-tag, remote, merge (noun), merge (verb), rebase, cherry-pick, fetch, clone, stash (noun), stash
-(verb), apply, pop, drop, stage, unstage, staged, uncommitted changes, worktree, diff, hash,
-author, committer, upstream, ahead, behind, detached, pull request, draft, review, checks, stack,
-ticket, epic, story, task, sub-task, fix version, release, release tag, Definition of Done, To Do,
-In Progress, Done, highlight, sidebar, details, graph, activity, feature, term, profile, API token,
-Settings, General. Later translations of new strings use it, so the app stays consistent.
+- `terms`: the words you chose for concepts these strings name that `glossary` doesn't have yet (a
+  git or Jira term, a part of the app), so the next translator says them the same way. The key is
+  the English term, with its sense in parentheses when it has two (`commit (noun)`,
+  `commit (verb)`); the value is your word, with where it's used when that varies.
+- A `glossary` term you found wrong: its key exactly as given, with your word, and why in your
+  reply. Leave out every term you used as it is.
+- `notes`: only a convention you settled that `glossaryNotes` doesn't cover, in a sentence. Don't
+  repeat or reword the notes.
+
+With nothing new, write `{"language": "<code>", "terms": {}}`.
+
+When `glossary` is empty (a language added just now), write the words you chose for: repository,
+commit (noun), commit (verb), branch, remote branch, tag, remote, merge (noun), merge (verb),
+rebase, cherry-pick, fetch, clone, stash (noun), stash (verb), apply, pop, drop, stage, unstage,
+staged, uncommitted changes, worktree, diff, hash, author, committer, upstream, ahead, behind,
+detached, pull request, draft, review, checks, stack, ticket, epic, story, task, sub-task, fix
+version, release, release tag, Definition of Done, To Do, In Progress, Done, highlight, sidebar,
+details, graph, activity, feature, term, profile, API token, Settings, General; and `notes` on your
+conventions: how you address the user, capitalization, how git terms are written.
