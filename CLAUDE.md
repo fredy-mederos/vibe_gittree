@@ -28,6 +28,13 @@ called GitTree until 1.2.0: the code, Xcode project, bundle id, data folder, `gi
   no wrapping text with `.fixedSize(horizontal: false, vertical: true)` there (use `lineLimit`, with
   `reservesSpace`). Otherwise zooming the window (a double-click on its title bar) loops AppKit's
   constraint passes until it stops the app. `-GTZoom <seconds>` zooms every window in and out, to check.
+- The repository window shows changes, comparisons and the activity calendar as pages over the
+  history (`GraphViewModel.pages`, laid out by `PaneLayout` in `Views/WindowPages.swift`): the top
+  one alone, or next to what's under it when the content area is wide enough. The user prefers one
+  window, so new views go there as pages rather than windows of their own. The history and the pages
+  under the top one stay loaded but hidden (`GraphTableView`'s `isHidden`); a page's toolbar items
+  show only while it's on screen (`isActive`), and since SwiftUI orders toolbar items by where their
+  views are in the tree, the window's own buttons are declared after the pages.
 - Read-only unless the user allows changes: never run git commands that change a user's repository,
   except `fetch` (on an explicit user action, or for clones Vibe GitTree manages itself) and, with
   Settings › General › Allow commits and stashes on (off by default), staging, unstaging, committing,

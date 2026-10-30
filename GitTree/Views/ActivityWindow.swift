@@ -15,8 +15,22 @@ struct ActivityWindow: View {
     }
 }
 
+/// The calendar in the repository's window, over its history or next to it.
+struct ActivityPageView: View {
+    let model: RepositoryModel
+    /// On screen: only then are its pickers in the window's toolbar.
+    let isActive: Bool
+
+    var body: some View {
+        ActivityView(model: model, isEmbedded: true, isActive: isActive)
+    }
+}
+
 private struct ActivityView: View {
     let model: RepositoryModel
+    /// In the repository's window: no title of its own.
+    var isEmbedded = false
+    var isActive = true
 
     @State private var period: ActivityPeriod = .lastTwelveMonths
     @State private var scope: GraphScope = .all
@@ -41,6 +55,8 @@ private struct ActivityView: View {
                     grid(activity)
                         .padding(16)
                 }
+                // Narrower than the year (next to the history, say): the latest weeks first.
+                .defaultScrollAnchor(.trailing)
                 legend(activity)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 10)
@@ -54,9 +70,10 @@ private struct ActivityView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Activity")
-        .navigationSubtitle(model.repository.name)
-        .toolbar { toolbar }
+        .windowTitle(String(localized: "Activity"), subtitle: model.repository.name, shown: !isEmbedded)
+        .toolbar {
+            if isActive { toolbar }
+        }
         .onAppear { model.loadIfNeeded() }
         .task(id: TaskKey(period: period, scope: scope, author: author, generation: model.generation)) {
             guard let graph = model.graph else { return }
@@ -216,6 +233,7 @@ private struct DayDetails: View {
     let isPinned: Bool
     let catalog: FeatureCatalog
     let repositoryID: UUID
+    @Environment(\.pageActions) private var actions
 
     var body: some View {
         if let day {
@@ -257,6 +275,7 @@ private struct DayDetails: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(commits.prefix(80)), id: \.self) { commit in
                             Button {
+                                if let actions { return actions.selectCommit(graph.ids[Int(commit)].hex) }
                                 NotificationCenter.default.post(name: .gitTreeRevealCommit, object: nil, userInfo: [
                                     "repository": repositoryID, "commit": graph.ids[Int(commit)].hex,
                                 ])

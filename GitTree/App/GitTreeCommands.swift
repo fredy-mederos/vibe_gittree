@@ -7,7 +7,6 @@ extension FocusedValues {
 /// Menu bar commands. They act on the focused window.
 struct GitTreeCommands: Commands {
     @FocusedValue(\.windowState) private var window
-    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         SidebarCommands()
@@ -68,36 +67,34 @@ struct GitTreeCommands: Commands {
 
             Divider()
 
-            Button("All Branches") { window?.graph?.scope = .all }
+            Button("All Branches") { window?.graph?.uncoverHistory(); window?.graph?.scope = .all }
                 .keyboardShortcut("1")
                 .disabled(window?.graph == nil)
-            Button("Local Branches") { window?.graph?.scope = .local }
+            Button("Local Branches") { window?.graph?.uncoverHistory(); window?.graph?.scope = .local }
                 .keyboardShortcut("2")
                 .disabled(window?.graph == nil)
-            Button("Current Branch") { window?.graph?.scope = .head }
+            Button("Current Branch") { window?.graph?.uncoverHistory(); window?.graph?.scope = .head }
                 .keyboardShortcut("3")
                 .disabled(window?.graph == nil)
             Button(window?.graph?.showTags == false ? "Show Tags" : "Hide Tags") { window?.graph?.showTags.toggle() }
                 .disabled(window?.graph == nil)
-            Button("Go to HEAD") { window?.graph?.revealHead() }
+            Button("Go to HEAD") { window?.graph?.uncoverHistory(); window?.graph?.revealHead() }
                 .keyboardShortcut("h", modifiers: [.command, .shift])
                 .disabled(window?.graph == nil)
-            Button("Show Activity") {
-                if let id = window?.repositoryID { openWindow(id: "activity", value: id) }
-            }
-            .keyboardShortcut("a", modifiers: [.command, .shift])
-            .disabled(window?.repositoryID == nil)
+            Button("Show Activity") { window?.graph?.showActivity() }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(window?.graph == nil)
             Button("Compare Branches…") {
-                if let id = window?.repositoryID { openWindow(id: "compare", value: CompareTarget(repositoryID: id)) }
+                if let id = window?.repositoryID { window?.graph?.showComparison(CompareTarget(repositoryID: id)) }
             }
             .keyboardShortcut("b", modifiers: [.command, .shift])
-            .disabled(window?.repositoryID == nil)
+            .disabled(window?.graph == nil)
             let recent = window?.currentRepository?.recentComparisons ?? []
             Menu("Recent Comparisons") {
                 if let id = window?.repositoryID {
                     ForEach(recent, id: \.self) { comparison in
                         Button(comparison.title) {
-                            openWindow(id: "compare", value: CompareTarget(repositoryID: id, base: comparison.base, head: comparison.head))
+                            window?.graph?.showComparison(CompareTarget(repositoryID: id, base: comparison.base, head: comparison.head))
                         }
                     }
                     Divider()

@@ -6,7 +6,6 @@ import SwiftUI
 struct WorkingTreeInspector: View {
     @Bindable var graph: GraphViewModel
     @AppStorage(AppSettings.allowsChangesKey) private var allowsChanges = false
-    @Environment(\.openWindow) private var openWindow
     /// Sections showing every file instead of the first few hundred.
     @State private var showsAll: Set<String> = []
 
@@ -58,13 +57,13 @@ struct WorkingTreeInspector: View {
                 Spacer()
                 if !status.isClean {
                     Button {
-                        openWindow(id: "diff", value: DiffTarget(repositoryID: model.id, commit: "", path: "", uncommitted: .unstaged,
-                                                                 allFiles: true, title: String(localized: "Uncommitted Changes")))
+                        graph.showChanges(DiffTarget(repositoryID: model.id, commit: "", path: "", uncommitted: .unstaged,
+                                                     allFiles: true, title: String(localized: "Uncommitted Changes")))
                     } label: {
                         Image(systemName: "doc.text.magnifyingglass")
                     }
                     .buttonStyle(.borderless)
-                    .help("Show every uncommitted change in one window")
+                    .help("Show every uncommitted change, one file after another")
                 }
             }
             Text(branchLine(status))
@@ -121,9 +120,10 @@ struct WorkingTreeInspector: View {
                     WorkingFileRow(change: change, side: side, staged: canChange ? side == .staged : nil, disabled: busy) {
                         toggle([change], staged: side == .staged)
                     } open: {
-                        openWindow(id: "diff", value: DiffTarget(repositoryID: model.id, commit: "", path: change.path,
-                                                                 oldPath: side == .staged ? change.oldPath : nil,
-                                                                 uncommitted: change.isConflicted ? .unstaged : side))
+                        graph.showChanges(DiffTarget(repositoryID: model.id, commit: "", path: change.path,
+                                                     oldPath: side == .staged ? change.oldPath : nil,
+                                                     uncommitted: change.isConflicted ? .unstaged : side,
+                                                     title: String(localized: "Uncommitted Changes")))
                     }
                 }
                 if files.count > shown.count {
@@ -393,7 +393,6 @@ struct StashInspector: View {
     let graph: GraphViewModel
     let stash: StashEntry
     @AppStorage(AppSettings.allowsChangesKey) private var allowsChanges = false
-    @Environment(\.openWindow) private var openWindow
     @State private var details: StashDetails?
     @State private var didLoad = false
     @State private var confirmsDrop = false
@@ -475,13 +474,13 @@ struct StashInspector: View {
                     Spacer()
                     if let base = stash.base, details?.files.isEmpty == false {
                         Button {
-                            openWindow(id: "diff", value: DiffTarget(repositoryID: model.id, commit: stash.id.hex, path: "", base: base.hex,
-                                                                     allFiles: true, title: "\(stash.name) \(stash.title)"))
+                            graph.showChanges(DiffTarget(repositoryID: model.id, commit: stash.id.hex, path: "", base: base.hex,
+                                                         allFiles: true, title: "\(stash.name) \(stash.title)"))
                         } label: {
                             Image(systemName: "doc.text.magnifyingglass")
                         }
                         .buttonStyle(.borderless)
-                        .help("Show all of the stash's changes in one window")
+                        .help("Show all of the stash's changes, one file after another")
                     }
                     if let details {
                         Text(details.files.count.formatted())
@@ -521,7 +520,8 @@ struct StashInspector: View {
     /// new file, shows all of it).
     private func fileButton(_ file: ChangedFile, commit: ObjectID) -> some View {
         Button {
-            openWindow(id: "diff", value: DiffTarget(repositoryID: model.id, commit: commit.hex, path: file.path, oldPath: file.oldPath))
+            graph.showChanges(DiffTarget(repositoryID: model.id, commit: commit.hex, path: file.path, oldPath: file.oldPath,
+                                         title: "\(stash.name) \(stash.title)"))
         } label: {
             HStack(spacing: 8) {
                 Text(file.status)

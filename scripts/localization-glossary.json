@@ -533,6 +533,28 @@
     "compare / base": {
       "id": "bandingkan / basis"
     },
+    "comparison": {
+      "ar": "المقارنة",
+      "de": "Vergleich",
+      "es": "comparación",
+      "fr": "comparaison",
+      "hi": "तुलना",
+      "id": "perbandingan",
+      "it": "confronto",
+      "ja": "比較",
+      "ko": "비교",
+      "ms": "perbandingan",
+      "nl": "vergelijking",
+      "pl": "porównanie",
+      "pt-BR": "comparação",
+      "ru": "сравнение",
+      "th": "การเปรียบเทียบ",
+      "tr": "karşılaştırma",
+      "uk": "порівняння",
+      "vi": "so sánh",
+      "zh-Hans": "比较",
+      "zh-Hant": "比較"
+    },
     "conflict": {
       "hi": "कॉन्फ़्लिक्ट",
       "th": "คอนฟลิกต์"
@@ -748,8 +770,26 @@
       "zh-Hant": "擷取"
     },
     "file": {
+      "ar": "ملف",
+      "de": "Datei",
+      "es": "archivo",
+      "fr": "fichier",
+      "hi": "फ़ाइल",
       "id": "berkas",
-      "vi": "tệp"
+      "it": "file",
+      "ja": "ファイル",
+      "ko": "파일",
+      "ms": "fail",
+      "nl": "bestand",
+      "pl": "plik",
+      "pt-BR": "arquivo",
+      "ru": "файл",
+      "th": "ไฟล์",
+      "tr": "dosya",
+      "uk": "файл",
+      "vi": "tệp",
+      "zh-Hans": "文件",
+      "zh-Hant": "檔案"
     },
     "find": {
       "hi": "ढूँढें"
@@ -854,8 +894,26 @@
       "fr": "surlignage"
     },
     "history": {
+      "ar": "السجل",
+      "de": "Verlauf",
+      "es": "historial",
+      "fr": "historique",
+      "hi": "इतिहास",
+      "id": "riwayat",
       "it": "cronologia",
-      "ko": "히스토리"
+      "ja": "履歴",
+      "ko": "히스토리",
+      "ms": "sejarah",
+      "nl": "commitgeschiedenis",
+      "pl": "historia commitów",
+      "pt-BR": "histórico",
+      "ru": "история коммитов",
+      "th": "ประวัติคอมมิต",
+      "tr": "commit geçmişi",
+      "uk": "історія комітів",
+      "vi": "lịch sử",
+      "zh-Hans": "历史记录",
+      "zh-Hant": "歷史紀錄"
     },
     "keychain": {
       "de": "Schlüsselbund",
@@ -1589,8 +1647,26 @@
       "zh-Hant": "上游"
     },
     "window": {
+      "ar": "نافذة",
+      "de": "Fenster",
+      "es": "ventana",
+      "fr": "fenêtre",
       "hi": "विंडो",
-      "ko": "윈도우"
+      "id": "jendela",
+      "it": "finestra",
+      "ja": "ウインドウ",
+      "ko": "윈도우",
+      "ms": "tetingkap",
+      "nl": "venster",
+      "pl": "okno",
+      "pt-BR": "janela",
+      "ru": "окно",
+      "th": "หน้าต่าง",
+      "tr": "pencere",
+      "uk": "вікно",
+      "vi": "cửa sổ",
+      "zh-Hans": "窗口",
+      "zh-Hant": "視窗"
     },
     "working tree": {
       "de": "Arbeitsverzeichnis",

@@ -20691,6 +20691,131 @@
         }
       }
     },
+    "Back" : {
+      "comment" : "Toolbar button: goes back to what the window showed before",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رجوع"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atrás"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वापस"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indietro"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "戻る"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "뒤로"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terug"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wstecz"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กลับ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geri"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quay lại"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回"
+          }
+        }
+      }
+    },
     "Back to draft" : {
       "localizations" : {
         "ar" : {
@@ -20811,6 +20936,502 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改回草稿"
+          }
+        }
+      }
+    },
+    "Back to the activity calendar (Esc)" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرجوع إلى تقويم النشاط (Esc)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zum Aktivitätskalender (Esc)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver al calendario de actividad (Esc)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour au calendrier d’activité (Échap)"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ऐक्टिविटी कैलेंडर पर वापस जाएँ (Esc)"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke kalender aktivitas (Esc)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Torna al calendario delle attività (Esc)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アクティビティカレンダーに戻る (Esc)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "활동 달력으로 돌아가기 (Esc)"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke kalendar aktiviti (Esc)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terug naar de activiteitenkalender (Esc)"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wróć do kalendarza aktywności (Esc)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar ao calendário de atividades (Esc)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад к календарю активности (Esc)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กลับไปยังปฏิทินกิจกรรม (Esc)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etkinlik takvimine dön (Esc)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад до календаря активності (Esc)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quay lại lịch hoạt động (Esc)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回活动日历（Esc）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回活動行事曆（Esc）"
+          }
+        }
+      }
+    },
+    "Back to the comparison (Esc)" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرجوع إلى المقارنة (Esc)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zum Vergleich (Esc)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a la comparación (Esc)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour à la comparaison (Échap)"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तुलना पर वापस जाएँ (Esc)"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke perbandingan (Esc)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Torna al confronto (Esc)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比較に戻る (Esc)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "비교로 돌아가기 (Esc)"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke perbandingan (Esc)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terug naar de vergelijking (Esc)"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wróć do porównania (Esc)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar à comparação (Esc)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад к сравнению (Esc)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กลับไปยังการเปรียบเทียบ (Esc)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karşılaştırmaya dön (Esc)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад до порівняння (Esc)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quay lại so sánh (Esc)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回比较（Esc）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回比較（Esc）"
+          }
+        }
+      }
+    },
+    "Back to the details" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرجوع إلى التفاصيل"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zu den Details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a los detalles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour aux détails"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "विवरण पर वापस जाएँ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke detail"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Torna ai dettagli"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "詳細に戻る"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세부 정보로 돌아가기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke butiran"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terug naar de details"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wróć do szczegółów"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar aos detalhes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад к подробностям"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กลับไปยังรายละเอียด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayrıntılara dön"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад до подробиць"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quay lại chi tiết"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回详情"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回詳細資訊"
+          }
+        }
+      }
+    },
+    "Back to the history (Esc)" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرجوع إلى السجل (Esc)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zum Verlauf (Esc)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver al historial (Esc)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour à l’historique (Échap)"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इतिहास पर वापस जाएँ (Esc)"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke riwayat (Esc)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Torna alla cronologia (Esc)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "履歴に戻る (Esc)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "히스토리로 돌아가기 (Esc)"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kembali ke sejarah (Esc)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terug naar de commitgeschiedenis (Esc)"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wróć do historii commitów (Esc)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar ao histórico (Esc)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад к истории коммитов (Esc)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "กลับไปยังประวัติคอมมิต (Esc)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commit geçmişine dön (Esc)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад до історії комітів (Esc)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quay lại lịch sử (Esc)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回历史记录（Esc）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回歷史紀錄（Esc）"
           }
         }
       }
@@ -76606,250 +77227,250 @@
         }
       }
     },
-    "Show all of the commit's changes in one window" : {
+    "Show all of the commit's changes, one file after another" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إظهار كل تغييرات الإيداع في نافذة واحدة"
+            "value" : "عرض جميع تغييرات الإيداع، ملفًا بعد ملف"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Änderungen des Commits in einem Fenster anzeigen"
+            "value" : "Alle Änderungen des Commits anzeigen, Datei für Datei"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar todos los cambios del commit en una ventana"
+            "value" : "Mostrar todos los cambios del commit, archivo tras archivo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Afficher toutes les modifications du commit dans une seule fenêtre"
+            "value" : "Afficher toutes les modifications du commit, fichier après fichier"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कमिट के सभी बदलाव एक विंडो में दिखाएँ"
+            "value" : "कमिट के सभी बदलाव एक फ़ाइल के बाद दूसरी दिखाएँ"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tampilkan semua perubahan commit di satu jendela"
+            "value" : "Tampilkan semua perubahan commit, berkas demi berkas"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostra tutte le modifiche del commit in una finestra"
+            "value" : "Mostra tutte le modifiche del commit, un file dopo l’altro"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "コミットのすべての変更を1つのウインドウに表示"
+            "value" : "コミットのすべての変更をファイルごとに順に表示"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "커밋의 모든 변경 사항을 한 윈도우에서 보기"
+            "value" : "커밋의 모든 변경 사항을 파일별로 차례로 보기"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tunjukkan semua perubahan commit dalam satu tetingkap"
+            "value" : "Tunjukkan semua perubahan commit, fail demi fail"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toon alle wijzigingen van de commit in één venster"
+            "value" : "Toon alle wijzigingen van de commit, bestand na bestand"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pokaż wszystkie zmiany commita w jednym oknie"
+            "value" : "Pokaż wszystkie zmiany commita, plik po pliku"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar todas as alterações do commit em uma janela"
+            "value" : "Mostrar todas as alterações do commit, um arquivo após o outro"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показать все изменения коммита в одном окне"
+            "value" : "Показать все изменения коммита, файл за файлом"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แสดงการเปลี่ยนแปลงทั้งหมดของคอมมิตในหน้าต่างเดียว"
+            "value" : "แสดงการเปลี่ยนแปลงทั้งหมดของคอมมิต เรียงทีละไฟล์"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Commit’in tüm değişikliklerini tek pencerede göster"
+            "value" : "Commit’in tüm değişikliklerini dosya dosya art arda göster"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показати всі зміни коміту в одному вікні"
+            "value" : "Показати всі зміни коміту, файл за файлом"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hiển thị mọi thay đổi của commit trong một cửa sổ"
+            "value" : "Hiển thị tất cả thay đổi của commit, lần lượt từng tệp"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在一个窗口中显示此提交的所有更改"
+            "value" : "按文件依次显示提交的所有更改"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在一個視窗中顯示此提交的所有變更"
+            "value" : "一個檔案接著一個檔案顯示提交的所有變更"
           }
         }
       }
     },
-    "Show all of the stash's changes in one window" : {
+    "Show all of the stash's changes, one file after another" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إظهار كل تغييرات المخبأ في نافذة واحدة"
+            "value" : "عرض جميع تغييرات المخبأ، ملفًا بعد ملف"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Änderungen des Stashs in einem Fenster anzeigen"
+            "value" : "Alle Änderungen des Stashs anzeigen, Datei für Datei"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar todos los cambios del stash en una ventana"
+            "value" : "Mostrar todos los cambios del stash, archivo tras archivo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Afficher toutes les modifications du remisage dans une seule fenêtre"
+            "value" : "Afficher toutes les modifications du remisage, fichier après fichier"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "स्टैश के सभी बदलाव एक विंडो में दिखाएँ"
+            "value" : "स्टैश के सभी बदलाव एक फ़ाइल के बाद दूसरी दिखाएँ"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tampilkan semua perubahan stash di satu jendela"
+            "value" : "Tampilkan semua perubahan stash, berkas demi berkas"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostra tutte le modifiche dello stash in una finestra"
+            "value" : "Mostra tutte le modifiche dello stash, un file dopo l’altro"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "スタッシュのすべての変更を1つのウインドウに表示"
+            "value" : "スタッシュのすべての変更をファイルごとに順に表示"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "스태시의 모든 변경 사항을 한 윈도우에서 보기"
+            "value" : "스태시의 모든 변경 사항을 파일별로 차례로 보기"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tunjukkan semua perubahan stash dalam satu tetingkap"
+            "value" : "Tunjukkan semua perubahan stash, fail demi fail"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toon alle wijzigingen van de stash in één venster"
+            "value" : "Toon alle wijzigingen van de stash, bestand na bestand"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pokaż wszystkie zmiany stasha w jednym oknie"
+            "value" : "Pokaż wszystkie zmiany stasha, plik po pliku"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar todas as alterações do stash em uma janela"
+            "value" : "Mostrar todas as alterações do stash, um arquivo após o outro"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показать все изменения стэша в одном окне"
+            "value" : "Показать все изменения стэша, файл за файлом"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แสดงการเปลี่ยนแปลงทั้งหมดของสแตชในหน้าต่างเดียว"
+            "value" : "แสดงการเปลี่ยนแปลงทั้งหมดของสแตช เรียงทีละไฟล์"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stash’in tüm değişikliklerini tek pencerede göster"
+            "value" : "Stash’in tüm değişikliklerini dosya dosya art arda göster"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показати всі зміни stash в одному вікні"
+            "value" : "Показати всі зміни stash, файл за файлом"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hiển thị mọi thay đổi của stash trong một cửa sổ"
+            "value" : "Hiển thị tất cả thay đổi của stash, lần lượt từng tệp"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在一个窗口中显示此贮藏的所有更改"
+            "value" : "按文件依次显示贮藏的所有更改"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在一個視窗中顯示此儲藏的所有變更"
+            "value" : "一個檔案接著一個檔案顯示儲藏的所有變更"
           }
         }
       }
@@ -77226,126 +77847,126 @@
         }
       }
     },
-    "Show every uncommitted change in one window" : {
+    "Show every uncommitted change, one file after another" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إظهار كل التغييرات غير المودعة في نافذة واحدة"
+            "value" : "عرض جميع التغييرات غير المودعة، ملفًا بعد ملف"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle nicht committeten Änderungen in einem Fenster anzeigen"
+            "value" : "Alle nicht committeten Änderungen anzeigen, Datei für Datei"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar todos los cambios sin commit en una ventana"
+            "value" : "Mostrar todos los cambios sin commit, archivo tras archivo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Afficher toutes les modifications non validées dans une seule fenêtre"
+            "value" : "Afficher toutes les modifications non validées, fichier après fichier"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "कमिट न किया गया हर बदलाव एक विंडो में दिखाएँ"
+            "value" : "कमिट न किए गए सभी बदलाव एक फ़ाइल के बाद दूसरी दिखाएँ"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tampilkan semua perubahan yang belum di-commit di satu jendela"
+            "value" : "Tampilkan semua perubahan yang belum di-commit, berkas demi berkas"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostra tutte le modifiche non committate in una finestra"
+            "value" : "Mostra tutte le modifiche non committate, un file dopo l’altro"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未コミットの変更をすべて1つのウインドウに表示"
+            "value" : "未コミットの変更をすべてファイルごとに順に表示"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "커밋하지 않은 모든 변경 사항을 한 윈도우에서 보기"
+            "value" : "커밋하지 않은 모든 변경 사항을 파일별로 차례로 보기"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tunjukkan setiap perubahan yang belum di-commit dalam satu tetingkap"
+            "value" : "Tunjukkan semua perubahan yang belum di-commit, fail demi fail"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toon alle niet-gecommitte wijzigingen in één venster"
+            "value" : "Toon alle niet-gecommitte wijzigingen, bestand na bestand"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pokaż wszystkie niezatwierdzone zmiany w jednym oknie"
+            "value" : "Pokaż wszystkie niezatwierdzone zmiany, plik po pliku"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostrar todas as alterações sem commit em uma janela"
+            "value" : "Mostrar todas as alterações sem commit, um arquivo após o outro"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показать все незакоммиченные изменения в одном окне"
+            "value" : "Показать все незакоммиченные изменения, файл за файлом"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "แสดงทุกการเปลี่ยนแปลงที่ยังไม่ได้คอมมิตในหน้าต่างเดียว"
+            "value" : "แสดงการเปลี่ยนแปลงทั้งหมดที่ยังไม่ได้คอมมิต เรียงทีละไฟล์"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Commit edilmemiş tüm değişiklikleri tek pencerede göster"
+            "value" : "Commit edilmemiş tüm değişiklikleri dosya dosya art arda göster"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показати всі незакомічені зміни в одному вікні"
+            "value" : "Показати всі незакомічені зміни, файл за файлом"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hiển thị mọi thay đổi chưa commit trong một cửa sổ"
+            "value" : "Hiển thị mọi thay đổi chưa commit, lần lượt từng tệp"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在一个窗口中显示所有未提交的更改"
+            "value" : "按文件依次显示所有未提交的更改"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在一個視窗中顯示所有未提交的變更"
+            "value" : "一個檔案接著一個檔案顯示所有未提交的變更"
           }
         }
       }
@@ -78214,6 +78835,130 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "顯示變更周圍的整個檔案"
+          }
+        }
+      }
+    },
+    "Show this in a window of its own" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عرض هذا في نافذة مستقلة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In einem eigenen Fenster anzeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en una ventana propia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher dans une fenêtre distincte"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इसे अपनी अलग विंडो में दिखाएँ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tampilkan ini di jendela tersendiri"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra in una finestra separata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "専用のウインドウで表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "별도의 윈도우에서 보기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunjukkan ini dalam tetingkap tersendiri"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toon dit in een eigen venster"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pokaż w osobnym oknie"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar em uma janela própria"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать в отдельном окне"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แสดงในหน้าต่างแยกต่างหาก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bunu kendi penceresinde göster"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показати у власному вікні"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hiển thị trong cửa sổ riêng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在独立窗口中显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在獨立視窗中顯示"
           }
         }
       }

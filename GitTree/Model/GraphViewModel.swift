@@ -18,7 +18,10 @@ import Observation
         didSet {
             guard searchText != oldValue else { return }
             // A search wins over a highlight that's still loading.
-            if !searchText.isEmpty { cancelHighlightLoad() }
+            if !searchText.isEmpty {
+                cancelHighlightLoad()
+                uncoverHistory()
+            }
             scheduleSearch(jump: true)
         }
     }
@@ -245,6 +248,7 @@ import Observation
         selectsWorkingTree = false
         selectedStash = nil
         followsHeadUntil = nil
+        followSelection()
     }
 
     /// The user clicked or arrowed to the row for uncommitted changes.
@@ -254,6 +258,7 @@ import Observation
         selectsWorkingTree = true
         selectedStash = nil
         followsHeadUntil = nil
+        followSelection()
     }
 
     /// Selects the row for uncommitted changes and scrolls up to it.
@@ -279,6 +284,7 @@ import Observation
         selectsWorkingTree = false
         selectedStash = nil
         followsHeadUntil = nil
+        followSelection()
         if let layout, layout.rowOfCommit[Int(commit)] < 0 {
             scope = .all
             return
@@ -314,10 +320,88 @@ import Observation
         scope = .ref(fullName)
     }
 
+    // MARK: Pages over the history
+
+    /// What the window shows over the history, bottom to top: a comparison or the activity
+    /// calendar, then changes opened from the details or a comparison. Back takes off the top one.
+    private(set) var pages: [GraphPage] = []
+    /// Whether the history is on screen, not covered by a page (the window says, as its width changes).
+    @ObservationIgnored var historyIsVisible = true
+
+    /// A file's changes, or every file's, over what's shown; changes already on top make way.
+    func showChanges(_ target: DiffTarget) {
+        if case .changes? = pages.last { pages.removeLast() }
+        pages.append(.changes(DiffSession(target: target)))
+    }
+
+    /// A comparison over the history, instead of the pages shown (one already there takes the
+    /// new branches, keeping its tab).
+    func showComparison(_ target: CompareTarget) {
+        if case .comparison(let page)? = pages.first {
+            page.target = target
+            pages = [pages[0]]
+        } else {
+            pages = [.comparison(ComparisonPage(target: target))]
+        }
+    }
+
+    /// The activity calendar over the history, instead of the pages shown (one already there
+    /// keeps its period, branches and author).
+    func showActivity() {
+        if case .activity? = pages.first {
+            if pages.count > 1 { pages = [pages[0]] }
+        } else {
+            pages = [.activity(UUID())]
+        }
+    }
+
+    func goBack() {
+        _ = pages.popLast()
+    }
+
+    func showHistory() {
+        if !pages.isEmpty { pages = [] }
+    }
+
+    /// The history back on screen when a page covers it: for what's about to happen there, a search say.
+    func uncoverHistory() {
+        if !historyIsVisible { showHistory() }
+    }
+
+    /// Changes on top follow the selection (in the history beside them, say): another commit, or the
+    /// uncommitted changes, shows its own, one file at a time or all of them as before. Nothing
+    /// selected takes them off.
+    private func followSelection() {
+        guard case .changes(let shown)? = pages.last else { return }
+        let allFiles: Bool? = shown.showsAllFiles ? true : nil
+        let target: DiffTarget
+        if selectsWorkingTree {
+            guard shown.target.uncommitted == nil else { return }
+            target = DiffTarget(repositoryID: model.id, commit: "", path: "", uncommitted: .unstaged, allFiles: allFiles,
+                                title: String(localized: "Uncommitted Changes"))
+        } else if let commit = selectedCommit, let graph = commitGraph, Int(commit) < graph.count {
+            let id = graph.ids[Int(commit)]
+            guard id.hex != shown.target.commit || shown.target.base != nil else { return }
+            target = DiffTarget(repositoryID: model.id, commit: id.hex, path: "", allFiles: allFiles,
+                                title: "\(id.short) \(graph.subjects[Int(commit)])")
+        } else {
+            pages.removeLast()
+            return
+        }
+        pages[pages.count - 1] = .changes(DiffSession(target: target))
+    }
+
     // MARK: Search
 
-    func nextMatch() { stepMatch(by: 1) }
-    func previousMatch() { stepMatch(by: -1) }
+    func nextMatch() {
+        uncoverHistory()
+        stepMatch(by: 1)
+    }
+
+    func previousMatch() {
+        uncoverHistory()
+        stepMatch(by: -1)
+    }
 
     private func stepMatch(by delta: Int) {
         guard let layout, !matchRows.isEmpty else { return }

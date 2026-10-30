@@ -61,12 +61,7 @@ struct RepositoryWindow: View {
         // gittree:// links go to an existing window instead of opening a new one.
         .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         .onOpenURL { state.handle($0) }
-        .onChange(of: state.diffRequest) { _, request in
-            guard let request else { return }
-            openWindow(id: "diff", value: request)
-            state.diffRequest = nil
-        }
-        // A commit clicked in the activity calendar.
+        // A commit clicked in a comparison or the activity calendar in a window of its own.
         .onReceive(NotificationCenter.default.publisher(for: .gitTreeRevealCommit)) { notification in
             guard let id = notification.userInfo?["repository"] as? UUID, id == state.repositoryID,
                   let hex = notification.userInfo?["commit"] as? String,
@@ -88,7 +83,7 @@ struct RepositoryWindow: View {
             DebugLaunch.runOnce(state: state)
             if UserDefaults.standard.bool(forKey: "GTShowActivity") {
                 try? await Task.sleep(for: .seconds(2))
-                if let id = state.repositoryID { openWindow(id: "activity", value: id) }
+                state.graph?.showActivity()
             }
             if let spec = UserDefaults.standard.string(forKey: "GTCompare"), DebugLaunch.claimCompare() {
                 // `base...head`, by branch or tag name, once the history is read.
@@ -98,12 +93,22 @@ struct RepositoryWindow: View {
                 if let id = state.repositoryID, let graph = state.graph?.commitGraph {
                     let names = spec.components(separatedBy: "...")
                     func fullName(_ name: String?) -> String? { graph.refs.first { $0.name == name }?.fullName }
-                    openWindow(id: "compare", value: CompareTarget(repositoryID: id, base: fullName(names.first),
-                                                                   head: fullName(names.count > 1 ? names[1] : nil)))
+                    let target = CompareTarget(repositoryID: id, base: fullName(names.first), head: fullName(names.count > 1 ? names[1] : nil))
+                    if UserDefaults.standard.bool(forKey: "GTOwnWindows") {
+                        openWindow(id: "compare", value: target)
+                    } else {
+                        state.graph?.showComparison(target)
+                    }
                 }
             }
             if DebugLaunch.claimChangeWindows() {
-                await DebugLaunch.openChangeWindows(state: state) { openWindow(id: "diff", value: $0) }
+                await DebugLaunch.openChangeWindows(state: state) { target in
+                    if UserDefaults.standard.bool(forKey: "GTOwnWindows") {
+                        openWindow(id: "diff", value: target)
+                    } else {
+                        DebugLaunch.showChanges(target, state: state)
+                    }
+                }
             }
             if let output = UserDefaults.standard.string(forKey: "GTOpenInNewTab"), DebugLaunch.claimNewTab() {
                 try? await Task.sleep(for: .seconds(3))
@@ -159,13 +164,15 @@ struct RepositoryWindow: View {
 /// `-GTSearch <text>` searches once a repository is open, `-GTScope local|head|<full ref name>`
 /// narrows the graph, `-GTAppearance dark|light` forces an appearance, `-GTGroupFeatures YES` shows
 /// the Features section and groups features, `-GTHighlightFixVersion <version>` highlights one,
-/// `-GTShowActivity YES` opens the calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES`
+/// `-GTShowActivity YES` shows the calendar, `-GTRepositorySettings YES` and `-GTShowSettings YES`
 /// (with `-settingsTab jira`) open the settings, `-GTSelect epic:<key>|release:<name>|pr:<number>|ticket:<key>|ref:<name>|unmerged:<name>`
 /// selects that row in the sidebar once it's there (`first` for the first one, `open` for the newest
 /// open pull request; several, comma-separated, one after another, with `-GTSelectMarkers <folder>`
 /// for a script to capture each), `-GTRefresh releases|release|epics` refreshes those sections or the
 /// selected fix version after `-GTRefreshAfter` seconds (10 by default), and
-/// `-GTCompare <base>...<head>` opens the branch comparison, `-GTAllowChanges YES` turns on staging,
+/// `-GTCompare <base>...<head>` shows the branch comparison (`-GTOwnWindows YES` opens it, and the
+/// changes `-GTOpenChanges` and `-GTOpenDiff` name, in windows of their own), `-GTWindowSize <width>x<height>`
+/// sizes the window, `-GTAllowChanges YES` turns on staging,
 /// committing and stashing for the run, `-GTSelect changes|stash:<n>|worktree:<name>` selects the
 /// uncommitted changes, a stash or another worktree, and `-GTDescribeChanges <file>` (after
 /// `-GTDescribeAfter` seconds) writes the working tree's status, the stashes, the worktrees and what
@@ -384,6 +391,20 @@ struct RepositoryWindow: View {
                           title: "\(names[1]) since \(names[0])")
     }
 
+    /// Changes over the history, with their commit (or the uncommitted changes) selected, as when
+    /// they're opened from the details.
+    static func showChanges(_ target: DiffTarget, state: WindowState) {
+        guard let graph = state.graph else { return }
+        var target = target
+        if target.uncommitted != nil {
+            graph.selectWorkingTree()
+        } else if let commitGraph = graph.commitGraph, let index = commitGraph.index(matching: target.commit) {
+            graph.select(index)
+            if target.base == nil { target.title = "\(commitGraph.ids[Int(index)].short) \(commitGraph.subjects[Int(index)])" }
+        }
+        graph.showChanges(target)
+    }
+
     static func openChangeWindows(state: WindowState, diff: (DiffTarget) -> Void) async {
         let defaults = UserDefaults.standard
         guard defaults.string(forKey: "GTOpenChanges") != nil || defaults.string(forKey: "GTOpenDiff") != nil else { return }
@@ -497,6 +518,13 @@ struct RepositoryWindow: View {
         }
         if let url = defaults.string(forKey: "GTCloneURL") {
             state.cloneRemoteRepository(prefilledURL: url)
+        }
+        if let size = defaults.string(forKey: "GTWindowSize")?.split(separator: "x").compactMap({ Double($0) }), size.count == 2 {
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                state.window?.setContentSize(NSSize(width: size[0], height: size[1]))
+                state.window?.center()
+            }
         }
         if let link = defaults.string(forKey: "GTOpenLink").flatMap(URL.init(string:)) {
             Task {

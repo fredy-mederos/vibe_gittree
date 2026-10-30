@@ -2,17 +2,33 @@ import SwiftUI
 
 /// A window showing a file's changes in a commit (or since another commit, or not committed yet),
 /// scrolled to a line when asked, with the other files listed to move between, or all of them one
-/// after another. Commits, comparisons, stashes and uncommitted changes all open here.
+/// after another. The repository's window shows changes over its history instead; this one opens
+/// from there (Open in New Window) and from a comparison in a window of its own.
 struct DiffWindow: View {
     let target: DiffTarget?
 
     var body: some View {
         if let target, let repository = RepositoryLibrary.shared.repository(id: target.repositoryID) {
-            FileDiffView(target: target, repository: repository)
+            DiffWindowContent(target: target, repository: repository)
         } else {
             ContentUnavailableView("Nothing to Show", systemImage: "doc.text.magnifyingglass",
                                    description: Text("The repository for these changes is no longer in Vibe GitTree."))
         }
+    }
+}
+
+/// A diff window's changes, kept while it's open.
+private struct DiffWindowContent: View {
+    let repository: Repository
+    @State private var session: DiffSession
+
+    init(target: DiffTarget, repository: Repository) {
+        self.repository = repository
+        _session = State(initialValue: DiffSession(target: target))
+    }
+
+    var body: some View {
+        FileDiffView(session: session, repository: repository)
     }
 }
 
@@ -54,20 +70,64 @@ enum DiffFileOrder: String {
     }
 }
 
-private struct FileDiffView: View {
-    /// What the window was opened for.
+/// Changes and which of their files is shown: a diff window's, or the repository window's while it
+/// shows them over the history (its details list the files then).
+@MainActor @Observable final class DiffSession {
+    /// What they were opened for.
     let target: DiffTarget
+    /// The commit's files, or every uncommitted one, to move between.
+    var files: [DiffFile] = []
+    var filesVersion = 0
+    var selection: String?
+    /// Every file one after another instead of one at a time.
+    var showsAllFiles: Bool
+
+    init(target: DiffTarget) {
+        self.target = target
+        selection = target.path.isEmpty ? nil : DiffFile.id(path: target.path, uncommitted: target.uncommitted)
+        showsAllFiles = target.allFiles ?? false
+    }
+
+    /// The files in the list's order: uncommitted ones by kind (conflicts, staged, not staged,
+    /// new), each kind in the order picked.
+    func orderedFiles(_ order: DiffFileOrder) -> [DiffFile] {
+        order.sorted(files) { file in
+            if file.status == "!" { return 0 }
+            switch file.uncommitted {
+            case .staged: return 1
+            case .unstaged: return 2
+            case .untracked: return 3
+            case nil: return 0
+            }
+        }
+    }
+
+    /// What's shown now, to open on its own: the file, or every file.
+    var shown: DiffTarget {
+        guard !showsAllFiles, let file = files.first(where: { $0.id == selection }) else {
+            return DiffTarget(repositoryID: target.repositoryID, commit: target.commit, path: "", base: target.base,
+                              uncommitted: target.uncommitted, allFiles: true, title: target.title)
+        }
+        return DiffTarget(repositoryID: target.repositoryID, commit: target.commit, path: file.path,
+                          line: file.path == target.path ? target.line : nil, base: target.base, oldPath: file.oldPath,
+                          uncommitted: file.uncommitted, title: target.title)
+    }
+}
+
+/// A file's changes, or every file's one after another, with the buttons that go with them: in a
+/// window of its own, with the files listed on the side, or in the repository's window, whose
+/// details list the files.
+struct FileDiffView: View {
+    @Bindable var session: DiffSession
     let repository: Repository
+    /// In the repository's window: no list or title of its own.
+    let isEmbedded: Bool
+    /// On screen: only then are its buttons in the window's toolbar (a page under another isn't).
+    let isActive: Bool
 
     /// The file shown: the window's own, or another one picked in the list.
     @State private var current: DiffTarget
-    /// The commit's files, or every uncommitted one, to move between.
-    @State private var files: [DiffFile] = []
-    @State private var filesVersion = 0
-    @State private var selection: String?
     @AppStorage("diff.fileOrder") private var order = DiffFileOrder.path
-    /// Every file one after another instead of one at a time.
-    @State private var showsAllFiles: Bool
     /// All Files' diffs by file, and whether they're all there (a long diff stops at a limit).
     @State private var combined: (diffs: [String: FileDiff], complete: Bool)?
     @State private var combinedError: String?
@@ -78,12 +138,35 @@ private struct FileDiffView: View {
     @State private var didExpandForLine = false
     @State private var loadCount = 0
 
-    init(target: DiffTarget, repository: Repository) {
-        self.target = target
+    init(session: DiffSession, repository: Repository, isEmbedded: Bool = false, isActive: Bool = true) {
+        self.session = session
         self.repository = repository
-        _current = State(initialValue: target)
-        _showsAllFiles = State(initialValue: target.allFiles ?? false)
-        _selection = State(initialValue: target.path.isEmpty ? nil : DiffFile.id(path: target.path, uncommitted: target.uncommitted))
+        self.isEmbedded = isEmbedded
+        self.isActive = isActive
+        _current = State(initialValue: session.target)
+    }
+
+    /// What the changes were opened for.
+    private var target: DiffTarget { session.target }
+
+    private var files: [DiffFile] {
+        get { session.files }
+        nonmutating set { session.files = newValue }
+    }
+
+    private var filesVersion: Int {
+        get { session.filesVersion }
+        nonmutating set { session.filesVersion = newValue }
+    }
+
+    private var selection: String? {
+        get { session.selection }
+        nonmutating set { session.selection = newValue }
+    }
+
+    private var showsAllFiles: Bool {
+        get { session.showsAllFiles }
+        nonmutating set { session.showsAllFiles = newValue }
     }
 
     private var hosting: HostingService? {
@@ -103,18 +186,8 @@ private struct FileDiffView: View {
         return RepositoryModelStore.shared.model(for: repository).workingTreeVersion
     }
 
-    /// The files in the list's order: uncommitted ones by kind (conflicts, staged, not staged,
-    /// new), each kind in the order picked.
     private var orderedFiles: [DiffFile] {
-        order.sorted(files) { file in
-            if file.status == "!" { return 0 }
-            switch file.uncommitted {
-            case .staged: return 1
-            case .unstaged: return 2
-            case .untracked: return 3
-            case nil: return 0
-            }
-        }
+        session.orderedFiles(order)
     }
 
     private var position: Int? {
@@ -134,18 +207,20 @@ private struct FileDiffView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            DiffFileList(files: orderedFiles, selection: $selection, order: $order, uncommitted: target.uncommitted != nil)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 420)
-        } detail: {
-            if showsAllFiles {
-                allFiles
+        Group {
+            if isEmbedded {
+                detail
             } else {
-                content
+                NavigationSplitView {
+                    DiffFileList(files: orderedFiles, selection: $session.selection, order: $order, uncommitted: target.uncommitted != nil)
+                        .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 420)
+                } detail: {
+                    detail
+                }
+                .navigationTitle(title)
+                .navigationSubtitle(subtitle)
             }
         }
-        .navigationTitle(title)
-        .navigationSubtitle(subtitle)
         .toolbar { toolbar }
         .onChange(of: selection) { _, id in show(id) }
         // Uncommitted changes are looked at while the window is open, even with no repository window showing them.
@@ -162,7 +237,21 @@ private struct FileDiffView: View {
         }
     }
 
+    @ViewBuilder private var detail: some View {
+        if showsAllFiles {
+            allFiles
+        } else {
+            content
+        }
+    }
+
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if isActive {
+            buttons
+        }
+    }
+
+    @ToolbarContentBuilder private var buttons: some ToolbarContent {
         ToolbarItem {
             ControlGroup {
                 Button {
@@ -183,7 +272,7 @@ private struct FileDiffView: View {
             .help("The previous or next file (⌥⌘↑, ⌥⌘↓)")
         }
         ToolbarItem {
-            Toggle(isOn: $showsAllFiles) {
+            Toggle(isOn: $session.showsAllFiles) {
                 Label("All Files", systemImage: "doc.on.doc")
             }
             .help("Show every file's changes one after another, or one file at a time")
@@ -612,6 +701,45 @@ struct DiffFileOrderPicker: View {
         .labelsHidden()
         .fixedSize()
         .help("List the files by path, with the most changed lines first, or with the most existing lines changed or removed first (new and deleted files last)")
+    }
+}
+
+/// The details while the repository's window shows changes: what they're of, which goes back to
+/// the details, then their files as the diff window lists them, to move between.
+struct DiffSessionFiles: View {
+    @Bindable var session: DiffSession
+    let goBack: () -> Void
+    @AppStorage("diff.fileOrder") private var order = DiffFileOrder.path
+
+    var body: some View {
+        DiffFileList(files: session.orderedFiles(order), selection: $session.selection, order: $order,
+                     uncommitted: session.target.uncommitted != nil)
+            // One line whatever the width, like everything pinned outside a list in a column.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Button(action: goBack) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .foregroundStyle(.secondary)
+                        Text(title)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.callout.weight(.semibold))
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(.bar)
+                .overlay(alignment: .bottom) { Divider() }
+                .help("Back to the details")
+            }
+    }
+
+    private var title: String {
+        if let title = session.target.title { return title }
+        return session.target.uncommitted != nil ? String(localized: "Uncommitted Changes") : String(session.target.commit.prefix(8))
     }
 }
 

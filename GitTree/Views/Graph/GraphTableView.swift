@@ -36,6 +36,9 @@ struct GraphTableView: NSViewRepresentable {
     let annotationVersion: Int
     /// The working tree was looked at again (the uncommitted row's counts).
     let workingTreeVersion: Int
+    /// A page covers it: hidden, so its rows can't be clicked and the keyboard goes elsewhere,
+    /// while it keeps its columns and scroll position for when it's back.
+    let isHidden: Bool
     let onShowDetails: () -> Void
     /// Opens a comparison window (two commits picked in the graph, say).
     let onCompare: (CompareTarget) -> Void
@@ -105,6 +108,10 @@ struct GraphTableView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        if scrollView.isHidden != isHidden {
+            scrollView.isHidden = isHidden
+            if !isHidden, let tableView = context.coordinator.tableView { scrollView.window?.makeFirstResponder(tableView) }
+        }
         context.coordinator.onShowDetails = onShowDetails
         context.coordinator.onCompare = onCompare
         context.coordinator.update(

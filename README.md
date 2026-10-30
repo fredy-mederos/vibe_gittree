@@ -92,18 +92,19 @@ permission to access that folder.
 - **Branches, remotes and tags** in the sidebar, grouped by folder (`feature/`, `release/`…) and by
   version for tags, newest first with their age. Click one to jump to it; double-click (or Return)
   to show only its history.
-- **Changes**: click a file in the inspector to open its diff in its own window, with syntax colors
-  (Swift, Kotlin, Java, JavaScript/TypeScript, Python, Go, Rust, C/Objective-C, Ruby, shell, JSON,
-  YAML, XML/HTML, Markdown and more), a Side by Side toggle that puts the old and new file next to
-  each other, a Whole File toggle, a link to the file on GitHub, and Copy Link. The window lists the
-  commit's other files on the side, each with the lines it added and removed and a bar as long as
-  its changes, so the biggest stand out (or come first, with Most Changes First). Most Modified
+- **Changes**: click a file in the inspector and its diff takes the history's place in the window,
+  with syntax colors (Swift, Kotlin, Java, JavaScript/TypeScript, Python, Go, Rust, C/Objective-C,
+  Ruby, shell, JSON, YAML, XML/HTML, Markdown and more), a Side by Side toggle that puts the old and
+  new file next to each other, a Whole File toggle, a link to the file on GitHub, and Copy Link. The
+  details then list the commit's files, each with the lines it added and removed and a bar as long
+  as its changes, so the biggest stand out (or come first, with Most Changes First). Most Modified
   First lists first the files that were there before, by how many of their lines changed or went
   away, and new and deleted files last: where existing code was reworked, without new files
   filling the top. Click one, or step through them with Previous and Next File (⌥⌘↑, ⌥⌘↓). All
   Files shows every file's changes one after another, each under its name; the magnifier by
   Changed Files opens a commit that way. A comparison's files, a stash's and the uncommitted ones
-  open in the same window, which works the same way for all of them.
+  show the same way. Back (or Esc) returns to the history and the commit's details; Open in New
+  Window puts the changes in a window of their own, for a second screen say.
 - **Uncommitted changes**: a row above the history, a dashed ring with a dashed line down to the
   checked-out commit, says what changed (2 staged · 3 changed · 1 new); Local Changes in the sidebar
   has it too. Select it to list the files in the details: Conflicts, Staged, Not Staged and New
@@ -197,18 +198,18 @@ permission to access that folder.
   progress or to do (among the latest 500 commits), or of every ticket in a fix version (asked of
   Jira directly, so it covers tickets beyond what's on screen). The status bar steps through them.
 - **Compare branches** (Repository › Compare Branches…, ⇧⌘B, or right-click a branch or tag ›
-  Compare with…): two branches or tags side by side in their own window. It says how many commits
-  each has that the other doesn't and where they diverged, then lists, for each side, its commits,
-  its tickets (under their epics, with their status, marked when the other side has commits for
-  them too), the files changed since the branches diverged, and its authors. Click a commit to
-  select it in the graph; Highlight in Graph tints one side's commits there. The Files tab lists
-  files as the diff window does, with their added and removed lines and in the same order (by
-  path, Most Changes First or Most Modified First); click one for its changes since the branches
-  diverged, in the diff window listing the side's other files, or Show All Changes for all of them
-  one after another.
+  Compare with…): two branches or tags side by side, in the window in place of the history. It says
+  how many commits each has that the other doesn't and where they diverged, then lists, for each
+  side, its commits, its tickets (under their epics, with their status, marked when the other side
+  has commits for them too), the files changed since the branches diverged, and its authors. Click a
+  commit for its details; Highlight in Graph tints one side's commits in the history and goes back
+  to it. The Files tab lists files as the changes do, with their added and removed lines and in the
+  same order (by path, Most Changes First or Most Modified First); click one for its changes since
+  the branches diverged, over the comparison with the side's other files in the details, or Show
+  All Changes for all of them one after another.
   Any two commits compare too: right-click a commit › Compare with the selected one, with HEAD, or
   with a branch picked from a list (which takes a commit's hash as well). Repository › Recent
-  Comparisons and the window's clock menu bring back the last ten per repository.
+  Comparisons and the comparison's clock menu bring back the last ten per repository.
 - **Features** (off unless Settings › General › Group recent commits into features turns it on):
   the sidebar's Features section groups the latest commits (100 to 1,000) under the
   terms your team writes in commit messages: bracket tags like `[Search]` or `[Tech Debt]` and scope
@@ -219,9 +220,17 @@ permission to access that folder.
   Select one to highlight its commits in the graph. With Jira connected, the Epics section above it
   groups the same work by the epics in Jira instead, which needs no guessing.
 - **Activity** (toolbar calendar button or ⇧⌘A): a contribution grid with one square per day, shaded
-  by commits, for the last 12 months or any year, filtered by branches and author. Hover a day to
-  see its tickets (with their terms, when Features is on) and commits; click to keep it; click a commit to select it in
-  the graph.
+  by commits, for the last 12 months or any year, filtered by branches and author, in the window in
+  place of the history. Hover a day to see its tickets (with their terms, when Features is on) and
+  commits; click to keep it; click a commit for its details.
+- **One window, side by side when it's wide**: changes, a comparison and the calendar are pages over
+  the history, which keeps its place, selection and columns underneath. When the space between the
+  sidebar and the details fits both, the top page sits next to what's under it instead (the history
+  and the changes, the history and a comparison, a comparison and a file's changes), with a line
+  between them that drags. With the history beside them, the changes follow the selected commit, so
+  arrowing through the history shows each commit's changes. Back (or Esc) goes back one page;
+  picking something in the sidebar or searching goes back to the history; Open in New Window puts a
+  page in a window of its own.
 - **Deep links**: `gittree://open?repo=<path|remote URL|name>&commit=<sha>&path=<file>&line=<n>`
   opens the repository (adding it if needed), selects the commit and opens the file's diff scrolled
   to the line. A path in a worktree opens the repository the worktree belongs to (unless you added
@@ -347,8 +356,8 @@ GitTree/
   Integrations/  GitHub (gh, pull request timelines), Jira (REST + keychain), feature grouping (Foundation Models)
   Model/         repository library, per-repository model, per-window state, sidebar tree, deep links,
                  epics and releases, branch comparison
-  Views/         window, sidebar, switcher, toolbar and status bar, inspector, uncommitted changes and
-                 stashes, diff and compare windows, sheets
+  Views/         window and the pages over its history, sidebar, switcher, toolbar and status bar,
+                 inspector, uncommitted changes and stashes, changes, comparison and calendar, sheets
   Views/Graph    the commit table (NSTableView) and its Core Graphics cells
   Localizable.xcstrings   every string the app shows, with its translations (String Catalog)
 Support/Info.plist   the gittree:// URL scheme (merged with Xcode's generated keys)
@@ -384,7 +393,7 @@ setting says), `-GTShowSwitcher YES`, `-GTGroupFeatures YES` (shows the Features
 that sidebar row once it's there; `first` for the first epic or release, `open` for the newest open
 pull request; several, separated by commas, are selected one after another), `-GTRefresh releases|release|epics`
 (refreshes the Releases or Epics section, or the selected fix version, after `-GTRefreshAfter`
-seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), `-GTJiraSite <url>`
+seconds, 10 by default), `-GTCompare <base>...<head>` (shows the comparison), `-GTJiraSite <url>`
 (with optional `-GTJiraEmail`/`-GTJiraToken`) to use a Jira site without touching the keychain,
 `-GTAllowChanges YES` (staging, committing and stashing, for that run only), `-GTPerform <steps>`
 (changes one after another, as the buttons make them: `stage:<path>`, `unstage:<path>`, `stageAll`,
@@ -392,7 +401,10 @@ seconds, 10 by default), `-GTCompare <base>...<head>` (opens the comparison), `-
 `drop:<n>`, separated by `;`; try them on a throwaway clone), `-GTCompareTab files` (the tab a
 comparison opens on), `-GTOpenChanges uncommitted|<commit>|<base>...<head>` (every file of those
 changes, one after another), `-GTOpenDiff <staged|unstaged|untracked|commit>:<path>` (one file's diff),
-`-GTZoom <seconds>` (zooms every window in and out, as double-clicking its title bar does),
+`-GTShowActivity YES` (the calendar), `-GTOwnWindows YES` (the comparison and changes those name in
+windows of their own instead), `-GTWindowSize <width>x<height>` (sizes the window, wide enough for
+pages side by side say), `-GTZoom <seconds>` (zooms every window in and out, as double-clicking its
+title bar does),
 `-GTCheckForUpdates YES` (checks for updates at launch, as the installed app does; debug builds
 otherwise only check when asked) and `-GTUpdateRepository <owner/name>` (checks another repository's
 releases, without keeping what it finds; one with a newer version shows the update alert). Test

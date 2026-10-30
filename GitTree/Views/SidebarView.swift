@@ -1017,11 +1017,11 @@ struct SidebarView: View {
                 .filter { $0.fullName != ref.fullName }
             ForEach(Array(Set(bases.map(\.fullName))).sorted(), id: \.self) { base in
                 Button("Compare with “\(GitRef.shortName(fullName: base))”") {
-                    openWindow(id: "compare", value: CompareTarget(repositoryID: id, base: base, head: ref.fullName))
+                    state.graph?.showComparison(CompareTarget(repositoryID: id, base: base, head: ref.fullName))
                 }
             }
             Button("Compare with…") {
-                openWindow(id: "compare", value: CompareTarget(repositoryID: id, head: ref.fullName))
+                state.graph?.showComparison(CompareTarget(repositoryID: id, head: ref.fullName))
             }
         }
         if let hosting = state.graph?.model.hosting {

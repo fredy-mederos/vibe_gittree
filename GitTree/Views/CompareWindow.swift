@@ -16,6 +16,19 @@ struct CompareWindow: View {
     }
 }
 
+/// A comparison in the repository's window, over its history or next to it.
+struct ComparisonPageView: View {
+    @Bindable var page: ComparisonPage
+    /// On screen: only then are its pickers in the window's toolbar.
+    let isActive: Bool
+
+    var body: some View {
+        if let repository = RepositoryLibrary.shared.repository(id: page.target.repositoryID) {
+            CompareView(model: RepositoryModelStore.shared.model(for: repository), target: $page.target, isEmbedded: true, isActive: isActive)
+        }
+    }
+}
+
 private enum CompareTab: String, CaseIterable, Identifiable {
     case commits = "Commits", tickets = "Tickets", files = "Files", authors = "Authors"
 
@@ -42,7 +55,11 @@ private enum CompareTab: String, CaseIterable, Identifiable {
 private struct CompareView: View {
     let model: RepositoryModel
     @Binding var target: CompareTarget
+    /// In the repository's window: no title of its own.
+    var isEmbedded = false
+    var isActive = true
 
+    @Environment(\.pageActions) private var actions
     @State private var comparison: BranchComparison?
     /// Files changed on each side since they diverged, by the side's ref name or hash.
     @State private var files: [String: [DiffFile]] = [:]
@@ -74,9 +91,10 @@ private struct CompareView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(title)
-        .navigationSubtitle(model.repository.name)
-        .toolbar { toolbar }
+        .windowTitle(title, subtitle: model.repository.name, shown: !isEmbedded)
+        .toolbar {
+            if isActive { toolbar }
+        }
         .onAppear { model.loadIfNeeded() }
         .task(id: TaskKey(base: target.base, head: target.head, generation: model.generation)) { await compare() }
     }
@@ -256,6 +274,7 @@ private struct CompareView: View {
     }
 
     private func reveal(_ commit: Int32, in graph: CommitGraph) {
+        if let actions { return actions.selectCommit(graph.ids[Int(commit)].hex) }
         NotificationCenter.default.post(name: .gitTreeRevealCommit, object: nil, userInfo: [
             "repository": model.id, "commit": graph.ids[Int(commit)].hex,
         ])
@@ -278,6 +297,7 @@ private struct SideColumn: View {
     @Environment(\.openWindow) private var openWindow
     /// The Files tab's order, the diff window's too.
     @AppStorage("diff.fileOrder") private var order = DiffFileOrder.path
+    @Environment(\.pageActions) private var actions
 
     /// Lists stop here; the header still counts everything.
     private static let rowLimit = 2_000
@@ -315,10 +335,11 @@ private struct SideColumn: View {
                 .font(.headline)
                 Spacer(minLength: 8)
                 Button("Highlight in Graph") {
+                    let commits = side.commits.map { graph.ids[Int($0)].hex }
+                    let title = String(localized: "Only on \(side.point.name), not on \(other.point.name)")
+                    if let actions { return actions.highlightCommits(commits, title) }
                     NotificationCenter.default.post(name: .gitTreeHighlightCommits, object: nil, userInfo: [
-                        "repository": repositoryID,
-                        "commits": side.commits.map { graph.ids[Int($0)].hex },
-                        "title": String(localized: "Only on \(side.point.name), not on \(other.point.name)"),
+                        "repository": repositoryID, "commits": commits, "title": title,
                     ])
                 }
                 .disabled(side.commits.isEmpty)
@@ -351,6 +372,7 @@ private struct SideColumn: View {
         List {
             ForEach(Array(side.commits.prefix(Self.rowLimit)), id: \.self) { commit in
                 Button {
+                    if let actions { return actions.selectCommit(graph.ids[Int(commit)].hex) }
                     NotificationCenter.default.post(name: .gitTreeRevealCommit, object: nil, userInfo: [
                         "repository": repositoryID, "commit": graph.ids[Int(commit)].hex,
                     ])
@@ -513,9 +535,11 @@ private struct SideColumn: View {
     /// diff window (listing the side's other files), or all of them one after another.
     private func openDiff(of file: DiffFile, allFiles: Bool) {
         guard let mergeBase else { return }
-        openWindow(id: "diff", value: DiffTarget(repositoryID: repositoryID, commit: graph.ids[Int(side.point.commit)].hex, path: file.path,
-                                                 base: mergeBase.hex, oldPath: file.oldPath, allFiles: allFiles ? true : nil,
-                                                 title: String(localized: "\(side.point.name) since \(other.point.name)", comment: "A branch's changes since it diverged from another branch")))
+        let target = DiffTarget(repositoryID: repositoryID, commit: graph.ids[Int(side.point.commit)].hex, path: file.path,
+                                base: mergeBase.hex, oldPath: file.oldPath, allFiles: allFiles ? true : nil,
+                                title: String(localized: "\(side.point.name) since \(other.point.name)", comment: "A branch's changes since it diverged from another branch"))
+        if let actions { return actions.showChanges(target) }
+        openWindow(id: "diff", value: target)
     }
 }
 

@@ -1,12 +1,16 @@
 import SwiftUI
 
 /// The selected commit: message, author, links, where it shipped, family, branches and changed
-/// files. Or the uncommitted changes, or a stash picked in the sidebar.
+/// files. Or the uncommitted changes, or a stash picked in the sidebar. While the window shows
+/// changes, their files, to move between.
 struct CommitInspector: View {
     let graph: GraphViewModel
 
     var body: some View {
-        if let id = graph.selectedStash {
+        if case .changes(let session)? = graph.pages.last {
+            DiffSessionFiles(session: session) { graph.goBack() }
+                .id(ObjectIdentifier(session))
+        } else if let id = graph.selectedStash {
             if let stash = graph.model.stashes.first(where: { $0.id == id }) {
                 StashInspector(graph: graph, stash: stash)
                     .id(id)
@@ -38,7 +42,6 @@ private struct CommitDetailView: View {
     let commitGraph: CommitGraph
     let commit: Int32
 
-    @Environment(\.openWindow) private var openWindow
     @State private var details: CommitDetails?
     @State private var containment: Containment?
     @State private var didLoad = false
@@ -228,8 +231,8 @@ private struct CommitDetailView: View {
                     let files = showAllFiles ? details.files : Array(details.files.prefix(60))
                     ForEach(files) { file in
                         Button {
-                            openWindow(id: "diff", value: DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: file.path, line: nil,
-                                                                     oldPath: file.oldPath))
+                            graph.showChanges(DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: file.path,
+                                                         oldPath: file.oldPath, title: "\(id.short) \(subject)"))
                         } label: {
                             ChangedFileRow(file: file)
                                 .contentShape(Rectangle())
@@ -260,13 +263,13 @@ private struct CommitDetailView: View {
                     Spacer()
                     if let details, details.totalFiles > 0 {
                         Button {
-                            openWindow(id: "diff", value: DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: "", allFiles: true,
-                                                                     title: "\(id.short) \(subject)"))
+                            graph.showChanges(DiffTarget(repositoryID: graph.model.id, commit: id.hex, path: "", allFiles: true,
+                                                         title: "\(id.short) \(subject)"))
                         } label: {
                             Image(systemName: "doc.text.magnifyingglass")
                         }
                         .buttonStyle(.borderless)
-                        .help("Show all of the commit's changes in one window")
+                        .help("Show all of the commit's changes, one file after another")
                     }
                     if let details {
                         Text(details.totalFiles.formatted()).monospacedDigit().foregroundStyle(.secondary)

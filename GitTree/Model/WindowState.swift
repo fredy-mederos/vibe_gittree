@@ -49,8 +49,6 @@ enum SidebarItem: Hashable {
     var repositoryPendingRemoval: Repository?
     var errorTitle = String(localized: "Couldn't Add Repository")
     var errorMessage: String?
-    /// A diff the window should open in its own window (set by deep links).
-    var diffRequest: DiffTarget?
     /// A link waiting for its repository to finish cloning.
     @ObservationIgnored private var pendingDeepLink: DeepLink?
     var refFilter = ""
@@ -129,6 +127,11 @@ enum SidebarItem: Hashable {
     }
 
     private func sidebarSelectionChanged() {
+        // Picked in the sidebar: shown in the history, not under a page.
+        switch sidebarSelection {
+        case .repository, nil: break
+        default: graph?.showHistory()
+        }
         switch sidebarSelection {
         case .repository(let id):
             open(id)
@@ -324,10 +327,13 @@ enum SidebarItem: Hashable {
                           String(localized: "\(String(commit.prefix(12))) isn't in \(repository.name)'s history. Fetch the repository and try the link again."))
                 return
             }
+            graph.showHistory()
             graph.select(index)
             showInspector = true
             if let path = link.path {
-                diffRequest = DiffTarget(repositoryID: repository.id, commit: commitGraph.ids[Int(index)].hex, path: path, line: link.line)
+                let id = commitGraph.ids[Int(index)]
+                graph.showChanges(DiffTarget(repositoryID: repository.id, commit: id.hex, path: path, line: link.line,
+                                             title: "\(id.short) \(commitGraph.subjects[Int(index)])"))
             }
         }
     }
